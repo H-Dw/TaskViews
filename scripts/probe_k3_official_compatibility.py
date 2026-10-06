@@ -18,7 +18,7 @@ sys.path[:0] = [str(PROJECT), str(Path.home() / 'osworld2/OSWorld-V2')]
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--profile', choices=('low-16k', 'max-32k'), default='low-16k')
+    parser.add_argument('--profile', choices=('low-16k', 'max-16k', 'max-32k'), default='low-16k')
     parser.add_argument('--cua-config', type=Path)
     args = parser.parse_args()
     from scripts.osworld_native_experiment import require_scope, write, project_snapshot, now

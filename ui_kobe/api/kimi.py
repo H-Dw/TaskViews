@@ -33,6 +33,7 @@ class GenerationProfile:
 
 GENERATION_PROFILES = {
     'low-16k': GenerationProfile('low-16k', 'low', 16000, 32000, 16000, 4000),
+    'max-16k': GenerationProfile('max-16k', 'max', 16000, 32000, 16000, 4000),
     'max-32k': GenerationProfile('max-32k', 'max', 32768, 65536, 32768, 8192),
 }
 

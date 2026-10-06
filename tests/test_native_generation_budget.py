@@ -34,7 +34,7 @@ def transport(handler, profile, events, tmp_path):
         http_factory=lambda **kwargs: httpx.Client(transport=httpx.MockTransport(handler), **kwargs))
 
 
-@pytest.mark.parametrize('name,effort,cap', [('low-16k', 'low', 16000), ('max-32k', 'max', 32768)])
+@pytest.mark.parametrize('name,effort,cap', [('low-16k', 'low', 16000), ('max-16k', 'max', 16000), ('max-32k', 'max', 32768)])
 def test_frozen_profile_reaches_wire_and_rejects_mismatched_effort(name, effort, cap, tmp_path):
     profile = generation_profile(name)
     sent, events = [], []
@@ -114,6 +114,18 @@ def test_max_profile_is_passed_to_official_runner_arguments(tmp_path):
     args = official_arguments('059', tmp_path, generation_profile('max-32k').__dict__)
     assert args[args.index('--max_tokens') + 1] == '32768'
     assert args[args.index('--max_steps') + 1] == '500'
+
+
+def test_max16_retains_16k_reserves_and_changes_effort_only(tmp_path):
+    from scripts.osworld_native_experiment import official_arguments
+    low, maximum = generation_profile('low-16k'), generation_profile('max-16k')
+    assert maximum.reasoning_effort == 'max'
+    assert [maximum.max_completion_tokens, maximum.step_output_tokens,
+            maximum.executor_reserve_tokens, maximum.adviser_max_tokens] == [16000, 32000, 16000, 4000]
+    assert {k: v for k, v in maximum.__dict__.items() if k not in ('name', 'reasoning_effort')} == {
+        k: v for k, v in low.__dict__.items() if k not in ('name', 'reasoning_effort')}
+    args = official_arguments('059', tmp_path, maximum.__dict__)
+    assert args[args.index('--max_tokens') + 1] == '16000'
 
 
 def make_agent(monkeypatch, tmp_path):

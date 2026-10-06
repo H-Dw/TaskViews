@@ -591,7 +591,7 @@ def main():
     parser.add_argument("--validation", type=Path)
     parser.add_argument("--purpose", choices=("evaluation", "setup_validation"), default="evaluation")
     parser.add_argument("--admission", type=Path)
-    parser.add_argument("--profile", choices=("low-16k", "max-32k"), default="low-16k")
+    parser.add_argument("--profile", choices=("low-16k", "max-16k", "max-32k"), default="low-16k")
     parser.add_argument("--cua-config", type=Path)
     parser.add_argument('--agent-interface', choices=('official-xml', 'k3-native'), default='official-xml')
     parser.add_argument('--k3-compatibility', type=Path)
