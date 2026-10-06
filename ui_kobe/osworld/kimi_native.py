@@ -14,7 +14,7 @@ from . import telemetry
 from .cua_contract import CUAContract, options_contract
 from .native_history import compact
 
-PROTOCOL = "kimi-k3-native-tools-official-cua-v5"
+PROTOCOL = "kimi-k3-native-tools-official-cua-v6"
 
 
 def native_schema(frame):
@@ -104,6 +104,10 @@ class KimiNativeAgent:
             compiler="unchanged mm_agents.qwen.actions.translate_tool_calls", terminal_status_judge=False)
 
     def reset(self, _logger=None):
+        journal = getattr(self, 'execution_journal', None)
+        if journal and not journal.closed:
+            telemetry.record_transition(self, 'close')
+        self.execution_journal = None
         self.turns, self.pending = [], None
         self.last_trace, self.executions, self.command_call_indices = {}, [], []
         self.total_steps = self.folded_prefix_count = self._ui_kobe_trace_step = 0
@@ -195,4 +199,5 @@ class KimiNativeAgent:
                     "The original deadline and remaining budget still apply."})
 
     def close(self):
+        telemetry.record_transition(self, 'close')
         self.client.close()

@@ -113,14 +113,28 @@ def frozen_check(root):
         raise RuntimeError("Task046 setup admission changed")
 
 
-def prepare(root, task, validation, purpose="evaluation", admission=None, profile_name="low-16k", cua_config=None):
+def interface_protocols(interface):
+    return {'official-xml': ['kimi-k3-official-qwen-xml-v6', 'kimi-k3-official-qwen-xml-taskviews-v6'],
+            'k3-native': ['kimi-k3-native-tools-official-cua-v6', 'kimi-k3-native-tools-taskviews-official-cua-v6']}[interface]
+
+
+def check_interface(plan):
+    if (plan.get('implementation_version') != 6 or plan.get('agent_interface') not in ('official-xml', 'k3-native')
+            or plan.get('protocols') != interface_protocols(plan['agent_interface'])):
+        raise RuntimeError('Use a fresh v6 plan with one preselected shared Agent interface')
+    if plan['agent_interface'] == 'official-xml' and not plan.get('k3_compatibility', {}).get('compatible'):
+        raise RuntimeError('Official XML interface requires passing K3 response/history compatibility evidence')
+
+
+def prepare(root, task, validation, purpose="evaluation", admission=None, profile_name="low-16k", cua_config=None,
+            agent_interface='official-xml', compatibility=None):
     from examples.osworld2_eval import official_identity
     from ui_kobe.osworld.task_examples import task_example
     from ui_kobe.osworld.runner import source_snapshot
     from ui_kobe.api.kimi_stream import StreamBudget
     from ui_kobe.api.kimi import generation_profile
     from ui_kobe.osworld.cua_contract import CUAContract
-    from ui_kobe.osworld.official_base import verify_official_base
+    from ui_kobe.osworld.official_base import verify_official_base, OFFICIAL_COMMIT
     verify_official_base(REPO)
     contract = CUAContract(**load(cua_config)) if cua_config else CUAContract()
     from scripts.native_resource_accounting import POLICY, STARTUP_AVAILABLE_GIB, RUNTIME_AVAILABLE_GIB
@@ -129,6 +143,14 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     checked = load(validation)
     if checked["exit_code"] != 0 or checked["project_source"] != project_snapshot():
         raise RuntimeError("Current interface needs passing bounded validation")
+    proof = load(compatibility) if compatibility else None
+    if agent_interface == 'official-xml':
+        if (not proof or not proof.get('compatible') or not proof.get('live_api_called')
+                or proof.get('official_commit') != OFFICIAL_COMMIT
+                or proof.get('project_source') != project_snapshot()
+                or proof.get('generation_profile') != generation_profile(profile_name).__dict__
+                or proof.get('cua_contract') != contract.snapshot()):
+            raise RuntimeError('Verify live K3 XML/assistant history against this source/profile/contract before migration')
     # Freezing a read-only plan does not create a VM. Actual startup admission
     # remains in launch() and the VM guard, under the authorized resource policy.
     status = host_status()
@@ -138,8 +160,9 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
               for name in task_example(task).assets}
     plan = {"created_utc": now(), "task_id": task, "model": "kimi-k3", "base_url": "https://api.moonshot.ai/v1",
         "api_key_env": "KIMI_API_KEY", "official": identity, "asset_sha256": assets,
-        "arms": ["baseline", "taskviews"], "protocols": ["kimi-k3-native-tools-official-cua-v5",
-            "kimi-k3-native-tools-taskviews-official-cua-v5"], "stream_budget": StreamBudget().__dict__,
+        "arms": ["baseline", "taskviews"], "protocols": interface_protocols(agent_interface),
+        'implementation_version': 6, 'agent_interface': agent_interface,
+        'k3_compatibility': proof, 'stream_budget': StreamBudget().__dict__,
         "cua_contract": contract.snapshot(),
         "generation_profile": generation_profile(profile_name).__dict__,
         "arm_admission": {"baseline_score_required": False, "baseline_run_required": False,
@@ -159,10 +182,10 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         "startup_windows": status, "retries": "At most two transport attempts; actor repair pool 2 and advisory pool 2 separately; one shared step output/deadline, actor output/time reserved; all attempts charged; no episode reruns",
         "execution_policy": {"batch_actions": True, "compiler": "unchanged official translate_tool_calls",
             "extra_tool_count_limit": None, "extra_argument_ranges": False, "affirmative_receipt_gate": False,
-            "terminal_status_judge": False, "terminal_policy": "explicit native terminate or official max_steps; upstream optional terminal judge disabled to preserve the user-authorized no-automatic-DONE policy",
+            "terminal_status_judge": False, "terminal_policy": "explicit model terminate or official max_steps; upstream optional terminal judge disabled to preserve the user-authorized no-automatic-DONE policy",
             "taskviews_advisers": "best effort; invalid views recorded without blocking the reserved executor"},
         "user_authorization": "User requested a shared official CUA interface and source commit; preparing this plan does not authorize a new evaluation episode. Launch requires experiment authorization; generation profiles and resource protections remain declared in this plan",
-        "taskviews_variant": "dynamic semantic views/advisers; same native actor/compiler; no synthetic compensation"}
+        "taskviews_variant": "optional context provider consumes shared passive execution graph and task modules; same selected actor interface"}
     plan["purpose"] = purpose
     if task == "046":
         from scripts.native_task046_web import deployment_snapshot, validate_admission
@@ -210,9 +233,10 @@ def official_arguments(task, output, profile=None, contract=None):
 def launch(root, arm):
     frozen_check(root)
     plan = load(root / "plan.json")
+    check_interface(plan)
     from ui_kobe.osworld.cua_contract import CUAContract
     if not isinstance(plan.get("cua_contract"), dict):
-        raise RuntimeError("This v5 entry requires a fresh frozen plan with its predeclared CUA contract")
+        raise RuntimeError("This v6 entry requires a fresh frozen plan with its predeclared CUA contract")
     CUAContract(**plan["cua_contract"])
     resources_ready()
     if plan["task_id"] == "046":
@@ -241,6 +265,7 @@ def launch(root, arm):
     output = ROOT / "results" / run_id / "qwen"
     manifest = {"run_id": run_id, "run_dir": str(stage), "plan_root": str(root), "task_id": plan["task_id"],
         "arm": arm, "agent_protocol": plan["protocols"][plan["arms"].index(arm)], "unit": unit,
+        'agent_interface': plan['agent_interface'], 'implementation_version': 6,
         "official_results": str(output), "official_arguments": official_arguments(plan["task_id"], output,
                                                     plan.get("generation_profile"), plan.get("cua_contract")),
         "cua_contract": plan.get("cua_contract"),
@@ -568,11 +593,14 @@ def main():
     parser.add_argument("--admission", type=Path)
     parser.add_argument("--profile", choices=("low-16k", "max-32k"), default="low-16k")
     parser.add_argument("--cua-config", type=Path)
+    parser.add_argument('--agent-interface', choices=('official-xml', 'k3-native'), default='official-xml')
+    parser.add_argument('--k3-compatibility', type=Path)
     args = parser.parse_args()
     require_scope(2 * GIB if args.action == "supervise" else 128 * 1024**2)
     root = args.root.resolve()
     if args.action == "prepare":
-        prepare(root, args.task, args.validation, args.purpose, args.admission, args.profile, args.cua_config)
+        prepare(root, args.task, args.validation, args.purpose, args.admission, args.profile, args.cua_config,
+                args.agent_interface, args.k3_compatibility)
     elif args.action == "launch":
         lock = Path.home() / ".cache/ui-kobe-osworld-experiment.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)

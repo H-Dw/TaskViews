@@ -1,0 +1,194 @@
+{
+  "time_utc": "2026-10-06T12:31:17.421516+00:00",
+  "official_commit": "3d778a3c9a34a079316f70df023b166700445792",
+  "compatible": true,
+  "live_api_called": true,
+  "gui_operated": false,
+  "vm_created": false,
+  "benchmark_score": null,
+  "generation_profile": {
+    "name": "low-16k",
+    "reasoning_effort": "low",
+    "max_completion_tokens": 16000,
+    "step_output_tokens": 32000,
+    "executor_reserve_tokens": 16000,
+    "adviser_max_tokens": 4000,
+    "semantic_regenerations": 2
+  },
+  "cua_contract": {
+    "coordinate_type": "absolute",
+    "model_screen_width": 1920,
+    "model_screen_height": 1080,
+    "history_n": 500,
+    "image_max": 20,
+    "fold_size": 10,
+    "context_max_payload_chars": 10000000,
+    "context_max_text_chars": 120000,
+    "context_rough_text_token_budget": 100000,
+    "context_reserve_chars": 32000,
+    "tool_repair_retries": 2,
+    "advisory_repair_retries": 2,
+    "taskviews_context_bytes": 32000,
+    "enable_context_rescue": true
+  },
+  "history_exact": true,
+  "history_present": true,
+  "same_acting_image": true,
+  "turns": [
+    {
+      "step": 1,
+      "response": "<think>\nMove mouse to red marker at ~(100,101).\n</think>\n\n<tool_call>\n<function=computer_use>\n<parameter=action>mouse_move</parameter>\n<parameter=coordinate>[100, 101]</parameter>\n</function>\n</tool_call>",
+      "commands": [
+        "pyautogui.moveTo(100, 101)"
+      ],
+      "executed": false,
+      "step_tokens": {
+        "output_limit": 32000,
+        "charged_output": 66,
+        "known_usage": {
+          "prompt_tokens": 3689,
+          "completion_tokens": 66,
+          "total_tokens": 3755
+        },
+        "unknown_usage_requests": 0,
+        "semantic_regenerations": 0,
+        "repair_counts": {
+          "executor": 0,
+          "advisory": 0
+        },
+        "repair_limits": {
+          "executor": 2,
+          "advisory": 2
+        },
+        "requests": 1
+      }
+    },
+    {
+      "step": 2,
+      "response": "<think>\nReturn a single wait action as requested.\n</think>\n\n<tool_call>\n<function=computer_use>\n<parameter=action>wait</parameter>\n</function>\n</tool_call>",
+      "commands": [
+        "WAIT"
+      ],
+      "executed": false,
+      "step_tokens": {
+        "output_limit": 32000,
+        "charged_output": 50,
+        "known_usage": {
+          "prompt_tokens": 6486,
+          "completion_tokens": 50,
+          "total_tokens": 6536
+        },
+        "unknown_usage_requests": 0,
+        "semantic_regenerations": 0,
+        "repair_counts": {
+          "executor": 0,
+          "advisory": 0
+        },
+        "repair_limits": {
+          "executor": 2,
+          "advisory": 2
+        },
+        "requests": 1
+      }
+    }
+  ],
+  "error": null,
+  "usage": {
+    "prompt_tokens": 10175,
+    "completion_tokens": 116,
+    "total_tokens": 10291
+  },
+  "unknown_usage_requests": 0,
+  "settled_requests": 2,
+  "project_source": {
+    "ui_kobe/__init__.py": "56e0748e8d6622dfb9c3ec458b2a9eae6bbffe28116680ad5a73fb991a8d76fd",
+    "ui_kobe/api/__init__.py": "4abc448ad0fdc35014dadfc472e1a9820461528658378f61be5248d103de8612",
+    "ui_kobe/api/compatible.py": "11871e3b82912139bc5e44b9575b9e4d8c810375f54ae59d36e0d503d4e8e09e",
+    "ui_kobe/api/discover.py": "ee3e9b5ec104f9b628735ef71528b16077a4662820f60ac68aced1a3431749ec",
+    "ui_kobe/api/glm.py": "10115a80f22f8af1014e58d00cc2643ea92b3d1d9a3dbd5fc63e3b5138588962",
+    "ui_kobe/api/kimi.py": "e070ebdebbda727da031c9d126a975ebfdb1fd2483af13e3e0218bd9b393cff8",
+    "ui_kobe/api/kimi_budget.py": "d02b0361e8826ebce347081aa9ed7b9fb004ec32de1a53952c1f8d2349419eaf",
+    "ui_kobe/api/kimi_stream.py": "6c47afd63dbc5bab65e4cf4b691d1762f6f3215ec72d2e9fb4d65b0f8bcb009d",
+    "ui_kobe/api/probe.py": "5f89451709db88768de6a611ec2048ba24214b8fe30c370fc35ba7d1a05fe042",
+    "ui_kobe/api/qwen.py": "aa1541b19b47c7ee29fa86e2b5e2f987194e2ad6858905a70db0885e84fef27a",
+    "ui_kobe/cli.py": "a8ecd3fef71bcfcccd5305833c70a0b000ffd9d361d237b581f303ea390bae44",
+    "ui_kobe/kobe.py": "330eaf8096fdc5d40e5dca35e4401d2b22f33ae6053443b8bc5fe2cbc60f6b05",
+    "ui_kobe/osworld/__init__.py": "5a6f0a6cae1a85e830ece37b774b5d765ff1465965b149940021f906f370c815",
+    "ui_kobe/osworld/actions.py": "7eab113c213adf126d2282ca6d07f1e5e4ce55696d9df865af8868b946c9e4f7",
+    "ui_kobe/osworld/agent.py": "0a6274901f6a0be117f877aaa1da1358d4f6ce900970b012daeab20ad2bb8ac6",
+    "ui_kobe/osworld/cua_contract.py": "4645cd11333289df090ec955308fbff2c3710266f54709a7ed84cdba3a93b2dc",
+    "ui_kobe/osworld/feedback.py": "ad45397ce6e51fe9e4e2bee76f69d571a94895f2f01ff3a84d2672b2ec626ead",
+    "ui_kobe/osworld/kimi_native.py": "4a32e927b9484c5bfc4d4f76bf29f130239859cf92d0e01ea7a78b98508da2c6",
+    "ui_kobe/osworld/kimi_official.py": "18ffabfe3983cbf02d7e33e56cf29c406be2791bb1ff278e6b6400d82d7d42fd",
+    "ui_kobe/osworld/kimi_taskviews_native.py": "7152853f686c0fe34a336843ba443216f9c83196032549ee797547396006c863",
+    "ui_kobe/osworld/lifecycle.py": "ecf201d8009c997e0b6ec05f241c2985ba0e4f3d9219ba9d1dfdd6ed997092bc",
+    "ui_kobe/osworld/local_web.py": "aa88cd9fac81c591e8dc95ebe0ae1f3fe7f5e16f6a0e6838985273be7b3074dd",
+    "ui_kobe/osworld/native_history.py": "19fea4d4d6a49d07da8f7df0577b886b18b211e8fccf0f97b941e2d7a41939f5",
+    "ui_kobe/osworld/official_adapter.py": "0caa01fd4e52e49d8cc57178226bece73fdc8846cb2607ff921c6ab19cbc2764",
+    "ui_kobe/osworld/official_base.py": "05f7dbd333dce1a66cbde63a2b092a99182be955cad22c4fb29d465a2f40d603",
+    "ui_kobe/osworld/process.py": "3db05ee901b6908dfd668a9d26c17f691575357302acc9358aaca6cff719edef",
+    "ui_kobe/osworld/qwen_judge.py": "2af7fb139aee2d94ee2351a9c7b9ba4749bbb6dc2968e4329e68d818a489a96e",
+    "ui_kobe/osworld/runner.py": "99975eabec9672af8ec9badb4fea079da9e8bf747cb2ed28b9ae7feef19f87cc",
+    "ui_kobe/osworld/task_control.py": "f006c147604ef789588c4ec5a4088d0381e3d2b57dc4c61a04f76fa7cd2aeb2b",
+    "ui_kobe/osworld/task_examples.py": "d9768f5c569a2b58b55d885ff115c3361be4986ec94bb25befce6f741e8b90fc",
+    "ui_kobe/osworld/taskviews_context.py": "3ca4809ad7cbfa5d648042ac88c45153b144c865343cfde602053d0dbb3238c8",
+    "ui_kobe/osworld/telemetry.py": "8a5d510f78c7fab1c34b3b7141850ecfdf9cc949221b7dc8d85a0dbeddca2f51",
+    "ui_kobe/osworld/transitions.py": "1a2f1cf10ab5a7d5a1c85c990cae4f2429962c2728250393e02ecf63720492a9",
+    "ui_kobe/osworld/worker.py": "69f902636e663e7d3775419146fe1ded1e46406a719be996cd649d32a8993671",
+    "ui_kobe/utils/__init__.py": "63b0868fd6beaa17ee75dd93676a137d69d7f7757eecdcc03d13d67b8f0567a5",
+    "ui_kobe/utils/graph_manager.py": "91e39fe13d39b2f231b9c8b71d7376d7902331798c5d4e15abe100b67304ce60",
+    "ui_kobe/utils/logging.py": "4736df3e68bd57c39350999423455d601bb95ee50f8abdc4c674b2d6e050d498",
+    "ui_kobe/utils/vlm_utils.py": "a98b8a641019d64372ecf30ddc89007330fcb6eb1aa48d7ceff3a5a50d05fd87",
+    "kobe_views/__init__.py": "faeb28dde576a50401013f43ab3006be999af8155c29bbd7d4ade3c087fcf013",
+    "kobe_views/adapters.py": "5ec39bac5ccbe5abe092efc856de0dc3785facabd4b14cad6cf470d0cd55a025",
+    "kobe_views/cli.py": "18b7260a8c9bc7a18f4888cdf0ac3b3a8090ff9eee6e439808bf5147a6c90d07",
+    "kobe_views/execution_modules.py": "218e92f8581c2cd27b8b3436857ad044082811739821b5209e587cb0ec32037f",
+    "kobe_views/model.py": "0116ba44cece2e88b0e2a6b257b7ed315b40806b493a92e79537ae2c54a2d6c9",
+    "kobe_views/policies.py": "098f44f2c1b7bfca18b2433092ef1e5893850d5ab62913e3754e91f799772151",
+    "kobe_views/recovery.py": "c97381dd9dd6a81f985dc10d1aff3e5f43c506dd15c65294b28493b09b05e63d",
+    "kobe_views/retrieval.py": "e1ed2cd8d8ec05889157fb89026501fdb642e1764563c36482ff8c2829413922",
+    "kobe_views/routing.py": "1447de83453a5d529afb479d6ff08b2ed00661be46a0caca903fb0b1027b644a",
+    "kobe_views/runtime.py": "4a4f83a90542bf68b643941bc11d46635ab147fecd95e290256d60f2b1691de1",
+    "kobe_views/service.py": "cab1579730a6d7691dd3385aa89a996f02a8fb845a0df93f6ce68e6553840a74",
+    "kobe_views/store.py": "4645a0955a29c059c5b80fe86f2f66b9b3a8851797dd5840b00dae646bddf8e4",
+    "kobe_views/task_graph.py": "b8ae4667b4cc39d61c6ea49fdba709a59a602f7d901c94d70c8e3c9e46a64b0f",
+    "kobe_views/task_memory.py": "84487038ebc4f40aa010351279dd590fa389ae5d6d0bf487ed955f2c37d186b5",
+    "kobe_views/task_views.py": "6dd3d71de236d9e129d1c0ed46a53ecbfa9502a558e37989ccac79874846b471",
+    "kobe_views/view_control.py": "a345d5a2ba2f38f06f0511ca82d2d16a7ac9475e32e1e1febc9db7139fc70a3a",
+    "scripts/audit_graph.py": "c26294e00344b4207338956b59217de1e75417743a891031fa0b16174a614c88",
+    "scripts/explore.py": "e83e602bfc474ceb9f0a53b00a5a8fd1b22576ab5da0aeff668ab7c5f049dd63",
+    "scripts/launch_kimi_native_task035.py": "9daf64f7e3d864fd1d30fdb707192ceba3a737cedf15f02d9a68f8e7aabe4316",
+    "scripts/launch_osworld_task035_background.py": "f9f44ef52a71b0948582fb045c122ce11d511833a59bd82f2cd9329f2f190980",
+    "scripts/launch_osworld_task035_pipeline.py": "3cadcc3c5888b64a3c424326eeef094012e402aa9a203ce48ecda6b1fea854b7",
+    "scripts/native_resource_accounting.py": "3cedc0abcf29a8aba64ece4d9f31df55991c5d9594bb28dc11f970077014bfd4",
+    "scripts/native_task046_setup.py": "6728aea40eebbde8d54f9cb793783fbf7124fa48ee29bfe56ca652e221f2adaf",
+    "scripts/native_task046_web.py": "81249dfdfdc36a4eca2de2a42c13a440643b596af06be74c38b333fc48cb13af",
+    "scripts/osworld_native_experiment.py": "34c810f61967ec52e2b008aaef4f9cccb8e8f5e47eaea25cad443b2f409f787a",
+    "scripts/osworld_task035_background.py": "8d5a48fc915da8d46025e595ee431856549a9474e1120bd7b2ebdd288ecd281b",
+    "scripts/osworld_task035_pipeline.py": "6a467dc010d019502213b268d89bec6adaae487c1e53b609896322e79e5376f3",
+    "scripts/osworld_task035_profiles.py": "be320d73b9814cd478c0c568c21255d8a4d76000700364ce4ed0a4e9277b680c",
+    "scripts/plot_graph.py": "9be601609e15ef5796ddf2a21cb6be4b5905a2a05e44d4dd689dc67ce28427ef",
+    "scripts/precompute_graph_image_embeddings.py": "cfb8bef15a6ad78e785fd86e966f901b4e2b02e8ad7360daa1b939cc0aa96c8d",
+    "scripts/prepare_kimi_native_task035.py": "75f6eab9b124c7d9567adf49ef385d727967e6c27d24971118f058bc81933089",
+    "scripts/probe_k3_official_compatibility.py": "d452b4f5629a2233a9042e0879df932b15c7bd2400508f1b69ae3f9f27141294",
+    "scripts/probe_official_qwen_xml.py": "a4ad7a5cb89af70a8a306e8a882154400860723f62a100a60daac6d65f87f535",
+    "scripts/probe_qwen_cua_endpoint.py": "0a3f52a6391dc024999546a6b4c14eb149eb4e8646919f6119c4b6f252c90c47",
+    "scripts/run_official_native_tasks.py": "184a0196e3c4ec43826455ef81278f5f764780f3eb030e5f6bc37d09feb4fac6",
+    "scripts/run_official_qwen_task035.py": "6ff11d505820672b9bdd1d381d5c5fde76163a68ca86c14b6e2f796ca4411a21",
+    "scripts/validate_cua.py": "46c43e349deb53986f01280faa313704b2e1c888d5822d167f01c2768582ab91",
+    "scripts/validate_native_tasks.py": "312b9adfad3961e1cb7a4f33dd30bf60eabd7c633e9f81003fc4b49f2bd17d05",
+    "scripts/validate_task_control_memory_replay.py": "784ac94e3124d8f8ccdfe6f6bf782cb72e4b9650c2af06a060179eebc26acdba"
+  },
+  "official_source_unchanged": true,
+  "evidence_dir": "validation/k3-xml-low16-final",
+  "evidence_sha256": {
+    "events-47961.jsonl": "a79e41a2934af8b5a89ba0357e6655e43bb3923a564df5a3658e26649146eaa5",
+    "images/ef1b1651629b0dbff8154e79ce387130f9d4aa3501484f7d91a2ddfced5c989e.png": "ef1b1651629b0dbff8154e79ce387130f9d4aa3501484f7d91a2ddfced5c989e",
+    "streams/k3s-52952031932c498e9b82e0946467f0da.jsonl": "3ee0e88e306fd29fcbcd481badb6b73f6208d91fc688f7894332d1257e866b62",
+    "streams/k3s-d25c77bece3f4fa2ade0970af2c01036.jsonl": "cfed723a1e5f38cb4963e13f1b0b6a6ddfc52226a66f37899a8c47a514bc53c8"
+  },
+  "scope_limit": 134217728,
+  "memory_peak": 107298816,
+  "memory_events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "limitation": "Two synthetic turns only. No action executes. Upstream history success text is synthetic, not a receipt."
+}

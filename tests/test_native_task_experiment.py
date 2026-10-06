@@ -17,7 +17,8 @@ def launch_sandbox(tmp_path, monkeypatch):
     root = tmp_path / "new-plan"
     root.mkdir()
     experiment.write(root / "plan.json", {"task_id": "059", "arms": ["baseline", "taskviews"],
-        "protocols": ["kimi-k3-native-tools-official-cua-v5", "kimi-k3-native-tools-taskviews-official-cua-v5"],
+        'implementation_version': 6, 'agent_interface': 'k3-native',
+        "protocols": ["kimi-k3-native-tools-official-cua-v6", "kimi-k3-native-tools-taskviews-official-cua-v6"],
         "cua_contract": CUAContract().snapshot()})
     home = tmp_path / "home"
     (home / ".config/systemd/user").mkdir(parents=True)
@@ -40,12 +41,26 @@ def test_taskviews_launch_is_independent_of_baseline_score(launch_sandbox, basel
     experiment.launch(root, "taskviews")
     manifest = experiment.load(root / "taskviews/manifest.json")
     assert manifest["arm"] == "taskviews"
-    assert manifest["agent_protocol"] == "kimi-k3-native-tools-taskviews-official-cua-v5"
+    assert manifest["agent_protocol"] == "kimi-k3-native-tools-taskviews-official-cua-v6"
     assert checks == [("source", root), ("resources", None)]
     assert commands[-1] == ["systemctl", "--user", "start", manifest["unit"]]
     assert not (root / "taskviews/audit.json").exists()
     if baseline is not None:
         assert experiment.load(root / "baseline/audit.json")["score"] == baseline["score"]
+
+
+@pytest.mark.parametrize('change', [
+    {'implementation_version': 5}, {'agent_interface': 'guess'},
+    {'agent_interface': 'official-xml'},
+    {'agent_interface': 'official-xml', 'protocols': ['kimi-k3-official-qwen-xml-v6',
+        'kimi-k3-official-qwen-xml-taskviews-v6']}])
+def test_mixed_old_or_unverified_xml_interface_is_rejected_before_resources(launch_sandbox, change):
+    root, checks, commands = launch_sandbox
+    experiment.write(root / 'plan.json', {**experiment.load(root / 'plan.json'), **change})
+    with pytest.raises(RuntimeError):
+        experiment.launch(root, 'baseline')
+    assert checks == [('source', root)] and not commands
+    assert not (root / 'baseline').exists()
 
 
 @pytest.mark.parametrize("failed_check", ["source_unchanged", "cleanup_ok"])

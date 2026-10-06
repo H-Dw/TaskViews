@@ -25,6 +25,8 @@ class UIKobeAdapter:
             graph = source if hasattr(source, "nodes") else source.graph
             raw_nodes = [dict(attrs, id=n) for n, attrs in graph.nodes(data=True)]
             raw_edges = [dict(attrs, source=s, target=t) for s, t, attrs in graph.edges(data=True)]
+        if isinstance(source, dict) and source.get('schema_version') == 2:
+            return self._paired(source, app)
         nodes, edges = [], []
         for raw in raw_nodes:
             pid = page_id(app, raw["id"])
@@ -59,6 +61,26 @@ class UIKobeAdapter:
             edges.append(Edge(f"transition:{digest([src, dst])}", src, dst, "transition", fields,
                               Grade(raw.get("grade", "observed")), (ref,),
                               bool(raw.get("failed", False)), bool(raw.get("high_risk", False))))
+        return Snapshot.create(nodes, edges)
+
+    def _paired(self, source, app):
+        """Versioned observations, distinct attempts and honest missing endpoints."""
+        nodes, edges, self.gaps = [], [], []
+        ids = {raw['id'] for raw in source['nodes']}
+        for raw in source['nodes']:
+            pid = page_id(app, raw['id'])
+            ref = EvidenceRef('official-execution', 'observation:' + raw['id'])
+            fields = {'observation': (Assertion(raw['observation'], Grade.OBSERVED, (ref,)),),
+                'logical_page': (Assertion(raw.get('logical_page'), Grade.CANDIDATE, (ref,)),),
+                'state_schema': (Assertion(raw.get('state_schema'), Grade.CANDIDATE, (ref,)),)}
+            nodes.append(Node(pid, 'page', pid, fields))
+        for raw in source['edges']:
+            if raw['source'] not in ids or raw['target'] not in ids:
+                self.gaps.append(raw)
+                continue
+            edges.append(Edge('transition:' + raw['id'], page_id(app, raw['source']), page_id(app, raw['target']),
+                'transition', dict(raw), Grade.OBSERVED,
+                (EvidenceRef('official-execution', 'transition:' + raw['id']),), bool(raw.get('error')), False))
         return Snapshot.create(nodes, edges)
 
 

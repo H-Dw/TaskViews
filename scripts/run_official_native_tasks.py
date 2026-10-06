@@ -19,14 +19,18 @@ def main():
     repo = Path.home() / "osworld2/OSWorld-V2"
     sys.path[:0] = [str(project), str(repo), str(repo / "scripts/python")]
     os.chdir(repo)
-    from scripts.osworld_native_experiment import frozen_check, host_status
+    from scripts.osworld_native_experiment import frozen_check, host_status, check_interface
     frozen_check(Path(manifest["plan_root"]))
     from ui_kobe.osworld.official_base import verify_official_base
     official_base = verify_official_base(repo)
     from ui_kobe.osworld.cua_contract import CUAContract
     plan = json.loads((Path(manifest["plan_root"]) / "plan.json").read_text())
+    check_interface(plan)
+    if (manifest.get('agent_interface') != plan['agent_interface']
+            or manifest.get('agent_protocol') != plan['protocols'][plan['arms'].index(manifest['arm'])]):
+        raise RuntimeError('Manifest Agent interface differs from the frozen paired plan')
     if not isinstance(plan.get("cua_contract"), dict):
-        raise RuntimeError("This v5 entry requires a fresh frozen plan with its predeclared CUA contract")
+        raise RuntimeError("This v6 entry requires a fresh frozen plan with its predeclared CUA contract")
     contract = CUAContract(**plan["cua_contract"])
     if manifest.get("cua_contract") != contract.snapshot():
         raise RuntimeError("Manifest CUA contract differs from frozen plan")
@@ -59,7 +63,10 @@ def main():
     output = Path(manifest["official_results"])
     install_local_memory_profile(output, "minimal", startup_available_gib=STARTUP_AVAILABLE_GIB)
     import mm_agents.qwen
-    if manifest["arm"] == "baseline":
+    if manifest['agent_interface'] == 'official-xml':
+        from ui_kobe.osworld.kimi_official import OfficialK3Agent, OfficialK3TaskViewsAgent
+        mm_agents.qwen.QwenAgent = OfficialK3Agent if manifest['arm'] == 'baseline' else OfficialK3TaskViewsAgent
+    elif manifest["arm"] == "baseline":
         from ui_kobe.osworld.kimi_native import KimiNativeAgent
         mm_agents.qwen.QwenAgent = KimiNativeAgent
     else:

@@ -24,6 +24,40 @@ _installed = False
 _api_installed = False
 
 
+def record_transition(agent, operation, *args, **kwargs):
+    """Observer failures are durable warnings, never action/termination gates."""
+    journal = getattr(agent, 'execution_journal', None)
+    try:
+        args = list(args)
+        if operation in ('begin', 'decide', 'result') and args:
+            args[0] = safe(args[0])
+        if operation == 'begin':
+            args[1] = {**args[1], 'user_response': safe(args[1].get('user_response'))}
+        elif operation == 'decide':
+            args[1] = safe(args[1])
+        kwargs = {key: value if key == 'observation' else safe(value) for key, value in kwargs.items()}
+        if operation == 'begin' and journal is None and _root is not None:
+            from .cua_contract import CUAContract
+            from .transitions import TransitionJournal
+            contract = getattr(agent, 'contract', None)
+            if contract is None:
+                declared = os.environ.get('UI_KOBE_CUA_CONTRACT_JSON')
+                if declared is None:
+                    return None  # Other legacy runners did not declare this contract.
+                contract = CUAContract(**json.loads(declared))
+            journal = agent.execution_journal = TransitionJournal(_root / 'transitions',
+                task_id=os.environ.get('UI_KOBE_TASK_ID', 'unknown'),
+                run_id=os.environ.get('OSWORLD_FULL_RUN_ID', 'offline'), contract=contract)
+        if journal is not None and not journal.closed:
+            result = getattr(journal, operation)(*args, **kwargs)
+            if result:
+                emit('execution_journal_event', ref=journal.reference(result), kind=result['kind'])
+            return result
+    except Exception as exc:
+        emit('transition_recording_warning', operation=operation, error_type=type(exc).__name__, error=str(exc))
+    return None
+
+
 def safe(value):
     if hasattr(value, "model_dump"):
         value = value.model_dump()
@@ -169,16 +203,30 @@ def install(root: Path) -> None:
         self._ui_kobe_trace_step = getattr(self, "_ui_kobe_trace_step", 0) + 1
         _context.step, _context.phase = self._ui_kobe_trace_step, "agent"
         _context.agent = self
+        record_transition(self, 'begin', instruction, obs, step=self._ui_kobe_trace_step)
         emit("observation", instruction=instruction,
              screenshot=save_image(obs["screenshot"]) if obs.get("screenshot") else None)
         started = time.monotonic()
         try:
             response, actions = original_predict(self, instruction, obs)
+            try:
+                from .transitions import decision_tools
+                tools = decision_tools(self)
+            except Exception as exc:
+                tools = []
+                emit('transition_recording_warning', operation='tool_alignment', error=str(exc))
+            record_transition(self, 'decide', response, actions, step=self._ui_kobe_trace_step, tools=tools)
+            trace = getattr(self, 'last_trace', None)
+            if trace is None:
+                terminal = next((t['arguments'] for t in tools if t.get('arguments', {}).get('action') == 'terminate'), None)
+                trace = {'protocol': 'official_qwen_xml', 'terminal_origin': 'explicit_model_tool' if terminal else None,
+                         'native_action': terminal, 'compiled_commands': actions, 'tools': tools}
             emit("decision", duration_s=round(time.monotonic()-started, 3),
                  response=response, parsed_actions=actions,
-                 framework_trace=getattr(self, "last_trace", None))
+                 framework_trace=trace)
             return response, actions
         except Exception as exc:
+            record_transition(self, 'phase', 'decision_error', error=str(exc))
             emit("decision_error", error_type=type(exc).__name__, error=str(exc))
             raise
     QwenAgent.predict = predict
@@ -191,7 +239,10 @@ def install(root: Path) -> None:
         emit("controller_result", command=command, result=result,
              duration_s=round(time.monotonic()-started, 3))
         if in_agent_action():
-            getattr(_context, 'receipts', []).append({"command": command, "result": safe(result)})
+            try:
+                getattr(_context, 'receipts', []).append({"command": command, "result": safe(result)})
+            except Exception as exc:
+                emit('feedback_recording_warning', error=str(exc))
         return result
     PythonController.execute_python_command = execute
     original_step = DesktopEnv.step
@@ -204,6 +255,8 @@ def install(root: Path) -> None:
         started = time.monotonic()
         try:
             obs, reward, done, info = original_step(self, action, *args, **kwargs)
+            record_transition(getattr(_context, 'agent', None), 'result', action,
+                step=getattr(_context, 'step', 0), observation=obs, receipts=_context.receipts, info=info)
             emit("action_result", action=action, reward=reward, done=done, info=info,
                  duration_s=round(time.monotonic()-started, 3),
                  screenshot=save_image(obs["screenshot"]) if obs.get("screenshot") else None)
@@ -215,6 +268,8 @@ def install(root: Path) -> None:
                     emit('feedback_recording_warning', error=str(record_error))
             return obs, reward, done, info
         except Exception as exc:
+            record_transition(getattr(_context, 'agent', None), 'result', action,
+                step=getattr(_context, 'step', 0), receipts=_context.receipts, error=str(exc))
             emit("action_error", action=action, error_type=type(exc).__name__, error=str(exc))
             recorder = getattr(getattr(_context, "agent", None), "record_execution", None)
             if recorder:
@@ -233,15 +288,18 @@ def install(root: Path) -> None:
         if _root is not None:
             write_phase(_root.parent, "evaluating")
         emit("evaluation_start")
+        record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_start')
         started = time.monotonic()
         try:
             score = original_evaluate(self, *args, **kwargs)
             emit("evaluation_result", score=score, duration_s=round(time.monotonic()-started, 3))
+            record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_result', score=score)
             if _root is not None:
                 write_phase(_root.parent, "evaluation_returned", evaluation_returned=True, raw_official_score=safe(score))
             return score
         except Exception as exc:
             emit("evaluation_error", error_type=type(exc).__name__, error=str(exc))
+            record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_error', error=str(exc))
             raise
     DesktopEnv.evaluate = evaluate
     original_close = DesktopEnv.close
@@ -256,6 +314,21 @@ def install(root: Path) -> None:
         except BaseException as exc:
             emit("environment_close_error", error_type=type(exc).__name__, error=str(exc))
             raise
+        finally:
+            agent = getattr(_context, 'agent', None)
+            recorder = getattr(agent, 'flush_execution', None)
+            if recorder:
+                try:
+                    recorder()
+                except Exception as exc:
+                    emit('feedback_recording_warning', error=safe(str(exc)))
+            record_transition(agent, 'close')
+            closer = getattr(agent, 'close', None)
+            if closer:
+                try:
+                    closer()
+                except Exception as exc:
+                    emit('agent_close_warning', error=safe(str(exc)))
         if _root is not None:
             write_phase(_root.parent, "closed")
         return result

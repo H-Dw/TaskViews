@@ -15,6 +15,7 @@ cache/
 logs/
 docs/experiments/
 validation/*-suites/
+validation/k3-xml-*/
 validation/first-validation.json
 validation/second-validation.json
 validation/third-validation.json

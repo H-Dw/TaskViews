@@ -7,6 +7,8 @@ import subprocess
 
 OFFICIAL_COMMIT = "3d778a3c9a34a079316f70df023b166700445792"
 CRITICAL_PATHS = ("mm_agents/qwen/images.py", "mm_agents/qwen/actions.py", "mm_agents/qwen/parser.py",
+                  "mm_agents/qwen/main.py", "mm_agents/qwen/client.py", "mm_agents/qwen/context.py",
+                  "mm_agents/qwen/recovery.py", "mm_agents/qwen/__init__.py",
                   "mm_agents/qwen/prompts.py", "mm_agents/qwen/history.py", "lib_run_single.py",
                   "scripts/python/run_multienv_qwen.py", "desktop_env/desktop_env.py",
                   "desktop_env/controllers/python.py")
