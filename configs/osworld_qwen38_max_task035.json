@@ -1,0 +1,22 @@
+{
+  "api": {
+    "provider": "qwen",
+    "base_url": "https://pjfdspqowq.a.pinggy.link",
+    "model": "qwen3.8-max",
+    "api_key_env": "QWEN_API_KEY",
+    "timeout": 120,
+    "max_attempts": 3,
+    "total_timeout": 360,
+    "backoff_initial": 3,
+    "backoff_max": 15,
+    "extra_body": {"enable_thinking": false}
+  },
+  "agent": {
+    "temperature": 0,
+    "top_p": 0.9,
+    "max_output_tokens": 16000,
+    "context_bytes": 16000,
+    "history_steps": 8,
+    "retained_frames": 12
+  }
+}

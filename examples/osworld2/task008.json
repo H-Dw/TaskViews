@@ -1,0 +1,464 @@
+{
+  "schema_version": 1,
+  "task_id": "synthetic-osworld2-008",
+  "provenance": {
+    "kind": "synthetic_mechanism_fixture",
+    "official_task_id": "Task008",
+    "official_fixture": false,
+    "description": "Names, amounts, timestamps and event contents are illustrative; extracted proposals are pre-annotated, not model outputs.",
+    "sources": [
+      "https://huggingface.co/datasets/xlangai/osworld_v2_tasks/discussions/48",
+      "https://huggingface.co/datasets/xlangai/osworld_v2_tasks/discussions/132"
+    ]
+  },
+  "instruction": "从银行流水、邮件凭证和报销规则整理报销；保留凭证类型、金额、分摊与提交版本之间的对应关系。",
+  "roles": [
+    {
+      "id": "reconciler",
+      "anchors": [
+        "report:travel"
+      ],
+      "read_predicates": [
+        "report.transactions",
+        "report.outputs",
+        "transaction.*",
+        "artifact.*"
+      ],
+      "focus_predicates": [
+        "transaction.*"
+      ],
+      "sources": [
+        "*"
+      ],
+      "facets": [
+        "objects",
+        "relations",
+        "attention"
+      ],
+      "max_hops": 2,
+      "include_history": false
+    },
+    {
+      "id": "document_reviewer",
+      "anchors": [
+        "report:travel"
+      ],
+      "read_predicates": [
+        "report.documents",
+        "report.required_documents",
+        "document.*"
+      ],
+      "focus_predicates": [
+        "document.kind",
+        "document.content_hash"
+      ],
+      "sources": [
+        "*"
+      ],
+      "facets": [
+        "objects",
+        "relations",
+        "attention"
+      ],
+      "max_hops": 2,
+      "include_history": false
+    },
+    {
+      "id": "submission_checker",
+      "anchors": [
+        "report:travel"
+      ],
+      "read_predicates": [
+        "report.*",
+        "transaction.*",
+        "document.*",
+        "artifact.*"
+      ],
+      "focus_predicates": [],
+      "sources": [
+        "*"
+      ],
+      "facets": [
+        "objects",
+        "relations",
+        "attention"
+      ],
+      "max_hops": 2,
+      "include_history": true
+    }
+  ],
+  "events": [
+    {
+      "id": "008-01",
+      "task_id": "synthetic-osworld2-008",
+      "source": "finance_policy",
+      "ref": "synthetic://task008/008-01",
+      "observed_at": "2026-09-29T09:00:00+08:00",
+      "occurred_at": "2026-09-29T09:00:00+08:00",
+      "text": "差旅报销须同时提供电子客票收据和登机牌，保存各笔流水和分摊依据。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "report:travel",
+            "type": "expense_report",
+            "label": "Travel reimbursement"
+          }
+        ],
+        "claims": [
+          {
+            "id": "8-required",
+            "subject": "report:travel",
+            "predicate": "report.required_documents",
+            "value": [
+              "e_ticket_receipt",
+              "boarding_pass"
+            ],
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-allocation",
+            "subject": "report:travel",
+            "predicate": "report.allocation",
+            "value": {
+              "project:demo": 1.0
+            },
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "008-02",
+      "task_id": "synthetic-osworld2-008",
+      "source": "bank",
+      "ref": "synthetic://task008/008-02",
+      "observed_at": "2026-09-29T09:02:00+08:00",
+      "occurred_at": "2026-09-29T09:02:00+08:00",
+      "text": "银行流水显示机票支出CNY 1200。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "transaction:flight",
+            "type": "bank_transaction",
+            "label": "Flight charge"
+          }
+        ],
+        "claims": [
+          {
+            "id": "8-transactions",
+            "subject": "report:travel",
+            "predicate": "report.transactions",
+            "value": null,
+            "objects": [
+              "transaction:flight"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-amount-v1",
+            "subject": "transaction:flight",
+            "predicate": "transaction.amount",
+            "value": {
+              "amount": "1200.00",
+              "currency": "CNY"
+            },
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "008-03",
+      "task_id": "synthetic-osworld2-008",
+      "source": "mail_attachments",
+      "ref": "synthetic://task008/008-03",
+      "observed_at": "2026-09-29T09:04:00+08:00",
+      "occurred_at": "2026-09-29T09:04:00+08:00",
+      "text": "附件A写有座位与登机口，附件B是A的副本；首次抽取误将B命名为电子客票收据，两个附件内容hash相同。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "document:a",
+            "type": "travel_document",
+            "label": "Attachment A"
+          },
+          {
+            "id": "document:b",
+            "type": "travel_document",
+            "label": "Attachment B"
+          }
+        ],
+        "claims": [
+          {
+            "id": "8-documents-v1",
+            "subject": "report:travel",
+            "predicate": "report.documents",
+            "value": null,
+            "objects": [
+              "document:a",
+              "document:b"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-kind-a",
+            "subject": "document:a",
+            "predicate": "document.kind",
+            "value": "boarding_pass",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-kind-b-v1",
+            "subject": "document:b",
+            "predicate": "document.kind",
+            "value": "e_ticket_receipt",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-hash-a",
+            "subject": "document:a",
+            "predicate": "document.content_hash",
+            "value": "synthetic-identical-content-hash",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-hash-b",
+            "subject": "document:b",
+            "predicate": "document.content_hash",
+            "value": "synthetic-identical-content-hash",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "008-04",
+      "task_id": "synthetic-osworld2-008",
+      "source": "report_planner",
+      "ref": "synthetic://task008/008-04",
+      "observed_at": "2026-09-29T09:05:00+08:00",
+      "occurred_at": "2026-09-29T09:05:00+08:00",
+      "text": "暂拟1200元报销单；凭证分配是候选判断，尚未证明两个附件可满足不同要求。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "artifact:report",
+            "type": "report_draft",
+            "label": "Reimbursement draft"
+          }
+        ],
+        "claims": [
+          {
+            "id": "8-output",
+            "subject": "report:travel",
+            "predicate": "report.outputs",
+            "value": null,
+            "objects": [
+              "artifact:report"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-total",
+            "subject": "artifact:report",
+            "predicate": "artifact.total",
+            "value": {
+              "amount": "1200.00",
+              "currency": "CNY"
+            },
+            "objects": [],
+            "basis": [
+              "8-amount-v1",
+              "8-allocation"
+            ],
+            "supersedes": [],
+            "mode": "derived",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-matching",
+            "subject": "artifact:report",
+            "predicate": "artifact.document_assignment",
+            "value": {
+              "boarding_pass": "document:a",
+              "e_ticket_receipt": "document:b"
+            },
+            "objects": [],
+            "basis": [
+              "8-required",
+              "8-kind-a",
+              "8-kind-b-v1",
+              "8-hash-a",
+              "8-hash-b"
+            ],
+            "supersedes": [],
+            "mode": "derived",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "008-05",
+      "task_id": "synthetic-osworld2-008",
+      "source": "mail_attachments",
+      "ref": "synthetic://task008/008-05",
+      "observed_at": "2026-09-29T09:07:00+08:00",
+      "occurred_at": "2026-09-29T09:07:00+08:00",
+      "text": "复核确认附件B也是登机牌；另找到独立的电子客票收据C。新增文档保留独立身份及内容hash。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "document:c",
+            "type": "e_ticket_receipt",
+            "label": "Electronic ticket receipt"
+          }
+        ],
+        "claims": [
+          {
+            "id": "8-kind-b-v2",
+            "subject": "document:b",
+            "predicate": "document.kind",
+            "value": "boarding_pass",
+            "objects": [],
+            "basis": [],
+            "supersedes": [
+              "8-kind-b-v1"
+            ],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-documents-v2",
+            "subject": "report:travel",
+            "predicate": "report.documents",
+            "value": null,
+            "objects": [
+              "document:a",
+              "document:b",
+              "document:c"
+            ],
+            "basis": [],
+            "supersedes": [
+              "8-documents-v1"
+            ],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-kind-c",
+            "subject": "document:c",
+            "predicate": "document.kind",
+            "value": "e_ticket_receipt",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-hash-c",
+            "subject": "document:c",
+            "predicate": "document.content_hash",
+            "value": "synthetic-receipt-content-hash",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "8-date-c",
+            "subject": "document:c",
+            "predicate": "document.date",
+            "value": {
+              "raw": "29/09/2026",
+              "normalized": "2026-09-29",
+              "locale": "en-GB"
+            },
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "008-06",
+      "task_id": "synthetic-osworld2-008",
+      "source": "bank",
+      "ref": "synthetic://task008/008-06",
+      "observed_at": "2026-09-29T09:09:00+08:00",
+      "occurred_at": "2026-09-29T09:09:00+08:00",
+      "text": "后续银行页面显示该交易扣除退款后的净额为CNY 1100，旧草稿总额需重算。",
+      "extraction": {
+        "entities": [],
+        "claims": [
+          {
+            "id": "8-amount-v2",
+            "subject": "transaction:flight",
+            "predicate": "transaction.amount",
+            "value": {
+              "amount": "1100.00",
+              "currency": "CNY"
+            },
+            "objects": [],
+            "basis": [],
+            "supersedes": [
+              "8-amount-v1"
+            ],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    }
+  ],
+  "evaluation_notes": {
+    "audience": "offline analyst only; never injected as runtime observations",
+    "mechanisms": [
+      "Preserve document type and physical-content identity separately; duplicate boarding passes cannot automatically cover a receipt requirement.",
+      "Document reclassification invalidates the candidate assignment; the amount correction invalidates the old draft total.",
+      "Retain raw dates plus normalized dates and locale. No automatic matching solver or official reimbursement validator is implemented."
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "frame:1", "page": "settings",
+    "fields": {"state.notifications": {"value": false, "source": "axtree", "ref": "fixture:frame1/switch"}},
+    "controls": [
+      {"id": "panel", "kind": "container", "fields": {"text": "Notification preferences 通知设置", "visible": true}},
+      {"id": "label", "kind": "label", "parent": "panel", "fields": {"text": "Notifications 通知", "visible": true}},
+      {"id": "toggle", "parent": "panel", "fields": {"text": "Notifications 通知开关", "role": "switch", "visible": true, "bbox": [300, 120, 350, 160], "coordinate_space": "screen_pixels", "state.checked": false}}
+    ],
+    "relations": [{"source": "label", "target": "toggle", "kind": "label-for"}]
+  },
+  {
+    "id": "frame:2", "page": "settings",
+    "fields": {"state.notifications": {"value": true, "source": "axtree", "ref": "fixture:frame2/switch"}},
+    "controls": [
+      {"id": "panel", "kind": "container", "fields": {"text": "Notification preferences 通知设置", "visible": true}},
+      {"id": "label", "kind": "label", "parent": "panel", "fields": {"text": "Notifications 通知", "visible": true}},
+      {"id": "toggle", "parent": "panel", "fields": {"text": "Notifications 通知开关", "role": "switch", "visible": true, "bbox": [300, 120, 350, 160], "coordinate_space": "screen_pixels", "state.checked": true}}
+    ],
+    "relations": [{"source": "label", "target": "toggle", "kind": "label-for"}]
+  }
+]

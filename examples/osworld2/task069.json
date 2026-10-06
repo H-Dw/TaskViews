@@ -1,0 +1,716 @@
+{
+  "schema_version": 1,
+  "task_id": "synthetic-osworld2-069",
+  "provenance": {
+    "kind": "synthetic_mechanism_fixture",
+    "official_task_id": "Task069",
+    "official_fixture": false,
+    "description": "Names, amounts, timestamps and event contents are illustrative; extracted proposals are pre-annotated, not model outputs.",
+    "sources": [
+      "https://huggingface.co/datasets/xlangai/osworld_v2_tasks/discussions/130",
+      "https://huggingface.co/datasets/xlangai/osworld_v2_tasks/discussions/102",
+      "https://huggingface.co/datasets/xlangai/osworld_v2_tasks/discussions/174"
+    ]
+  },
+  "instruction": "协调评审会议：保留已有日程，准备议程，记录行动项，并将会后摘要发送给负责人、抄送参会者。后续消息可能更正行动项。",
+  "roles": [
+    {
+      "id": "scheduler",
+      "anchors": [
+        "meeting:review"
+      ],
+      "read_predicates": [
+        "meeting.title",
+        "meeting.participants",
+        "meeting.time",
+        "meeting.calendar",
+        "calendar.*",
+        "person.availability"
+      ],
+      "focus_predicates": [],
+      "sources": [
+        "*"
+      ],
+      "facets": [
+        "objects",
+        "relations",
+        "attention"
+      ],
+      "max_hops": 2,
+      "include_history": false
+    },
+    {
+      "id": "minutes_editor",
+      "anchors": [
+        "meeting:review"
+      ],
+      "read_predicates": [
+        "meeting.action_items",
+        "meeting.outputs",
+        "meeting.audience",
+        "action.*",
+        "artifact.*"
+      ],
+      "focus_predicates": [
+        "action.*"
+      ],
+      "sources": [
+        "*"
+      ],
+      "facets": [
+        "objects",
+        "relations",
+        "attention"
+      ],
+      "max_hops": 2,
+      "include_history": false
+    },
+    {
+      "id": "delivery_checker",
+      "anchors": [
+        "meeting:review"
+      ],
+      "read_predicates": [
+        "meeting.*",
+        "message.*",
+        "action.*",
+        "artifact.*",
+        "calendar.*"
+      ],
+      "focus_predicates": [
+        "message.kind",
+        "message.phase",
+        "message.to",
+        "message.cc"
+      ],
+      "sources": [
+        "*"
+      ],
+      "facets": [
+        "objects",
+        "relations",
+        "attention"
+      ],
+      "max_hops": 2,
+      "include_history": true
+    }
+  ],
+  "events": [
+    {
+      "id": "069-01",
+      "task_id": "synthetic-osworld2-069",
+      "source": "boss_thread",
+      "ref": "synthetic://task069/069-01",
+      "observed_at": "2026-09-29T09:00:00+08:00",
+      "occurred_at": "2026-09-29T09:00:00+08:00",
+      "text": "Morgan要求举行评审，收件人是Morgan，Alex和Casey必须在CC；保留现有日程并附议程。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "meeting:review",
+            "type": "meeting",
+            "label": "September review"
+          },
+          {
+            "id": "person:morgan",
+            "type": "person",
+            "label": "Morgan"
+          },
+          {
+            "id": "person:alex",
+            "type": "person",
+            "label": "Alex"
+          },
+          {
+            "id": "person:casey",
+            "type": "person",
+            "label": "Casey"
+          }
+        ],
+        "claims": [
+          {
+            "id": "69-title",
+            "subject": "meeting:review",
+            "predicate": "meeting.title",
+            "value": "September review",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-participants",
+            "subject": "meeting:review",
+            "predicate": "meeting.participants",
+            "value": null,
+            "objects": [
+              "person:morgan",
+              "person:alex",
+              "person:casey"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-audience",
+            "subject": "meeting:review",
+            "predicate": "meeting.audience",
+            "value": {
+              "to": [
+                "morgan@example.invalid"
+              ],
+              "cc": [
+                "alex@example.invalid",
+                "casey@example.invalid"
+              ]
+            },
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-time",
+            "subject": "meeting:review",
+            "predicate": "meeting.time",
+            "value": {
+              "start": "2026-09-30T14:00:00+08:00",
+              "end": "2026-09-30T14:30:00+08:00"
+            },
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-preserve",
+            "subject": "meeting:review",
+            "predicate": "meeting.preserve_existing_events",
+            "value": true,
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-private",
+            "subject": "person:morgan",
+            "predicate": "private.phone",
+            "value": "PRIVATE_DO_NOT_ROUTE_TO_SCHEDULER",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "069-02",
+      "task_id": "synthetic-osworld2-069",
+      "source": "mail_calendar",
+      "ref": "synthetic://task069/069-02",
+      "observed_at": "2026-09-29T09:02:00+08:00",
+      "occurred_at": "2026-09-29T09:02:00+08:00",
+      "text": "已有13:00至14:00的客户电话；旧邀请邮件属于邀请阶段。议程附件包含进度、风险、行动项三个部分。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "calendar:call",
+            "type": "calendar_event",
+            "label": "Existing customer call"
+          },
+          {
+            "id": "message:invite",
+            "type": "message",
+            "label": "Original invitation"
+          },
+          {
+            "id": "artifact:agenda",
+            "type": "agenda_document",
+            "label": "Review agenda"
+          }
+        ],
+        "claims": [
+          {
+            "id": "69-calendar",
+            "subject": "meeting:review",
+            "predicate": "meeting.calendar",
+            "value": null,
+            "objects": [
+              "calendar:call"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-block",
+            "subject": "calendar:call",
+            "predicate": "calendar.interval",
+            "value": {
+              "start": "2026-09-30T13:00:00+08:00",
+              "end": "2026-09-30T14:00:00+08:00"
+            },
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-mail1",
+            "subject": "meeting:review",
+            "predicate": "meeting.correspondence",
+            "value": null,
+            "objects": [
+              "message:invite"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-invite-kind",
+            "subject": "message:invite",
+            "predicate": "message.kind",
+            "value": "invitation",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-invite-phase",
+            "subject": "message:invite",
+            "predicate": "message.phase",
+            "value": "invitation",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-invite-to",
+            "subject": "message:invite",
+            "predicate": "message.to",
+            "value": [
+              "alex@example.invalid",
+              "casey@example.invalid"
+            ],
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-agenda",
+            "subject": "meeting:review",
+            "predicate": "meeting.agenda",
+            "value": null,
+            "objects": [
+              "artifact:agenda"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-sections",
+            "subject": "artifact:agenda",
+            "predicate": "artifact.sections",
+            "value": [
+              "Progress",
+              "Risks",
+              "Actions"
+            ],
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-agenda-path",
+            "subject": "artifact:agenda",
+            "predicate": "artifact.path",
+            "value": "/workspace/review-agenda.odt",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "069-03",
+      "task_id": "synthetic-osworld2-069",
+      "source": "meeting_minutes",
+      "ref": "synthetic://task069/069-03",
+      "observed_at": "2026-09-29T09:05:00+08:00",
+      "occurred_at": "2026-09-29T09:05:00+08:00",
+      "text": "会中记下：Alex在10月1日前完成原型回归测试。发现一种新的业务对象：独立行动项。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "action:prototype",
+            "type": "action_item",
+            "label": "Prototype regression"
+          }
+        ],
+        "claims": [
+          {
+            "id": "69-actions",
+            "subject": "meeting:review",
+            "predicate": "meeting.action_items",
+            "value": null,
+            "objects": [
+              "action:prototype"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-description",
+            "subject": "action:prototype",
+            "predicate": "action.description",
+            "value": "Complete prototype regression",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-owner-v1",
+            "subject": "action:prototype",
+            "predicate": "action.owner",
+            "value": null,
+            "objects": [
+              "person:alex"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-deadline-v1",
+            "subject": "action:prototype",
+            "predicate": "action.deadline",
+            "value": "2026-10-01",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "069-04",
+      "task_id": "synthetic-osworld2-069",
+      "source": "summary_planner",
+      "ref": "synthetic://task069/069-04",
+      "observed_at": "2026-09-29T09:06:00+08:00",
+      "occurred_at": "2026-09-29T09:06:00+08:00",
+      "text": "根据当前会议纪要形成摘要草稿；派生检查记录绑定草稿版本及其完整依据。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "artifact:summary",
+            "type": "summary_draft",
+            "label": "Summary draft"
+          }
+        ],
+        "claims": [
+          {
+            "id": "69-output",
+            "subject": "meeting:review",
+            "predicate": "meeting.outputs",
+            "value": null,
+            "objects": [
+              "artifact:summary"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-draft-v1",
+            "subject": "artifact:summary",
+            "predicate": "artifact.action_tuple",
+            "value": {
+              "action": "Prototype regression",
+              "owner": "Alex",
+              "deadline": "2026-10-01"
+            },
+            "objects": [],
+            "basis": [
+              "69-description",
+              "69-owner-v1",
+              "69-deadline-v1"
+            ],
+            "supersedes": [],
+            "mode": "derived",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-check-v1",
+            "subject": "artifact:summary",
+            "predicate": "artifact.local_check",
+            "value": {
+              "check": "action_tuple_has_source",
+              "result": true
+            },
+            "objects": [],
+            "basis": [
+              "69-draft-v1",
+              "69-audience"
+            ],
+            "supersedes": [],
+            "mode": "derived",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "069-05",
+      "task_id": "synthetic-osworld2-069",
+      "source": "meeting_minutes",
+      "ref": "synthetic://task069/069-05",
+      "observed_at": "2026-09-29T09:08:00+08:00",
+      "occurred_at": "2026-09-29T09:08:00+08:00",
+      "text": "纪要更正：原型回归由Casey负责，截止日为10月2日。",
+      "extraction": {
+        "entities": [],
+        "claims": [
+          {
+            "id": "69-owner-v2",
+            "subject": "action:prototype",
+            "predicate": "action.owner",
+            "value": null,
+            "objects": [
+              "person:casey"
+            ],
+            "basis": [],
+            "supersedes": [
+              "69-owner-v1"
+            ],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-deadline-v2",
+            "subject": "action:prototype",
+            "predicate": "action.deadline",
+            "value": "2026-10-02",
+            "objects": [],
+            "basis": [],
+            "supersedes": [
+              "69-deadline-v1"
+            ],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "069-06",
+      "task_id": "synthetic-osworld2-069",
+      "source": "summary_planner",
+      "ref": "synthetic://task069/069-06",
+      "observed_at": "2026-09-29T09:09:00+08:00",
+      "occurred_at": "2026-09-29T09:09:00+08:00",
+      "text": "按更正后的纪要重写草稿，并重做绑定当前草稿的检查。",
+      "extraction": {
+        "entities": [],
+        "claims": [
+          {
+            "id": "69-draft-v2",
+            "subject": "artifact:summary",
+            "predicate": "artifact.action_tuple",
+            "value": {
+              "action": "Prototype regression",
+              "owner": "Casey",
+              "deadline": "2026-10-02"
+            },
+            "objects": [],
+            "basis": [
+              "69-description",
+              "69-owner-v2",
+              "69-deadline-v2"
+            ],
+            "supersedes": [
+              "69-draft-v1"
+            ],
+            "mode": "derived",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-check-v2",
+            "subject": "artifact:summary",
+            "predicate": "artifact.local_check",
+            "value": {
+              "check": "action_tuple_has_source",
+              "result": true
+            },
+            "objects": [],
+            "basis": [
+              "69-draft-v2",
+              "69-audience"
+            ],
+            "supersedes": [
+              "69-check-v1"
+            ],
+            "mode": "derived",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "069-07",
+      "task_id": "synthetic-osworld2-069",
+      "source": "mail_calendar",
+      "ref": "synthetic://task069/069-07",
+      "observed_at": "2026-09-29T09:10:00+08:00",
+      "occurred_at": "2026-09-29T09:10:00+08:00",
+      "text": "新邮件已进入Sent：会后摘要To Morgan、CC Alex和Casey，正文使用更正后的行动项。它与原邀请邮件是不同对象。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "message:summary",
+            "type": "message",
+            "label": "Sent meeting summary"
+          }
+        ],
+        "claims": [
+          {
+            "id": "69-mail2",
+            "subject": "meeting:review",
+            "predicate": "meeting.correspondence",
+            "value": null,
+            "objects": [
+              "message:invite",
+              "message:summary"
+            ],
+            "basis": [],
+            "supersedes": [
+              "69-mail1"
+            ],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-summary-kind",
+            "subject": "message:summary",
+            "predicate": "message.kind",
+            "value": "meeting_summary",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-summary-phase",
+            "subject": "message:summary",
+            "predicate": "message.phase",
+            "value": "post_meeting",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-summary-state",
+            "subject": "message:summary",
+            "predicate": "message.state",
+            "value": "sent",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-summary-to",
+            "subject": "message:summary",
+            "predicate": "message.to",
+            "value": [
+              "morgan@example.invalid"
+            ],
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-summary-cc",
+            "subject": "message:summary",
+            "predicate": "message.cc",
+            "value": [
+              "alex@example.invalid",
+              "casey@example.invalid"
+            ],
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "69-summary-actions",
+            "subject": "message:summary",
+            "predicate": "message.action_tuples",
+            "value": [
+              {
+                "action": "Prototype regression",
+                "owner": "Casey",
+                "deadline": "2026-10-02"
+              }
+            ],
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    }
+  ],
+  "evaluation_notes": {
+    "audience": "offline analyst only; never injected as runtime observations",
+    "mechanisms": [
+      "At event 069-05 both the derived draft and its dependent local check must become stale.",
+      "A post-meeting summary must be selected by its own identity, phase and state; the invitation cannot stand in for it.",
+      "To and CC remain separate fields. Owner/action/deadline must be matched within the same action object.",
+      "These are analyst expectations, not an implementation of the official validator or a success verdict."
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+# Add task_views to your existing exploration / Android World config.
+task_views:
+  enabled: true
+  max_tokens: 16000  # Combined projection context, counted in UTF-8 bytes by default.
+  max_nodes: 40
+  max_edges: 60
+  top_k: 6
+  max_hops: 6
+
+# For AITK, use translator_args.projection_config with the same settings:
+# translator_args:
+#   projection_config:
+#     enabled: true
+#     max_tokens: 16000

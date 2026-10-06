@@ -1,0 +1,16 @@
+{
+  "nodes": [
+    {"id": "home", "activity": "com.demo.app/.Home", "page_description": "Home 首页", "state_schema": {}, "last_detail_snapshot": {}, "interactable_elements": [{"description": "Settings 设置", "position": "top right"}]},
+    {"id": "menu", "activity": "com.demo.app/.Menu", "page_description": "Navigation menu 菜单", "state_schema": {}, "last_detail_snapshot": {}, "interactable_elements": []},
+    {"id": "settings", "activity": "com.demo.app/.Settings", "page_description": "Settings notification preferences 通知设置", "state_schema": {"notifications": [false, true]}, "last_detail_snapshot": {"notifications": false}, "interactable_elements": [{"id": "toggle", "description": "Notifications 通知开关", "position": "center"}]},
+    {"id": "unrelated", "activity": "com.demo.app/.News", "page_description": "Weather news 天气资讯", "interactable_elements": []},
+    {"id": "unreachable", "activity": "com.demo.app/.Admin", "page_description": "Administrator account delete 删除账户", "interactable_elements": []}
+  ],
+  "edges": [
+    {"source": "home", "target": "menu", "actions": [{"action": "tap", "x": 20, "y": 20}], "instructions": ["Open menu"], "num_steps": [1]},
+    {"source": "menu", "target": "settings", "actions": [{"action": "tap", "x": 120, "y": 100}], "instructions": ["Open notification preferences 通知设置"], "num_steps": [1]},
+    {"source": "settings", "target": "settings", "actions": [{"action": "tap", "x": 320, "y": 150}], "instructions": ["Toggle notifications"], "schema_deltas": [{"notifications": {"before": false, "after": true}}], "num_steps": [1]},
+    {"source": "home", "target": "unrelated", "actions": [{"action": "tap", "x": 30, "y": 80}], "instructions": ["Read weather"], "num_steps": [1]},
+    {"source": "home", "target": "unreachable", "actions": [{"action": "tap"}], "instructions": ["Delete account"], "grade": "contradicted", "failed": true}
+  ]
+}

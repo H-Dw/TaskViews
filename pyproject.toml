@@ -1,0 +1,69 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "osworld-k3-taskviews"
+dynamic = ["version"]
+description = "Shared official OSWorld CUA contract with thin K3 native and TaskViews adapters"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = []
+authors = [{ name = "Yuxiang Chai (original UI-KOBE)" }]
+
+[project.optional-dependencies]
+native = ["httpx>=0.27", "pillow>=10", "docker>=7", "requests>=2.32"]
+runtime = [
+    "networkx",
+    "openai",
+    "pyyaml",
+    "pillow",
+    "rich",
+    "dill",
+    "pyvis>=0.3.2",
+    "matplotlib",
+]
+dev = ["pytest>=8", "ruff>=0.11", "networkx", "openai", "pyyaml", "pillow", "rich", "requests>=2.32", "httpx", "docker"]
+explore = []
+glm = ["openai>=2.26,<3", "pillow>=10"]
+
+[project.scripts]
+kobe-explore = "ui_kobe.cli:main"
+kobe-project = "kobe_views.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/YuxiangChai/UI-KOBE"
+
+[tool.hatch.version]
+path = "ui_kobe/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ui_kobe", "kobe_views"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/ui_kobe",
+    "/kobe_views",
+    "/aitk_files",
+    "/aw_files",
+    "/configs",
+    "/scripts",
+    "/README.md",
+    "/README.upstream.md",
+    "/docs",
+    "/tests",
+    "/examples",
+    "/UPSTREAM.md",
+    "/LICENSE",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

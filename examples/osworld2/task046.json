@@ -1,0 +1,153 @@
+{
+  "schema_version":1,
+  "task_id":"synthetic-osworld2-046",
+  "provenance":{
+    "kind":"synthetic_mechanism_fixture","official_task_id":"Task046","official_fixture":false,
+    "description":"Fictional Riley/Kai clients, invoices, transactions, photos and mail receipts; not official Task046 answers or recorded execution.",
+    "sources":["https://github.com/xlang-ai/OSWorld-V2/tree/osworld-v2.1"]
+  },
+  "instruction":"阅读照片交付要求，将发票和银行到账逐客户核对；付清客户获得照片ZIP，未付清客户获得GIMP水印预览和付款提醒。以下事件为虚构客户的机制回放。",
+  "roles":[
+    {"id":"requirements_reader","anchors":["session:demo"],"read_predicates":["session.clients","session.requirements","client.identity","requirement.*"],"focus_predicates":["requirement.*"],"max_hops":2},
+    {"id":"payment_reconciler","anchors":["session:demo"],"read_predicates":["session.clients","session.receipts","client.*","invoice.*","receipt.*","payment.*"],"focus_predicates":["payment.*"],"max_hops":3},
+    {"id":"photo_curator","anchors":["session:demo"],"read_predicates":["session.clients","session.photos","client.identity","photo.*"],"focus_predicates":["photo.*"],"max_hops":2},
+    {"id":"preview_editor","anchors":["session:demo"],"read_predicates":["session.*","client.*","invoice.*","receipt.*","payment.*","photo.*","requirement.*","preview.*"],"focus_predicates":["preview.*"],"max_hops":4},
+    {"id":"delivery_verifier","anchors":["session:demo"],"read_predicates":["*"],"focus_predicates":["delivery.*","mail.*"],"max_hops":4}
+  ],
+  "events":[
+    {
+      "id":"046-01","task_id":"synthetic-osworld2-046","source":"teamchat","ref":"synthetic://task046/session-dm",
+      "observed_at":"2026-10-04T10:00:00+08:00","occurred_at":"2026-10-04T10:00:00+08:00",
+      "text":"合成私信：Riley与Kai参加拍摄。付清后交付室内和室外照片，包括有本人出现的合照；否则发送水印预览和提醒。",
+      "extraction":{"entities":[
+        {"id":"session:demo","type":"photo_session","label":"Synthetic portrait session"},
+        {"id":"client:riley","type":"client","label":"Riley"},
+        {"id":"client:kai","type":"client","label":"Kai"},
+        {"id":"requirement:delivery","type":"delivery_requirement","label":"Session instructions"}
+      ],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-clients","subject":"session:demo","predicate":"session.clients","value":null,"objects":["client:riley","client:kai"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-requirements","subject":"session:demo","predicate":"session.requirements","value":null,"objects":["requirement:delivery"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-riley","subject":"client:riley","predicate":"client.identity","value":{"name":"Riley","email":"riley@example.test","invoice":"DEMO-R1"}},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-kai","subject":"client:kai","predicate":"client.identity","value":{"name":"Kai","email":"kai@example.test","invoice":"DEMO-K1"}},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-rule","subject":"requirement:delivery","predicate":"requirement.branch","value":{"paid":"zip all matching photos, grouped by scene","unpaid":"watermarked preview and payment reminder","include_group_photos":true}}
+      ]}
+    },
+    {
+      "id":"046-02","task_id":"synthetic-osworld2-046","source":"invoice_reader","ref":"synthetic://task046/invoices",
+      "observed_at":"2026-10-04T10:01:00+08:00","occurred_at":"2026-10-04T10:01:00+08:00",
+      "text":"合成发票：Riley应付600，Kai应付450，币种均为USD。",
+      "extraction":{"entities":[
+        {"id":"invoice:riley","type":"invoice","label":"DEMO-R1"},
+        {"id":"invoice:kai","type":"invoice","label":"DEMO-K1"}
+      ],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-r-invoice-link","subject":"client:riley","predicate":"client.invoice","value":null,"objects":["invoice:riley"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-k-invoice-link","subject":"client:kai","predicate":"client.invoice","value":null,"objects":["invoice:kai"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-r-invoice","subject":"invoice:riley","predicate":"invoice.total","value":{"amount":"600.00","currency":"USD","reference":"DEMO-R1"}},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-k-invoice","subject":"invoice:kai","predicate":"invoice.total","value":{"amount":"450.00","currency":"USD","reference":"DEMO-K1"}}
+      ]}
+    },
+    {
+      "id":"046-03","task_id":"synthetic-osworld2-046","source":"vaultbank","ref":"synthetic://task046/transactions",
+      "observed_at":"2026-10-04T10:02:00+08:00","occurred_at":"2026-10-04T10:02:00+08:00",
+      "text":"合成银行流水：Riley分两笔200和400到账。Kai有150到账；另有同名付款300，最初未展开详情。",
+      "extraction":{"entities":[
+        {"id":"receipt:riley","type":"receipt_batch","label":"Riley receipts"},
+        {"id":"receipt:kai","type":"receipt_batch","label":"Kai and ambiguous-name receipts"}
+      ],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-receipts","subject":"session:demo","predicate":"session.receipts","value":null,"objects":["receipt:riley","receipt:kai"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-r-receipts","subject":"receipt:riley","predicate":"receipt.entries","value":[{"id":"DEMO-T1","amount":"200.00","reference":"DEMO-R1"},{"id":"DEMO-T2","amount":"400.00","reference":"DEMO-R1"}]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-k-receipts-v1","subject":"receipt:kai","predicate":"receipt.entries","value":[{"id":"DEMO-T3","amount":"150.00","reference":"DEMO-K1"},{"id":"DEMO-T4","amount":"300.00","reference":"not_yet_observed"}]}
+      ]}
+    },
+    {
+      "id":"046-04","task_id":"synthetic-osworld2-046","source":"payment_planner","ref":"synthetic://task046/matching-v1",
+      "observed_at":"2026-10-04T10:03:00+08:00","occurred_at":"2026-10-04T10:03:00+08:00",
+      "text":"合成推导：Riley已付清。规划器错误地只按姓名合并Kai的两笔记录，暂判付清；这是待验证提案，不是银行事实。",
+      "extraction":{"entities":[],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-r-paid","subject":"client:riley","predicate":"payment.state","value":{"status":"paid","matched_total":"600.00"},"basis":["46-r-invoice","46-r-receipts","46-riley"],"mode":"derived"},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-k-paid-v1","subject":"client:kai","predicate":"payment.state","value":{"status":"paid","matched_total":"450.00","identity_check":"incomplete"},"basis":["46-k-invoice","46-k-receipts-v1","46-kai"],"mode":"derived"}
+      ]}
+    },
+    {
+      "id":"046-05","task_id":"synthetic-osworld2-046","source":"photo_observer","ref":"synthetic://task046/photos",
+      "observed_at":"2026-10-04T10:04:00+08:00","occurred_at":"2026-10-04T10:04:00+08:00",
+      "text":"合成照片识别：P1是Riley室内照，P2是Kai室外照，P3为两人的室外合照。文件归属不能只靠单人照筛选。",
+      "extraction":{"entities":[
+        {"id":"photo:p1","type":"photo","label":"demo_P1.jpg"},
+        {"id":"photo:p2","type":"photo","label":"demo_P2.jpg"},
+        {"id":"photo:p3","type":"photo","label":"demo_P3.jpg"}
+      ],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-photos","subject":"session:demo","predicate":"session.photos","value":null,"objects":["photo:p1","photo:p2","photo:p3"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-p1","subject":"photo:p1","predicate":"photo.classification","value":{"scene":"indoors","file":"demo_P1.jpg"},"objects":["client:riley"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-p2","subject":"photo:p2","predicate":"photo.classification","value":{"scene":"outdoors","file":"demo_P2.jpg"},"objects":["client:kai"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-p3","subject":"photo:p3","predicate":"photo.classification","value":{"scene":"outdoors","file":"demo_P3.jpg","group":true},"objects":["client:riley","client:kai"]}
+      ]}
+    },
+    {
+      "id":"046-06","task_id":"synthetic-osworld2-046","source":"delivery_planner","ref":"synthetic://task046/drafts",
+      "observed_at":"2026-10-04T10:05:00+08:00","occurred_at":"2026-10-04T10:05:00+08:00",
+      "text":"合成交付草稿：Riley照片P1/P3打包，Kai照片P2/P3暂拟打包。未发送邮件，草稿依赖付款判断。",
+      "extraction":{"entities":[
+        {"id":"delivery:riley","type":"delivery_draft","label":"Riley delivery"},
+        {"id":"delivery:kai","type":"delivery_draft","label":"Kai delivery"}
+      ],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-deliveries","subject":"session:demo","predicate":"session.deliveries","value":null,"objects":["delivery:riley","delivery:kai"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-r-draft","subject":"delivery:riley","predicate":"delivery.package","value":{"type":"zip","recipient":"riley@example.test","folders":{"Riley_Indoors":["demo_P1.jpg"],"Riley_Outdoors":["demo_P3.jpg"]}},"basis":["46-r-paid","46-p1","46-p3","46-rule"],"mode":"derived"},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-k-draft-v1","subject":"delivery:kai","predicate":"delivery.package","value":{"type":"zip","recipient":"kai@example.test","files":["demo_P2.jpg","demo_P3.jpg"]},"basis":["46-k-paid-v1","46-p2","46-p3","46-rule"],"mode":"derived"}
+      ]}
+    },
+    {
+      "id":"046-07","task_id":"synthetic-osworld2-046","source":"vaultbank","ref":"synthetic://task046/identity-correction",
+      "observed_at":"2026-10-04T10:06:00+08:00","occurred_at":"2026-10-04T10:06:00+08:00",
+      "text":"合成明细复查：300元属于另一客户、另一发票DEMO-OTHER，不能计入Kai。更新流水解释会使旧付款判断及ZIP草稿失效，但照片分类保持有效。",
+      "extraction":{"entities":[],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-k-receipts-v2","subject":"receipt:kai","predicate":"receipt.entries","value":[{"id":"DEMO-T3","amount":"150.00","reference":"DEMO-K1"},{"id":"DEMO-T4","amount":"300.00","reference":"DEMO-OTHER"}],"supersedes":["46-k-receipts-v1"]}
+      ]}
+    },
+    {
+      "id":"046-08","task_id":"synthetic-osworld2-046","source":"payment_planner","ref":"synthetic://task046/matching-v2",
+      "observed_at":"2026-10-04T10:07:00+08:00","occurred_at":"2026-10-04T10:07:00+08:00",
+      "text":"合成重新核对：Kai匹配到账150，余款300，改用预览和付款提醒分支。",
+      "extraction":{"entities":[],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-k-paid-v2","subject":"client:kai","predicate":"payment.state","value":{"status":"partial","matched_total":"150.00","balance":"300.00","currency":"USD"},"basis":["46-k-invoice","46-k-receipts-v2","46-kai"],"supersedes":["46-k-paid-v1"],"mode":"derived"}
+      ]}
+    },
+    {
+      "id":"046-09","task_id":"synthetic-osworld2-046","source":"gimp_observer","ref":"synthetic://task046/preview",
+      "observed_at":"2026-10-04T10:08:00+08:00","occurred_at":"2026-10-04T10:08:00+08:00",
+      "text":"合成GIMP观察：按本示例指南保留模板水印与客户文字层，生成Kai的P2预览。XCF为编辑源，PNG为发送附件；两者分别保存并复查。",
+      "extraction":{"entities":[{"id":"preview:kai","type":"watermarked_preview","label":"Kai preview"}],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-preview-link","subject":"session:demo","predicate":"session.preview","value":null,"objects":["preview:kai"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-preview-layers","subject":"preview:kai","predicate":"preview.layers","value":{"watermark":"template layer retained","client_text":"Kai","photo":"demo_P2.jpg"},"objects":["photo:p2"],"basis":["46-k-paid-v2","46-p2","46-kai"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-preview-xcf","subject":"preview:kai","predicate":"preview.editable_file","value":"/home/user/Desktop/demo_P2_preview.xcf","basis":["46-preview-layers"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-preview-png","subject":"preview:kai","predicate":"preview.exported_file","value":"/home/user/Desktop/demo_P2_preview.png","basis":["46-preview-layers"]}
+      ]}
+    },
+    {
+      "id":"046-10","task_id":"synthetic-osworld2-046","source":"delivery_planner","ref":"synthetic://task046/reminder-draft",
+      "observed_at":"2026-10-04T10:09:00+08:00","occurred_at":"2026-10-04T10:09:00+08:00",
+      "text":"合成草稿更新：Kai邮件包含PNG预览与DEMO-K1剩余300元的友好提醒。附件上传完成仍不等于邮件已发送。",
+      "extraction":{"entities":[],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-k-draft-v2","subject":"delivery:kai","predicate":"delivery.package","value":{"type":"preview_reminder","recipient":"kai@example.test","attachment":"demo_P2_preview.png","invoice":"DEMO-K1","remaining":"USD 300.00","sent":false},"basis":["46-k-paid-v2","46-preview-png","46-rule"],"supersedes":["46-k-draft-v1"],"mode":"derived"}
+      ]}
+    },
+    {
+      "id":"046-11","task_id":"synthetic-osworld2-046","source":"mailhub_sent_observer","ref":"synthetic://task046/sent",
+      "observed_at":"2026-10-04T10:10:00+08:00","occurred_at":"2026-10-04T10:10:00+08:00",
+      "text":"合成Sent文件夹观察：Riley的ZIP邮件与Kai的PNG提醒邮件均有独立已发送记录。该观察不提供官方分数。",
+      "extraction":{"entities":[],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-r-sent","subject":"delivery:riley","predicate":"mail.sent_receipt","value":{"message_id":"synthetic-sent-r","recipient":"riley@example.test","attachment":"Riley_photos.zip"},"basis":["46-r-draft"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"46-k-sent","subject":"delivery:kai","predicate":"mail.sent_receipt","value":{"message_id":"synthetic-sent-k","recipient":"kai@example.test","attachment":"demo_P2_preview.png"},"basis":["46-k-draft-v2"]}
+      ]}
+    }
+  ],
+  "evaluation_notes":{
+    "audience":"offline analyst only; never injected as runtime observations",
+    "mechanisms":[
+      "046-07 invalidates only Kai's paid classification and ZIP draft. Riley and photo_curator retain applicable evidence.",
+      "Money reconciliation, photo identity, GIMP layers/export and mail receipt are distinct views sharing stable client/file IDs.",
+      "Synthetic facts, including client names, amounts and subjects, are not answers for the real Task046 environment.",
+      "XCF save, PNG export, draft attachment and Sent receipt are separate evidence stages. No synthetic reward replaces env.evaluate()."
+    ]
+  }
+}

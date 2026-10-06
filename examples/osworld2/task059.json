@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "task_id": "synthetic-osworld2-059",
+  "provenance": {
+    "kind": "synthetic_mechanism_fixture",
+    "official_task_id": "Task059",
+    "official_fixture": false,
+    "description": "Invented GeoGebra observations, point labels and values. No original vase pixels, expected volume or evaluator thresholds. Not a recorded GUI trajectory.",
+    "sources": ["https://github.com/xlang-ai/OSWorld-V2/tree/osworld-v2.1"]
+  },
+  "instruction": "仅用 GeoGebra，最大化窗口后按默认比例导入 vase.png，保持图像尺度和方向；沿轮廓手动标记至少20点，拟合并推导 VaseVolume，保存 Desktop/GeoGebra/vase.ggb。以下事件为合成机制回放。",
+  "roles": [
+    {"id":"frame_reader","anchors":["project:vase"],"read_predicates":["project.image","image.*"],"focus_predicates":["image.*"],"max_hops":1},
+    {"id":"outline_reader","anchors":["project:vase"],"read_predicates":["project.image","project.regions","image.*","region.*"],"focus_predicates":["region.points"],"max_hops":2},
+    {"id":"fit_verifier","anchors":["project:vase"],"read_predicates":["project.*","image.*","region.*","fit.*","volume.*"],"focus_predicates":["fit.*","volume.*"],"max_hops":3},
+    {"id":"artifact_verifier","anchors":["project:vase"],"read_predicates":["*"],"focus_predicates":["artifact.*"],"max_hops":4}
+  ],
+  "events": [
+    {
+      "id":"059-01","task_id":"synthetic-osworld2-059","source":"geogebra_inspector","ref":"synthetic://task059/import",
+      "observed_at":"2026-10-04T09:00:00+08:00","occurred_at":"2026-10-04T09:00:00+08:00",
+      "text":"合成观察：最大化后导入默认尺寸图像，未变形。图像的模型坐标系为 geo-frame-1，水平中线为 y=2；模型坐标不等于屏幕像素。",
+      "extraction":{"entities":[
+        {"id":"project:vase","type":"geogebra_project","label":"Synthetic vase project"},
+        {"id":"image:vase","type":"imported_image","label":"vase.png"}
+      ],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-image","subject":"project:vase","predicate":"project.image","value":null,"objects":["image:vase"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-frame","subject":"image:vase","predicate":"image.coordinate_frame","value":{"id":"geo-frame-1","space":"GeoGebra model coordinates; never reusable GUI pixels"}},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-scale","subject":"image:vase","predicate":"image.import_state","value":{"maximized_before_import":true,"scale":"default","resized":false,"rotated":false}},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-axis","subject":"image:vase","predicate":"image.symmetry_axis","value":"y = 2 in geo-frame-1"}
+      ]}
+    },
+    {
+      "id":"059-02","task_id":"synthetic-osworld2-059","source":"outline_inspector","ref":"synthetic://task059/points",
+      "observed_at":"2026-10-04T09:01:00+08:00","occurred_at":"2026-10-04T09:01:00+08:00",
+      "text":"合成轮廓观察：底部、腹部、瓶颈各8个手动点，共24个。分区共用同一模型坐标系。此时瓶颈点 N8 暂被识别为轮廓点。",
+      "extraction":{"entities":[
+        {"id":"region:base","type":"outline_region","label":"Base"},
+        {"id":"region:body","type":"outline_region","label":"Body"},
+        {"id":"region:neck","type":"outline_region","label":"Neck and mouth"}
+      ],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-regions","subject":"project:vase","predicate":"project.regions","value":null,"objects":["region:base","region:body","region:neck"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-base-points","subject":"region:base","predicate":"region.points","value":{"count":8,"labels":"B1-B8","frame":"geo-frame-1","span":[0,2],"manual":true},"basis":["59-frame"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-body-points","subject":"region:body","predicate":"region.points","value":{"count":8,"labels":"M1-M8","frame":"geo-frame-1","span":[2,6],"manual":true},"basis":["59-frame"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-neck-points-v1","subject":"region:neck","predicate":"region.points","value":{"count":8,"labels":"N1-N8","frame":"geo-frame-1","span":[6,8],"manual":true},"basis":["59-frame"]}
+      ]}
+    },
+    {
+      "id":"059-03","task_id":"synthetic-osworld2-059","source":"fit_planner","ref":"synthetic://task059/fits",
+      "observed_at":"2026-10-04T09:02:00+08:00","occurred_at":"2026-10-04T09:02:00+08:00",
+      "text":"合成拟合提案：三个分区独立拟合。函数和区间绑定对应手动点，避免把所有轮廓点混入一个高阶多项式。",
+      "extraction":{"entities":[
+        {"id":"fit:base","type":"profile_fit","label":"Base fit"},
+        {"id":"fit:body","type":"profile_fit","label":"Body fit"},
+        {"id":"fit:neck","type":"profile_fit","label":"Neck fit"}
+      ],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-fits","subject":"project:vase","predicate":"project.fits","value":null,"objects":["fit:base","fit:body","fit:neck"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-fit-base","subject":"fit:base","predicate":"fit.profile","value":{"function":"f_base","interval":[0,2]},"objects":["region:base"],"basis":["59-base-points"],"mode":"derived"},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-fit-body","subject":"fit:body","predicate":"fit.profile","value":{"function":"f_body","interval":[2,6]},"objects":["region:body"],"basis":["59-body-points"],"mode":"derived"},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-fit-neck-v1","subject":"fit:neck","predicate":"fit.profile","value":{"function":"f_neck_v1","interval":[6,8]},"objects":["region:neck"],"basis":["59-neck-points-v1"],"mode":"derived"}
+      ]}
+    },
+    {
+      "id":"059-04","task_id":"synthetic-osworld2-059","source":"volume_planner","ref":"synthetic://task059/volume-v1",
+      "observed_at":"2026-10-04T09:03:00+08:00","occurred_at":"2026-10-04T09:03:00+08:00",
+      "text":"合成体积提案：分别对三个区间的半径平方积分，半径为拟合轮廓到 y=2 的距离；数值仅为示意值。",
+      "extraction":{"entities":[{"id":"volume:vase","type":"derived_volume","label":"VaseVolume"}],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-volume-link","subject":"project:vase","predicate":"project.volume","value":null,"objects":["volume:vase"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-volume-v1","subject":"volume:vase","predicate":"volume.derivation","value":{"variable":"VaseVolume","formula":"pi * sum(Integral((f_region(x)-2)^2, region_start, region_end))","illustrative_value":123.45},"basis":["59-axis","59-scale","59-fit-base","59-fit-body","59-fit-neck-v1"],"mode":"derived"}
+      ]}
+    },
+    {
+      "id":"059-05","task_id":"synthetic-osworld2-059","source":"artifact_observer","ref":"synthetic://task059/save-v1",
+      "observed_at":"2026-10-04T09:04:00+08:00","occurred_at":"2026-10-04T09:04:00+08:00",
+      "text":"合成保存观察：保存了当前模型的 vase.ggb。保存动作或文件存在本身不证明点集、拟合与体积正确。",
+      "extraction":{"entities":[{"id":"artifact:vase","type":"saved_project","label":"vase.ggb"}],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-artifact","subject":"project:vase","predicate":"project.artifact","value":null,"objects":["artifact:vase"]},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-path","subject":"artifact:vase","predicate":"artifact.path","value":"/home/user/Desktop/GeoGebra/vase.ggb"},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-saved-v1","subject":"artifact:vase","predicate":"artifact.model_snapshot","value":"synthetic-save-1","basis":["59-volume-v1"],"mode":"derived"}
+      ]}
+    },
+    {
+      "id":"059-06","task_id":"synthetic-osworld2-059","source":"outline_inspector","ref":"synthetic://task059/neck-correction",
+      "observed_at":"2026-10-04T09:05:00+08:00","occurred_at":"2026-10-04T09:05:00+08:00",
+      "text":"合成局部复查：N8 实为图像边框上的点，已在 GeoGebra 中删除并手动补记瓶口边缘 N9。坐标系、图像比例及另两区点集不变。",
+      "extraction":{"entities":[],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-neck-points-v2","subject":"region:neck","predicate":"region.points","value":{"count":8,"labels":"N1-N7,N9","frame":"geo-frame-1","span":[6,8],"manual":true},"basis":["59-frame"],"supersedes":["59-neck-points-v1"]}
+      ]}
+    },
+    {
+      "id":"059-07","task_id":"synthetic-osworld2-059","source":"fit_planner","ref":"synthetic://task059/refit",
+      "observed_at":"2026-10-04T09:06:00+08:00","occurred_at":"2026-10-04T09:06:00+08:00",
+      "text":"合成重拟合：仅更新瓶颈函数，复用仍有效的底部和腹部函数。体积与保存快照仍需重新生成。",
+      "extraction":{"entities":[],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-fit-neck-v2","subject":"fit:neck","predicate":"fit.profile","value":{"function":"f_neck_v2","interval":[6,8]},"objects":["region:neck"],"basis":["59-neck-points-v2"],"supersedes":["59-fit-neck-v1"],"mode":"derived"}
+      ]}
+    },
+    {
+      "id":"059-08","task_id":"synthetic-osworld2-059","source":"volume_planner","ref":"synthetic://task059/volume-v2",
+      "observed_at":"2026-10-04T09:07:00+08:00","occurred_at":"2026-10-04T09:07:00+08:00",
+      "text":"合成体积更新：VaseVolume 改为依赖当前三个分区函数；数值不对应真实 vase.png。",
+      "extraction":{"entities":[],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-volume-v2","subject":"volume:vase","predicate":"volume.derivation","value":{"variable":"VaseVolume","formula":"pi * sum(Integral((f_region(x)-2)^2, region_start, region_end))","illustrative_value":120.25},"basis":["59-axis","59-scale","59-fit-base","59-fit-body","59-fit-neck-v2"],"supersedes":["59-volume-v1"],"mode":"derived"}
+      ]}
+    },
+    {
+      "id":"059-09","task_id":"synthetic-osworld2-059","source":"artifact_observer","ref":"synthetic://task059/save-v2",
+      "observed_at":"2026-10-04T09:08:00+08:00","occurred_at":"2026-10-04T09:08:00+08:00",
+      "text":"合成保存及重新打开观察：目标路径现在包含第二版模型；这是本地交付证据，不是官方评分。",
+      "extraction":{"entities":[],"claims":[
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-saved-v2","subject":"artifact:vase","predicate":"artifact.model_snapshot","value":"synthetic-save-2","basis":["59-volume-v2","59-path"],"supersedes":["59-saved-v1"],"mode":"derived"},
+        {"locator":"synthetic annotated observation; not independently verified","id":"59-reopened","subject":"artifact:vase","predicate":"artifact.reopened","value":true,"basis":["59-saved-v2"]}
+      ]}
+    }
+  ],
+  "evaluation_notes": {
+    "audience":"offline analyst only; never injected as runtime observations",
+    "mechanisms":[
+      "059-06 invalidates neck fit, derived volume and saved-model snapshot transitively. Base/body fits and frame_reader remain unchanged.",
+      "Region cuts retain shared image scale, coordinate frame and symmetry-axis evidence. No screen ROI crop or pixel detector is implemented here.",
+      "Point labels, spans and numerical values are synthetic. No ground-truth volume, edge map or official reward is supplied to the agent.",
+      "Official v2.1 evaluation must use the installed task class via examples.osworld2_eval, independently of this replay."
+    ]
+  }
+}

@@ -1,0 +1,473 @@
+{
+  "schema_version": 1,
+  "task_id": "synthetic-osworld2-035",
+  "provenance": {
+    "kind": "synthetic_mechanism_fixture",
+    "official_task_id": "Task035",
+    "official_fixture": false,
+    "description": "Names, amounts, timestamps and event contents are illustrative; extracted proposals are pre-annotated, not model outputs.",
+    "sources": [
+      "https://huggingface.co/datasets/xlangai/osworld_v2_tasks/discussions/146"
+    ]
+  },
+  "instruction": "依照财务政策和采购申请维护采购表；政策更正和延迟到达的审批都需要更新受影响的申请与行。",
+  "roles": [
+    {
+      "id": "policy_reader",
+      "anchors": [
+        "batch:purchase"
+      ],
+      "read_predicates": [
+        "batch.policy",
+        "policy.*"
+      ],
+      "focus_predicates": [
+        "policy.*"
+      ],
+      "sources": [
+        "*"
+      ],
+      "facets": [
+        "objects",
+        "relations",
+        "attention"
+      ],
+      "max_hops": 2,
+      "include_history": false
+    },
+    {
+      "id": "order_editor",
+      "anchors": [
+        "batch:purchase"
+      ],
+      "read_predicates": [
+        "batch.*",
+        "policy.*",
+        "request.*",
+        "decision.*",
+        "approval.*",
+        "row.*"
+      ],
+      "focus_predicates": [
+        "decision.*",
+        "row.*"
+      ],
+      "sources": [
+        "*"
+      ],
+      "facets": [
+        "objects",
+        "relations",
+        "attention"
+      ],
+      "max_hops": 2,
+      "include_history": false
+    },
+    {
+      "id": "approval_monitor",
+      "anchors": [
+        "batch:purchase"
+      ],
+      "read_predicates": [
+        "batch.requests",
+        "batch.approvals",
+        "request.applicant",
+        "approval.*"
+      ],
+      "focus_predicates": [
+        "approval.*"
+      ],
+      "sources": [
+        "*"
+      ],
+      "facets": [
+        "objects",
+        "relations",
+        "attention"
+      ],
+      "max_hops": 2,
+      "include_history": false
+    }
+  ],
+  "events": [
+    {
+      "id": "035-01",
+      "task_id": "synthetic-osworld2-035",
+      "source": "finance_thread",
+      "ref": "synthetic://task035/035-01",
+      "observed_at": "2026-09-29T09:00:00+08:00",
+      "occurred_at": "2026-09-29T09:00:00+08:00",
+      "text": "初始政策：单笔限额1000元，指定供应商TechMax。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "batch:purchase",
+            "type": "purchase_batch",
+            "label": "Equipment requests"
+          },
+          {
+            "id": "policy:equipment",
+            "type": "procurement_policy",
+            "label": "Equipment policy"
+          }
+        ],
+        "claims": [
+          {
+            "id": "35-policy",
+            "subject": "batch:purchase",
+            "predicate": "batch.policy",
+            "value": null,
+            "objects": [
+              "policy:equipment"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-limit-v1",
+            "subject": "policy:equipment",
+            "predicate": "policy.limit",
+            "value": {
+              "amount": "1000.00",
+              "currency": "CNY"
+            },
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-vendor-v1",
+            "subject": "policy:equipment",
+            "predicate": "policy.vendor",
+            "value": "TechMax",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "035-02",
+      "task_id": "synthetic-osworld2-035",
+      "source": "requests_sheet",
+      "ref": "synthetic://task035/035-02",
+      "observed_at": "2026-09-29T09:01:00+08:00",
+      "occurred_at": "2026-09-29T09:01:00+08:00",
+      "text": "Casey申请1800元设备，申请位于第12行，当前尚未看到主管批准。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "request:casey",
+            "type": "purchase_request",
+            "label": "Casey equipment request"
+          },
+          {
+            "id": "row:12",
+            "type": "spreadsheet_row",
+            "label": "Request row 12"
+          }
+        ],
+        "claims": [
+          {
+            "id": "35-requests",
+            "subject": "batch:purchase",
+            "predicate": "batch.requests",
+            "value": null,
+            "objects": [
+              "request:casey"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-applicant",
+            "subject": "request:casey",
+            "predicate": "request.applicant",
+            "value": "Casey",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-amount",
+            "subject": "request:casey",
+            "predicate": "request.amount",
+            "value": {
+              "amount": "1800.00",
+              "currency": "CNY"
+            },
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-row-link",
+            "subject": "request:casey",
+            "predicate": "request.row",
+            "value": null,
+            "objects": [
+              "row:12"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-row-number",
+            "subject": "row:12",
+            "predicate": "row.index",
+            "value": 12,
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-row-format",
+            "subject": "row:12",
+            "predicate": "row.display_amount",
+            "value": "CNY 1,800.00",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "035-03",
+      "task_id": "synthetic-osworld2-035",
+      "source": "purchase_planner",
+      "ref": "synthetic://task035/035-03",
+      "observed_at": "2026-09-29T09:02:00+08:00",
+      "occurred_at": "2026-09-29T09:02:00+08:00",
+      "text": "按当前限额暂不纳入Casey申请，此判断依赖初始政策。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "decision:casey",
+            "type": "purchase_decision",
+            "label": "Casey decision"
+          }
+        ],
+        "claims": [
+          {
+            "id": "35-decision-link",
+            "subject": "request:casey",
+            "predicate": "request.decision",
+            "value": null,
+            "objects": [
+              "decision:casey"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-decision-v1",
+            "subject": "decision:casey",
+            "predicate": "decision.disposition",
+            "value": "excluded_over_limit",
+            "objects": [],
+            "basis": [
+              "35-amount",
+              "35-limit-v1",
+              "35-vendor-v1"
+            ],
+            "supersedes": [],
+            "mode": "derived",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "035-04",
+      "task_id": "synthetic-osworld2-035",
+      "source": "finance_thread",
+      "ref": "synthetic://task035/035-04",
+      "observed_at": "2026-09-29T09:04:00+08:00",
+      "occurred_at": "2026-09-29T09:04:00+08:00",
+      "text": "财务更正：限额改为2000元，指定供应商改为CenTech，主管批准仍是必要条件。",
+      "extraction": {
+        "entities": [],
+        "claims": [
+          {
+            "id": "35-limit-v2",
+            "subject": "policy:equipment",
+            "predicate": "policy.limit",
+            "value": {
+              "amount": "2000.00",
+              "currency": "CNY"
+            },
+            "objects": [],
+            "basis": [],
+            "supersedes": [
+              "35-limit-v1"
+            ],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-vendor-v2",
+            "subject": "policy:equipment",
+            "predicate": "policy.vendor",
+            "value": "CenTech",
+            "objects": [],
+            "basis": [],
+            "supersedes": [
+              "35-vendor-v1"
+            ],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-approval-rule",
+            "subject": "policy:equipment",
+            "predicate": "policy.approval_required",
+            "value": true,
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "035-05",
+      "task_id": "synthetic-osworld2-035",
+      "source": "manager_dm",
+      "ref": "synthetic://task035/035-05",
+      "observed_at": "2026-09-29T09:25:00+08:00",
+      "occurred_at": "2026-09-29T09:24:00+08:00",
+      "text": "任务启动25分钟后才观察到主管批准Casey申请的私信。审批成为新对象，并与具体申请绑定。",
+      "extraction": {
+        "entities": [
+          {
+            "id": "approval:casey",
+            "type": "manager_approval",
+            "label": "Manager approval for Casey"
+          }
+        ],
+        "claims": [
+          {
+            "id": "35-approvals",
+            "subject": "batch:purchase",
+            "predicate": "batch.approvals",
+            "value": null,
+            "objects": [
+              "approval:casey"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-approved-request",
+            "subject": "approval:casey",
+            "predicate": "approval.request",
+            "value": null,
+            "objects": [
+              "request:casey"
+            ],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-approved",
+            "subject": "approval:casey",
+            "predicate": "approval.state",
+            "value": "approved",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          },
+          {
+            "id": "35-approver",
+            "subject": "approval:casey",
+            "predicate": "approval.actor",
+            "value": "Morgan",
+            "objects": [],
+            "basis": [],
+            "supersedes": [],
+            "mode": "extracted",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "035-06",
+      "task_id": "synthetic-osworld2-035",
+      "source": "purchase_planner",
+      "ref": "synthetic://task035/035-06",
+      "observed_at": "2026-09-29T09:26:00+08:00",
+      "occurred_at": "2026-09-29T09:26:00+08:00",
+      "text": "依据更正后的限额、供应商和已观察到的主管审批，更新采购决定。",
+      "extraction": {
+        "entities": [],
+        "claims": [
+          {
+            "id": "35-decision-v2",
+            "subject": "decision:casey",
+            "predicate": "decision.disposition",
+            "value": {
+              "state": "include",
+              "vendor": "CenTech",
+              "row": 12
+            },
+            "objects": [],
+            "basis": [
+              "35-amount",
+              "35-limit-v2",
+              "35-vendor-v2",
+              "35-approval-rule",
+              "35-approved",
+              "35-approved-request",
+              "35-row-number"
+            ],
+            "supersedes": [
+              "35-decision-v1"
+            ],
+            "mode": "derived",
+            "locator": "synthetic annotated text"
+          }
+        ]
+      }
+    }
+  ],
+  "evaluation_notes": {
+    "audience": "offline analyst only; never injected as runtime observations",
+    "mechanisms": [
+      "The 25-minute delay is represented by event times; replay does not sleep or emulate the environment delivery mechanism.",
+      "A revised policy invalidates dependent decisions, and a late approval is attached to the specific request.",
+      "Row 12 and currency display test preservation of target identity and representation, not an official spreadsheet evaluator.",
+      "The original late-message initialization bug is an environment issue; memory alone cannot recover a message never delivered."
+    ]
+  }
+}

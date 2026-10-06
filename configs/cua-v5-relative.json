@@ -1,0 +1,16 @@
+{
+  "coordinate_type": "relative",
+  "model_screen_width": null,
+  "model_screen_height": null,
+  "history_n": 500,
+  "image_max": 20,
+  "fold_size": 10,
+  "context_max_payload_chars": 10000000,
+  "context_max_text_chars": 120000,
+  "context_rough_text_token_budget": 100000,
+  "context_reserve_chars": 32000,
+  "tool_repair_retries": 2,
+  "advisory_repair_retries": 2,
+  "taskviews_context_bytes": 32000,
+  "enable_context_rescue": true
+}
