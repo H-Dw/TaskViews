@@ -1,4 +1,4 @@
-"""Run either K3 arm through the pinned, untouched official execution/evaluation runner."""
+"""Run any K3 arm through the pinned, untouched official execution/evaluation runner."""
 from __future__ import annotations
 
 import argparse
@@ -7,6 +7,22 @@ import os
 from pathlib import Path
 import runpy
 import sys
+
+
+def agent_class(interface, arm):
+    if interface == 'official-xml':
+        from ui_kobe.osworld.kimi_official import OfficialK3Agent, OfficialK3TransitionAgent, OfficialK3TaskViewsAgent
+        classes = {'baseline': OfficialK3Agent, 'ui_kobe_like': OfficialK3TransitionAgent,
+                   'taskviews': OfficialK3TaskViewsAgent}
+    elif interface == 'k3-native':
+        from ui_kobe.osworld.kimi_native import KimiNativeAgent
+        from ui_kobe.osworld.kimi_transition_native import KimiTransitionNativeAgent
+        from ui_kobe.osworld.kimi_taskviews_native import KimiTaskViewsNativeAgent
+        classes = {'baseline': KimiNativeAgent, 'ui_kobe_like': KimiTransitionNativeAgent,
+                   'taskviews': KimiTaskViewsNativeAgent}
+    else:
+        raise ValueError('Unknown Agent interface')
+    return classes[arm]
 
 
 def main():
@@ -28,9 +44,9 @@ def main():
     check_interface(plan)
     if (manifest.get('agent_interface') != plan['agent_interface']
             or manifest.get('agent_protocol') != plan['protocols'][plan['arms'].index(manifest['arm'])]):
-        raise RuntimeError('Manifest Agent interface differs from the frozen paired plan')
+        raise RuntimeError('Manifest Agent interface differs from the frozen three-arm plan')
     if not isinstance(plan.get("cua_contract"), dict):
-        raise RuntimeError("This v6 entry requires a fresh frozen plan with its predeclared CUA contract")
+        raise RuntimeError("This v7 entry requires a fresh frozen plan with its predeclared CUA contract")
     contract = CUAContract(**plan["cua_contract"])
     if manifest.get("cua_contract") != contract.snapshot():
         raise RuntimeError("Manifest CUA contract differs from frozen plan")
@@ -63,15 +79,10 @@ def main():
     output = Path(manifest["official_results"])
     install_local_memory_profile(output, "minimal", startup_available_gib=STARTUP_AVAILABLE_GIB)
     import mm_agents.qwen
-    if manifest['agent_interface'] == 'official-xml':
-        from ui_kobe.osworld.kimi_official import OfficialK3Agent, OfficialK3TaskViewsAgent
-        mm_agents.qwen.QwenAgent = OfficialK3Agent if manifest['arm'] == 'baseline' else OfficialK3TaskViewsAgent
-    elif manifest["arm"] == "baseline":
-        from ui_kobe.osworld.kimi_native import KimiNativeAgent
-        mm_agents.qwen.QwenAgent = KimiNativeAgent
-    else:
-        from ui_kobe.osworld.kimi_taskviews_native import KimiTaskViewsNativeAgent
-        mm_agents.qwen.QwenAgent = KimiTaskViewsNativeAgent
+    selected = agent_class(manifest['agent_interface'], manifest['arm'])
+    if manifest.get('transition_recording') != selected.transition_recording:
+        raise RuntimeError('Recording policy differs from the frozen experimental arm')
+    mm_agents.qwen.QwenAgent = selected
     from ui_kobe.osworld.telemetry import install
     from ui_kobe.api.kimi import install_official_k3_transport
     from ui_kobe.osworld.qwen_judge import install_qwen_judge_backend

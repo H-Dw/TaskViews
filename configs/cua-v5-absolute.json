@@ -8,7 +8,7 @@
   "context_max_payload_chars": 10000000,
   "context_max_text_chars": 120000,
   "context_rough_text_token_budget": 100000,
-  "context_reserve_chars": 32000,
+  "context_reserve_chars": 0,
   "tool_repair_retries": 2,
   "advisory_repair_retries": 2,
   "taskviews_context_bytes": 32000,

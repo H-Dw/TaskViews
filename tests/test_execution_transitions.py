@@ -153,9 +153,10 @@ def test_passive_hook_captures_even_when_analysis_fails_and_preserves_actual_ret
     score, closed = object(), object()
     class Agent:
         contract = CUAContract(model_screen_width=64, model_screen_height=48)
+        transition_recording = True
         responses = ['']
         def predict(self, instruction, observation):
-            # Baseline needs no analysis; unavailable analysis also still logs.
+            # Experimental recording survives unavailable optional analysis.
             return 'intent', ['WAIT']
     class Controller:
         def execute_python_command(self, command):

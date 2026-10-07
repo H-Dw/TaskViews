@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "osworld-k3-taskviews"
 dynamic = ["version"]
-description = "Shared official OSWorld CUA contract with thin K3 native and TaskViews adapters"
+description = "Three-arm OSWorld CUA comparison with shared K3 acting and optional execution memory or TaskViews"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"

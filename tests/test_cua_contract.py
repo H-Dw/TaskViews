@@ -76,7 +76,7 @@ def test_task_date_and_official_batch_guidance_are_shared():
     assert "2030-02-07" in prompt
     assert "depends on observing an intermediate result" in prompt
     assert "<tool_call>" not in prompt
-    assert "model-image pixels" in prompt
+    assert '1920x1080' in prompt
 
 
 @pytest.mark.parametrize("parameters,commands,question", [
@@ -179,8 +179,11 @@ def test_specific_coordinate_repair_feedback_preserves_complete_native_history(m
         _, actions = agent.predict("literal goal", {"screenshot": png((1920, 1080))})
         assert len(actions) == 1 and len(actual.requests) == 2
         feedback = actual.requests[1]["messages"][-1]["content"][-1]["text"]
-        assert "1342" in feedback and "0..1000" in feedback and '"error_code": "coordinate"' in feedback
-        assert not any(m["role"] == "assistant" for m in actual.requests[1]["messages"])
+        assert "1342" in feedback and "0..1000" in feedback and 'error_code' not in feedback
+        history = actual.requests[1]['messages']
+        assert history[-3]['role'] == 'assistant' and history[-2]['role'] == 'tool'
+        assert history[-3]['tool_calls'][0]['id'] == history[-2]['tool_call_id']
+        assert json.loads(history[-2]['content'])['error'] in feedback
         assert actual.requests[0]["deadline"] == actual.requests[1]["deadline"]
     finally:
         agent.close()
@@ -214,7 +217,8 @@ def test_business_schema_repair_inside_bounded_role_loop(monkeypatch, tmp_path, 
     agent.transport = agent.client.transport = actual
     try:
         _, commands = agent.predict("goal", {"screenshot": png()})
-        assert commands and agent.step_ledger.repair_counts == {"executor": 0, "advisory": 1}
+        assert commands and agent.step_ledger.repair_counts == {"executor": 0, "advisory": 0}
+        assert agent.advisory_ledger.repair_counts == {"executor": 0, "advisory": 1}
         assert "advisory_failure" not in agent.last_trace["taskviews"]
         assert any("Invalid " + bad_role in str(r["messages"][-1]["content"]) for r in actual.requests)
     finally:
@@ -236,10 +240,11 @@ def test_advisory_exhaustion_leaves_actor_repair_pool_and_original_task(monkeypa
     try:
         _, commands = agent.predict("literal goal", {"screenshot": png()})
         assert len(actual.requests) == 6 and len(commands) == 1
-        assert agent.step_ledger.repair_counts == {"executor": 2, "advisory": 2}
+        assert agent.step_ledger.repair_counts == {"executor": 2, "advisory": 0}
+        assert agent.advisory_ledger.repair_counts == {"executor": 0, "advisory": 2}
         actor = actual.requests[-1]
-        assert "literal goal" in actor["messages"][-1]["content"][0]["text"]
-        assert actor["messages"][-1]["content"][1]["text"] == actual.requests[-2]["messages"][-1]["content"][1]["text"]
+        assert 'literal goal' in actor['messages'][1]['content'][-1]['text']
+        assert not any('advisory_status' in json.dumps(r['messages']) for r in actual.requests if r.get('tools'))
         assert "advisory_failure" in agent.last_trace["taskviews"]
         assert len({r["deadline"] for r in actual.requests if r.get("tools")}) == 1
     finally:

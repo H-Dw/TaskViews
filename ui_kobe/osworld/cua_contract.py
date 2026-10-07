@@ -21,7 +21,7 @@ class CUAContract:
     context_max_payload_chars: int = 10_000_000
     context_max_text_chars: int = 120_000
     context_rough_text_token_budget: int = 100_000
-    context_reserve_chars: int = 32_000
+    context_reserve_chars: int = 0
     tool_repair_retries: int = 2
     advisory_repair_retries: int = 2
     taskviews_context_bytes: int = 32_000
@@ -43,8 +43,8 @@ class CUAContract:
                 raise ValueError(name + " must be a positive integer")
         if type(self.context_reserve_chars) is not int or not 0 <= self.context_reserve_chars < self.context_max_text_chars:
             raise ValueError("Context reserve must leave space for acting history")
-        if self.taskviews_context_bytes > self.context_reserve_chars:
-            raise ValueError("Both arms must reserve the full TaskViews context envelope")
+        # Optional evidence has its own envelope, not a mandatory empty reserve
+        # that truncates the baseline's actor history.
         for name in ("tool_repair_retries", "advisory_repair_retries"):
             if type(getattr(self, name)) is not int or not 0 <= getattr(self, name) <= 2:
                 raise ValueError(name + " must be in 0..2")

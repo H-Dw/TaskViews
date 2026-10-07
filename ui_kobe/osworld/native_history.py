@@ -17,7 +17,7 @@ def context_size(messages):
     return len(json.dumps(messages, ensure_ascii=False, separators=(",", ":"))), text
 
 
-def compact(turns, *, step, folded, contract, system, current):
+def compact(turns, *, step, folded, contract, system, current, instruction=None, actions=()):
     from mm_agents.qwen.history import COLLAPSED_SCREENSHOT_TEXT, folded_prefix
     folded = folded_prefix(step, folded, contract.image_max, contract.fold_size)
     omitted = max(0, len(turns) - max(0, contract.history_n - 1))
@@ -29,6 +29,16 @@ def compact(turns, *, step, folded, contract, system, current):
             turn[0]["content"] = [part if part.get("type") != "image_url" else
                 {"type": "text", "text": COLLAPSED_SCREENSHOT_TEXT} for part in turn[0]["content"]]
     while True:
+        if instruction is not None:
+            from mm_agents.qwen.history import previous_actions_text
+            from mm_agents.qwen.prompts import build_instruction_prompt
+            first = turns[0][0] if turns else current
+            # Match the upstream placement: original task/older actions on the
+            # first retained observation, not repeated on every new frame.
+            prefix = 'Generate the next move from the screenshot, task, and prior actions.\n\nTask: '
+            first['content'] = [p for p in first['content'] if not p.get('text', '').startswith(prefix)]
+            first['content'].append({'type': 'text',
+                'text': build_instruction_prompt(instruction, previous_actions_text(list(actions), step - len(turns)))})
         messages = [system, *(message for turn in turns for message in turn), current]
         payload, text = context_size(messages)
         too_large = (payload + contract.context_reserve_chars > contract.context_max_payload_chars or

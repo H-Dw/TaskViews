@@ -18,7 +18,17 @@ PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
 
 
+def restore_cwd():
+    # Re-enter through the filesystem root rather than retain an inherited
+    # DrvFS cwd reference across exec. Tests and config discovery need PROJECT.
+    os.chdir(PROJECT.anchor)
+    os.chdir(PROJECT)
+
+
 def _next(state_path, *, worker=False):
+    # Tests may enter temporary runner directories. Restore a durable cwd
+    # before exec; otherwise the next pytest cannot initialize after removal.
+    restore_cwd()
     state = json.loads(state_path.read_text(encoding="utf-8"))
     env = {**os.environ, "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
            "UI_KOBE_OFFICIAL_REPO": state["official_repo"],
@@ -61,6 +71,7 @@ def main():
     args = parser.parse_args()
     from scripts.osworld_native_experiment import require_scope, project_snapshot, now, write
     group = require_scope(128 * 1024**2)
+    restore_cwd()  # Initialize each fresh interpreter, not only its predecessor.
     if not args.state:
         if args.ruff is None:
             parser.error("--ruff is required")

@@ -113,15 +113,20 @@ def frozen_check(root):
         raise RuntimeError("Task046 setup admission changed")
 
 
+ARMS = ('baseline', 'ui_kobe_like', 'taskviews')
+
+
 def interface_protocols(interface):
-    return {'official-xml': ['kimi-k3-official-qwen-xml-v6', 'kimi-k3-official-qwen-xml-taskviews-v6'],
-            'k3-native': ['kimi-k3-native-tools-official-cua-v6', 'kimi-k3-native-tools-taskviews-official-cua-v6']}[interface]
+    protocol = {'official-xml': 'kimi-k3-official-qwen-xml-v7',
+                'k3-native': 'kimi-k3-native-tools-official-cua-v7'}[interface]
+    return [protocol] * len(ARMS)
 
 
 def check_interface(plan):
-    if (plan.get('implementation_version') != 6 or plan.get('agent_interface') not in ('official-xml', 'k3-native')
+    if (plan.get('implementation_version') != 7 or plan.get('arms') != list(ARMS)
+            or plan.get('agent_interface') not in ('official-xml', 'k3-native')
             or plan.get('protocols') != interface_protocols(plan['agent_interface'])):
-        raise RuntimeError('Use a fresh v6 plan with one preselected shared Agent interface')
+        raise RuntimeError('Use a fresh v7 three-arm plan with one preselected shared Agent interface')
     if plan['agent_interface'] == 'official-xml' and not plan.get('k3_compatibility', {}).get('compatible'):
         raise RuntimeError('Official XML interface requires passing K3 response/history compatibility evidence')
 
@@ -173,13 +178,24 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
               for name in task_example(task).assets}
     plan = {"created_utc": now(), "task_id": task, "model": "kimi-k3", "base_url": "https://api.moonshot.ai/v1",
         "api_key_env": "KIMI_API_KEY", "official": identity, "asset_sha256": assets,
-        "arms": ["baseline", "taskviews"], "protocols": interface_protocols(agent_interface),
-        'implementation_version': 6, 'agent_interface': agent_interface,
+        "arms": list(ARMS), "protocols": interface_protocols(agent_interface),
+        'implementation_version': 7, 'agent_interface': agent_interface,
+        'arm_variables': {'baseline': 'no transition database or optional memory context',
+                         'ui_kobe_like': 'transition database and bounded edge retrieval',
+                         'taskviews': 'transition database plus task modules and adaptive context'},
         'k3_compatibility': proof, 'stream_budget': StreamBudget().__dict__,
         "cua_contract": contract.snapshot(),
         "generation_profile": generation_profile(profile_name).__dict__,
         "arm_admission": {"baseline_score_required": False, "baseline_run_required": False,
-            "serial_execution": True, "existing_baseline_source_and_cleanup_required": True},
+            "serial_execution": True, "existing_predecessor_source_and_cleanup_required": True},
+        'actor_policy': {'shared_entry': 'one selected actor implementation for all three arms',
+            'prompt': 'pinned official prompt; native wire-format substitution only',
+            'feedback': 'minimal protocol result, actual command error or actual user answer',
+            'complete_evidence': 'separate audit; experimental transition journals only',
+            'optional_context_omission': 'omit whole packet; never evict actor history'},
+        'budget_scopes': {'actor': 'full unchanged step output/deadline and repair pool',
+            'advisory': 'separate output admission and analysis deadline; actual usage retained',
+            'equal_total_budget_comparison': False},
         "max_steps": decisions, "screen": [1920, 1080], "sleep_after_execution": 3,
         "history": {"turns": contract.history_n, "images": contract.image_max, "fold_size": contract.fold_size,
                     "context_max_text_chars": contract.context_max_text_chars},
@@ -192,17 +208,17 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
             "raw_free_retained": True, "hard_limits_unchanged": True,
             "scope": "Owned VM and website containers plus the shared service and one registered auxiliary scope; nested scopes and container IDs counted once",
             "limits": "Charged-memory attribution, not an exact host physical footprint; unrelated WSL/Docker memory and unmeasured virtualization overhead are not credited"},
-        "startup_windows": status, "retries": "At most two transport attempts; actor repair pool 2 and advisory pool 2 separately; one shared step output/deadline, actor output/time reserved; all attempts charged; no episode reruns",
+        "startup_windows": status, "retries": "At most two transport attempts; same actor output/deadline and repair pool in all arms; optional analysis has a separate bounded ledger/deadline; all attempts charged; no episode reruns",
         "execution_policy": {"batch_actions": True, "compiler": "unchanged official translate_tool_calls",
             "extra_tool_count_limit": None, "extra_argument_ranges": False, "affirmative_receipt_gate": False,
             "terminal_status_judge": False, "terminal_policy": "explicit model terminate or official max_steps; upstream optional terminal judge disabled to preserve the user-authorized no-automatic-DONE policy",
             "taskviews_advisers": "best effort; invalid views recorded without blocking the reserved executor"},
         "user_authorization": "User requested a shared official CUA interface and source commit; preparing this plan does not authorize a new evaluation episode. Launch requires experiment authorization; generation profiles and resource protections remain declared in this plan",
-        "taskviews_variant": "optional context provider consumes shared passive execution graph and task modules; same selected actor interface"}
+        "taskviews_variant": "optional context provider consumes experimental passive execution graph and task modules; same selected actor interface"}
     plan["purpose"] = purpose
     if purpose == 'cua_smoke':
         plan['benchmark_comparable'] = False
-        plan['user_authorization'] = 'User requested real K3 native CUA chain validation in both arms; the predeclared short official decision limit is a compatibility smoke trial, not a benchmark rerun'
+        plan['user_authorization'] = 'The predeclared short official decision limit is a compatibility smoke trial, not a benchmark rerun. Preparation does not authorize a new evaluation episode'
     if task == "046":
         from scripts.native_task046_web import deployment_snapshot, validate_admission
         plan["native_web_deployment"] = deployment_snapshot()
@@ -252,8 +268,10 @@ def launch(root, arm):
     check_interface(plan)
     decisions = trial_max_steps(plan.get('purpose', 'evaluation'), plan.get('max_steps'))
     from ui_kobe.osworld.cua_contract import CUAContract
+    if arm not in ARMS:
+        raise ValueError('Unknown experimental arm')
     if not isinstance(plan.get("cua_contract"), dict):
-        raise RuntimeError("This v6 entry requires a fresh frozen plan with its predeclared CUA contract")
+        raise RuntimeError("This v7 entry requires a fresh frozen plan with its predeclared CUA contract")
     CUAContract(**plan["cua_contract"])
     resources_ready()
     if plan["task_id"] == "046":
@@ -267,10 +285,11 @@ def launch(root, arm):
     # OSWorld evaluates each run independently. An absent or unsuccessful baseline
     # is not a score prerequisite; an existing predecessor must still be audited
     # and cleaned before sharing its plan/resources with the next arm.
-    if arm == "taskviews" and (root / "baseline").exists():
-        previous = load(root / "baseline/audit.json")
-        if not previous["source_unchanged"] or not previous["cleanup_ok"]:
-            raise RuntimeError("Baseline source audit or cleanup failed; diagnose before proceeding")
+    for predecessor in ARMS[:ARMS.index(arm)]:
+        if (root / predecessor).exists():
+            previous = load(root / predecessor / 'audit.json')
+            if not previous['source_unchanged'] or not previous['cleanup_ok']:
+                raise RuntimeError(f'{predecessor} source audit or cleanup failed; diagnose before proceeding')
     active = subprocess.check_output(["systemctl", "--user", "list-units", "--type=service", "--state=active",
                                       "--no-legend", "--no-pager"], text=True)
     if any(line.strip().startswith("osworld21-") for line in active.splitlines()):
@@ -282,7 +301,8 @@ def launch(root, arm):
     output = ROOT / "results" / run_id / "qwen"
     manifest = {"run_id": run_id, "run_dir": str(stage), "plan_root": str(root), "task_id": plan["task_id"],
         "arm": arm, "agent_protocol": plan["protocols"][plan["arms"].index(arm)], "unit": unit,
-        'agent_interface': plan['agent_interface'], 'implementation_version': 6,
+        'agent_interface': plan['agent_interface'], 'implementation_version': 7,
+        'transition_recording': arm != 'baseline',
         "official_results": str(output), "official_arguments": official_arguments(plan["task_id"], output,
                                                     plan.get("generation_profile"), plan.get("cua_contract"), decisions),
         "cua_contract": plan.get("cua_contract"),
@@ -606,7 +626,7 @@ def main():
     parser.add_argument("action", choices=("prepare", "launch", "supervise", "cleanup", "audit", "status"))
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--task", choices=("059", "046"))
-    parser.add_argument("--arm", choices=("baseline", "taskviews"))
+    parser.add_argument("--arm", choices=ARMS)
     parser.add_argument("--validation", type=Path)
     parser.add_argument("--purpose", choices=("evaluation", "setup_validation", "cua_smoke"), default="evaluation")
     parser.add_argument('--max-steps', type=int, help='Predeclare a short official decision limit for cua_smoke only')

@@ -158,7 +158,8 @@ def test_agent_regenerates_once_preserves_history_and_charges_failed_usage(monke
             assert len(agent.turns) == 1 and agent.pending == 'original-id'
         assert len(sent) == 2
         assert all(m['role'] != 'assistant' for m in sent[1]['messages'])
-        assert sent[1]['messages'][-1]['content'][0]['text'].startswith('Original task: exact goal')
+        assert sent[1]['messages'][1]['content'][-1]['text'].endswith('Task: exact goal\n\nPrevious actions:\nNone')
+        assert sent[1]['messages'][-1]['content'][0]['text'].startswith('Your previous computer_use response could not execute:')
         requests = [value for name, value in events if name == 'api_request']
         assert [v['generation_attempt'] for v in requests] == [1, 2]
         assert [v['attempt'] for v in requests] == [1, 1]
@@ -201,7 +202,7 @@ def test_transport_retry_is_distinct_and_reserves_unknown_attempt(monkeypatch, t
 
 
 @pytest.mark.parametrize('failed_role', ['perception', 'executor'])
-def test_taskviews_roles_share_budget_and_executor_retry_reuses_views(monkeypatch, tmp_path, failed_role):
+def test_taskviews_roles_use_separate_budget_and_executor_retry_reuses_views(monkeypatch, tmp_path, failed_role):
     from ui_kobe.osworld.kimi_taskviews_native import KimiTaskViewsNativeAgent
     monkeypatch.setenv('KIMI_API_KEY', 'offline-secret')
     monkeypatch.setenv('UI_KOBE_TELEMETRY_DIR', str(tmp_path))
@@ -242,12 +243,17 @@ def test_taskviews_roles_share_budget_and_executor_retry_reuses_views(monkeypatc
         assert all(payload['max_completion_tokens'] <= (16000 if role == 'executor' else 4000)
                    for role, payload in zip(roles, payloads))
         ledger = agent.step_ledger.snapshot()
-        assert ledger['semantic_regenerations'] == 1 and ledger['requests'] == 6
-        assert ledger['charged_output'] == (4000 if failed_role == 'perception' else 16000) + 35
-        assert ledger['known_usage']['total_tokens'] == ledger['charged_output'] + 600
+        advisory = agent.advisory_ledger.snapshot()
+        assert ledger['requests'] == (2 if failed_role == 'executor' else 1)
+        assert ledger['semantic_regenerations'] == (1 if failed_role == 'executor' else 0)
+        assert advisory['semantic_regenerations'] == (1 if failed_role == 'perception' else 0)
+        assert ledger['requests'] + advisory['requests'] == 6
+        assert ledger['charged_output'] == (16007 if failed_role == 'executor' else 7)
+        assert ledger['known_usage']['total_tokens'] + advisory['known_usage']['total_tokens'] == (
+            ledger['charged_output'] + advisory['charged_output'] + 600)
         assert ledger['charged_output'] <= ledger['output_limit']
         if failed_role == 'executor':
-            assert payloads[-1]['messages'][-1]['content'][1] == payloads[-2]['messages'][-1]['content'][1]
-            assert payloads[-1]['max_completion_tokens'] == 15972
+            assert payloads[-1]['messages'][-1]['content'][-1] == payloads[-2]['messages'][-1]['content'][-1]
+            assert payloads[-1]['max_completion_tokens'] == 16000
     finally:
         agent.close()

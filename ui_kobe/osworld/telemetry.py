@@ -1,8 +1,8 @@
 """Passive, credential-safe trace hooks for the official OSWorld Qwen runner.
 
-Hooks return original values without execution gates. Native tool feedback may
-include actual execution records; no success is inferred. Each process writes
-its own JSONL; inline images are stored by SHA-256.
+Hooks return original values without execution gates. Full audit evidence stays
+separate from the minimal native tool reply. Only opted-in experimental arms
+create transition journals. Each process writes JSONL; images use SHA-256.
 """
 from __future__ import annotations
 
@@ -27,6 +27,8 @@ _api_installed = False
 def record_transition(agent, operation, *args, **kwargs):
     """Observer failures are durable warnings, never action/termination gates."""
     journal = getattr(agent, 'execution_journal', None)
+    if journal is None and not getattr(agent, 'transition_recording', False):
+        return None
     try:
         args = list(args)
         if operation in ('begin', 'decide', 'result') and args:

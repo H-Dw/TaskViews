@@ -16,9 +16,9 @@ from scripts import osworld_native_experiment as experiment
 def launch_sandbox(tmp_path, monkeypatch):
     root = tmp_path / "new-plan"
     root.mkdir()
-    experiment.write(root / "plan.json", {"task_id": "059", "arms": ["baseline", "taskviews"],
-        'implementation_version': 6, 'agent_interface': 'k3-native',
-        "protocols": ["kimi-k3-native-tools-official-cua-v6", "kimi-k3-native-tools-taskviews-official-cua-v6"],
+    experiment.write(root / "plan.json", {"task_id": "059", "arms": list(experiment.ARMS),
+        'implementation_version': 7, 'agent_interface': 'k3-native',
+        "protocols": experiment.interface_protocols('k3-native'),
         "cua_contract": CUAContract().snapshot()})
     home = tmp_path / "home"
     (home / ".config/systemd/user").mkdir(parents=True)
@@ -41,7 +41,8 @@ def test_taskviews_launch_is_independent_of_baseline_score(launch_sandbox, basel
     experiment.launch(root, "taskviews")
     manifest = experiment.load(root / "taskviews/manifest.json")
     assert manifest["arm"] == "taskviews"
-    assert manifest["agent_protocol"] == "kimi-k3-native-tools-taskviews-official-cua-v6"
+    assert manifest["agent_protocol"] == "kimi-k3-native-tools-official-cua-v7"
+    assert manifest['transition_recording']
     assert checks == [("source", root), ("resources", None)]
     assert commands[-1] == ["systemctl", "--user", "start", manifest["unit"]]
     assert not (root / "taskviews/audit.json").exists()
@@ -171,7 +172,7 @@ class Transport:
         pass
 
 
-def test_taskviews_native_shares_deadline_and_preserves_tool_history(tmp_path, monkeypatch):
+def test_taskviews_native_keeps_independent_analysis_and_preserves_tool_history(tmp_path, monkeypatch):
     monkeypatch.setenv("KIMI_API_KEY", "offline-only")
     monkeypatch.setenv("UI_KOBE_TELEMETRY_DIR", str(tmp_path))
     monkeypatch.setenv("UI_KOBE_TASK_ID", "059")
@@ -188,11 +189,12 @@ def test_taskviews_native_shares_deadline_and_preserves_tool_history(tmp_path, m
         assert len(transport.requests) == 6
         for first, second, actor in (transport.requests[:3], transport.requests[3:]):
             assert first["deadline"] == second["deadline"] < actor["deadline"]
-            assert actor["deadline"] - first["deadline"] == agent.budget.generation_s + agent.budget.connect_s
+            assert actor["deadline"] - first["deadline"] >= agent.budget.generation_s + agent.budget.connect_s
+            assert first['step_ledger'].deadline == second['step_ledger'].deadline < actor['step_ledger'].deadline
             assert actor["tool_choice"] == "auto" and len(actor["tools"]) == 1
             assert actor["reasoning_effort"] == "low" and actor["max_completion_tokens"] == 16000
-            assert "Original exact task with VaseVolume" in actor["messages"][-1]["content"][0]["text"]
-            assert "TaskViews evidence" in actor["messages"][-1]["content"][1]["text"]
+            assert 'Original exact task with VaseVolume' in actor['messages'][1]['content'][-1]['text']
+            assert actor['messages'][-1]['content'][-1]['text'].startswith('TaskViews evidence')
         actor = transport.requests[-1]
         assistant = next(m for m in actor["messages"] if m["role"] == "assistant")
         tool = next(m for m in actor["messages"] if m["role"] == "tool")

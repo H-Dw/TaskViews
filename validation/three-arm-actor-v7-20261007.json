@@ -1,0 +1,334 @@
+{
+  "started_utc": "2026-10-07T12:53:59.500923+00:00",
+  "time_utc": "2026-10-07T12:58:03.248029+00:00",
+  "exit_code": 1,
+  "pytest_exit_code": 1,
+  "tests": {
+    "passed": 605,
+    "failed": 6,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "file": "tests/test_cua_contract.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 32,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_execution_transitions.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 9,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_glm_api.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 22,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_kimi_api.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 30,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_kimi_stream.py",
+      "exit_code": 1,
+      "tests": {
+        "passed": 18,
+        "failed": 6,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_native_generation_budget.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 15,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_native_lifecycle.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_native_official_policy.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 14,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_native_resource_accounting.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 13,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_native_task_experiment.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 30,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_official_k3_agent.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 17,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_osworld_agent.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 52,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_osworld_examples.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_osworld_pipeline.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 111,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_persistent_task_memory.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 34,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_projections.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 30,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_qwen_api.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_recovery.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 47,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_task_control_runtime.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 25,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_task_memory.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 25,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_three_arm_actor.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 17,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_upstream_integration.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 8,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "file": "tests/test_view_control.py",
+      "exit_code": 0,
+      "tests": {
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0
+      }
+    }
+  ],
+  "ruff_exit_code": 0,
+  "ruff_output": "All checks passed!\n",
+  "official_base": {
+    "commit": "3d778a3c9a34a079316f70df023b166700445792",
+    "critical_sha256": {
+      "mm_agents/qwen/images.py": "79d457d53a9736fea42af6b8bb6d550873c74100ebf46db2f5fcd866f683e93c",
+      "mm_agents/qwen/actions.py": "054f6ded8b6b48bdda7ba7669099bdb7ca623bfdd1f8b43d55f5bc8778ed5234",
+      "mm_agents/qwen/parser.py": "6bb97723e913528783dbb5a364c0c34cb77768d2b5f3d434483fd88474105c6e",
+      "mm_agents/qwen/main.py": "202241aa629b55451f8d02e59f7fbbd218e308c8dc603e4cddb7d6323b063246",
+      "mm_agents/qwen/client.py": "64fad39796e71241a02e42a03b3b18019fdfec65df3434fc81e351bcdb8d6ecc",
+      "mm_agents/qwen/context.py": "265046e81302dc0261c48d399f75f8b6f7151342f0178255b8f7ccb83b0c8397",
+      "mm_agents/qwen/recovery.py": "920bcf05cc64d0e6f60d8440e9e37e4fc55c3d355581d719d98104cd8dddbe29",
+      "mm_agents/qwen/__init__.py": "6aae4dc17f6bb1d88b8ddeb09f21c3b29597e3e4bc11e429a38acc9dd86349a2",
+      "mm_agents/qwen/prompts.py": "4981cede8b0c34ecf592610b7b7ea7ae37513544710b96aaa0003a16ad63a3cb",
+      "mm_agents/qwen/history.py": "df00844674a6fa4fd9cc961cd3e48ae0f17b38868e5670576fbecaf021bd6ca8",
+      "lib_run_single.py": "ea6287894aaefb504c6419aa3307b69f0f4b95cbd7fecf67c9c70a25003d1e5e",
+      "scripts/python/run_multienv_qwen.py": "282c877e2b476cd74e7b690bb7a2f66d2fbad0fba20b23f3f7797ac11bff1df8",
+      "desktop_env/desktop_env.py": "5aa950e8a8b077256f7e74669d244ec27f0fde57513b29618bb43b816547d09f",
+      "desktop_env/controllers/python.py": "122c981aba46b8d3fcc8ebe2ec6b1d5a0d572e7b4aaf94f57f2a8c1c29b56556"
+    },
+    "unchanged": true
+  },
+  "official_source_unchanged": true,
+  "changed_official_paths": [],
+  "project_source": {
+    "ui_kobe/__init__.py": "56e0748e8d6622dfb9c3ec458b2a9eae6bbffe28116680ad5a73fb991a8d76fd",
+    "ui_kobe/api/__init__.py": "4abc448ad0fdc35014dadfc472e1a9820461528658378f61be5248d103de8612",
+    "ui_kobe/api/compatible.py": "11871e3b82912139bc5e44b9575b9e4d8c810375f54ae59d36e0d503d4e8e09e",
+    "ui_kobe/api/discover.py": "ee3e9b5ec104f9b628735ef71528b16077a4662820f60ac68aced1a3431749ec",
+    "ui_kobe/api/glm.py": "10115a80f22f8af1014e58d00cc2643ea92b3d1d9a3dbd5fc63e3b5138588962",
+    "ui_kobe/api/kimi.py": "0e4f585a32f6f008c2eb11d3c2b65ee4975c31891342562c4c73c45031b8c1e2",
+    "ui_kobe/api/kimi_budget.py": "d02b0361e8826ebce347081aa9ed7b9fb004ec32de1a53952c1f8d2349419eaf",
+    "ui_kobe/api/kimi_stream.py": "6c47afd63dbc5bab65e4cf4b691d1762f6f3215ec72d2e9fb4d65b0f8bcb009d",
+    "ui_kobe/api/probe.py": "5f89451709db88768de6a611ec2048ba24214b8fe30c370fc35ba7d1a05fe042",
+    "ui_kobe/api/qwen.py": "aa1541b19b47c7ee29fa86e2b5e2f987194e2ad6858905a70db0885e84fef27a",
+    "ui_kobe/cli.py": "a8ecd3fef71bcfcccd5305833c70a0b000ffd9d361d237b581f303ea390bae44",
+    "ui_kobe/kobe.py": "330eaf8096fdc5d40e5dca35e4401d2b22f33ae6053443b8bc5fe2cbc60f6b05",
+    "ui_kobe/osworld/__init__.py": "5a6f0a6cae1a85e830ece37b774b5d765ff1465965b149940021f906f370c815",
+    "ui_kobe/osworld/actions.py": "7eab113c213adf126d2282ca6d07f1e5e4ce55696d9df865af8868b946c9e4f7",
+    "ui_kobe/osworld/actor_context.py": "370ed6b52b8d1f83a47ded50adc3f0a7614ad41365d9819037078bcdc9b957e0",
+    "ui_kobe/osworld/agent.py": "0a6274901f6a0be117f877aaa1da1358d4f6ce900970b012daeab20ad2bb8ac6",
+    "ui_kobe/osworld/cua_contract.py": "5f92d536850394f7e32a959bb5bdd37f1677a622b8ddeeb87a0ec671491efcd2",
+    "ui_kobe/osworld/feedback.py": "ad45397ce6e51fe9e4e2bee76f69d571a94895f2f01ff3a84d2672b2ec626ead",
+    "ui_kobe/osworld/kimi_native.py": "005170720da17041e4b6d22600210cb1ba3c0b9f6481eea6e6dca8cc75e17ad2",
+    "ui_kobe/osworld/kimi_official.py": "2950a72e0b0ef40484551153c11dba7da035c019ee556723b449c2fa571f1c09",
+    "ui_kobe/osworld/kimi_taskviews_native.py": "d751dad8a40f25482e3b425868d150cbc631251677d5f1af8b98bf6802e9cb65",
+    "ui_kobe/osworld/kimi_transition_native.py": "b6c4c7de92412caba5cc9c28d4cfc43bbadfbafd41bd70e5a14712857c7c5eec",
+    "ui_kobe/osworld/lifecycle.py": "ecf201d8009c997e0b6ec05f241c2985ba0e4f3d9219ba9d1dfdd6ed997092bc",
+    "ui_kobe/osworld/local_web.py": "aa88cd9fac81c591e8dc95ebe0ae1f3fe7f5e16f6a0e6838985273be7b3074dd",
+    "ui_kobe/osworld/native_history.py": "42116ccd213f80c57724598aabf37ede6424b1f22691f1154f3240677ee40613",
+    "ui_kobe/osworld/official_adapter.py": "0caa01fd4e52e49d8cc57178226bece73fdc8846cb2607ff921c6ab19cbc2764",
+    "ui_kobe/osworld/official_base.py": "05f7dbd333dce1a66cbde63a2b092a99182be955cad22c4fb29d465a2f40d603",
+    "ui_kobe/osworld/process.py": "3db05ee901b6908dfd668a9d26c17f691575357302acc9358aaca6cff719edef",
+    "ui_kobe/osworld/qwen_judge.py": "2af7fb139aee2d94ee2351a9c7b9ba4749bbb6dc2968e4329e68d818a489a96e",
+    "ui_kobe/osworld/runner.py": "99975eabec9672af8ec9badb4fea079da9e8bf747cb2ed28b9ae7feef19f87cc",
+    "ui_kobe/osworld/task_control.py": "f006c147604ef789588c4ec5a4088d0381e3d2b57dc4c61a04f76fa7cd2aeb2b",
+    "ui_kobe/osworld/task_examples.py": "d9768f5c569a2b58b55d885ff115c3361be4986ec94bb25befce6f741e8b90fc",
+    "ui_kobe/osworld/taskviews_context.py": "3ca4809ad7cbfa5d648042ac88c45153b144c865343cfde602053d0dbb3238c8",
+    "ui_kobe/osworld/telemetry.py": "0a6124dd4868b0a4d280aa7c31fc48d5f1cb3578103649df5846bda132c2d94d",
+    "ui_kobe/osworld/transition_context.py": "3fe07f6c1abd3ca7d2df1b7e6825c19e78be4a2dc7ac6afc000bfbebc93074bc",
+    "ui_kobe/osworld/transitions.py": "1a2f1cf10ab5a7d5a1c85c990cae4f2429962c2728250393e02ecf63720492a9",
+    "ui_kobe/osworld/worker.py": "69f902636e663e7d3775419146fe1ded1e46406a719be996cd649d32a8993671",
+    "ui_kobe/utils/__init__.py": "63b0868fd6beaa17ee75dd93676a137d69d7f7757eecdcc03d13d67b8f0567a5",
+    "ui_kobe/utils/graph_manager.py": "91e39fe13d39b2f231b9c8b71d7376d7902331798c5d4e15abe100b67304ce60",
+    "ui_kobe/utils/logging.py": "4736df3e68bd57c39350999423455d601bb95ee50f8abdc4c674b2d6e050d498",
+    "ui_kobe/utils/vlm_utils.py": "a98b8a641019d64372ecf30ddc89007330fcb6eb1aa48d7ceff3a5a50d05fd87",
+    "kobe_views/__init__.py": "faeb28dde576a50401013f43ab3006be999af8155c29bbd7d4ade3c087fcf013",
+    "kobe_views/adapters.py": "5ec39bac5ccbe5abe092efc856de0dc3785facabd4b14cad6cf470d0cd55a025",
+    "kobe_views/cli.py": "18b7260a8c9bc7a18f4888cdf0ac3b3a8090ff9eee6e439808bf5147a6c90d07",
+    "kobe_views/execution_modules.py": "218e92f8581c2cd27b8b3436857ad044082811739821b5209e587cb0ec32037f",
+    "kobe_views/model.py": "0116ba44cece2e88b0e2a6b257b7ed315b40806b493a92e79537ae2c54a2d6c9",
+    "kobe_views/policies.py": "098f44f2c1b7bfca18b2433092ef1e5893850d5ab62913e3754e91f799772151",
+    "kobe_views/recovery.py": "c97381dd9dd6a81f985dc10d1aff3e5f43c506dd15c65294b28493b09b05e63d",
+    "kobe_views/retrieval.py": "e1ed2cd8d8ec05889157fb89026501fdb642e1764563c36482ff8c2829413922",
+    "kobe_views/routing.py": "1447de83453a5d529afb479d6ff08b2ed00661be46a0caca903fb0b1027b644a",
+    "kobe_views/runtime.py": "4a4f83a90542bf68b643941bc11d46635ab147fecd95e290256d60f2b1691de1",
+    "kobe_views/service.py": "cab1579730a6d7691dd3385aa89a996f02a8fb845a0df93f6ce68e6553840a74",
+    "kobe_views/store.py": "4645a0955a29c059c5b80fe86f2f66b9b3a8851797dd5840b00dae646bddf8e4",
+    "kobe_views/task_graph.py": "b8ae4667b4cc39d61c6ea49fdba709a59a602f7d901c94d70c8e3c9e46a64b0f",
+    "kobe_views/task_memory.py": "84487038ebc4f40aa010351279dd590fa389ae5d6d0bf487ed955f2c37d186b5",
+    "kobe_views/task_views.py": "6dd3d71de236d9e129d1c0ed46a53ecbfa9502a558e37989ccac79874846b471",
+    "kobe_views/view_control.py": "a345d5a2ba2f38f06f0511ca82d2d16a7ac9475e32e1e1febc9db7139fc70a3a",
+    "scripts/audit_graph.py": "c26294e00344b4207338956b59217de1e75417743a891031fa0b16174a614c88",
+    "scripts/explore.py": "e83e602bfc474ceb9f0a53b00a5a8fd1b22576ab5da0aeff668ab7c5f049dd63",
+    "scripts/launch_kimi_native_task035.py": "9daf64f7e3d864fd1d30fdb707192ceba3a737cedf15f02d9a68f8e7aabe4316",
+    "scripts/launch_osworld_task035_background.py": "f9f44ef52a71b0948582fb045c122ce11d511833a59bd82f2cd9329f2f190980",
+    "scripts/launch_osworld_task035_pipeline.py": "3cadcc3c5888b64a3c424326eeef094012e402aa9a203ce48ecda6b1fea854b7",
+    "scripts/native_resource_accounting.py": "3cedc0abcf29a8aba64ece4d9f31df55991c5d9594bb28dc11f970077014bfd4",
+    "scripts/native_task046_setup.py": "6728aea40eebbde8d54f9cb793783fbf7124fa48ee29bfe56ca652e221f2adaf",
+    "scripts/native_task046_web.py": "81249dfdfdc36a4eca2de2a42c13a440643b596af06be74c38b333fc48cb13af",
+    "scripts/osworld_native_experiment.py": "42e00101cd2516adfcde0ff7fde11fa70a4cecfbb70286fcad6086abd1ac742a",
+    "scripts/osworld_task035_background.py": "8d5a48fc915da8d46025e595ee431856549a9474e1120bd7b2ebdd288ecd281b",
+    "scripts/osworld_task035_pipeline.py": "6a467dc010d019502213b268d89bec6adaae487c1e53b609896322e79e5376f3",
+    "scripts/osworld_task035_profiles.py": "be320d73b9814cd478c0c568c21255d8a4d76000700364ce4ed0a4e9277b680c",
+    "scripts/plot_graph.py": "9be601609e15ef5796ddf2a21cb6be4b5905a2a05e44d4dd689dc67ce28427ef",
+    "scripts/precompute_graph_image_embeddings.py": "cfb8bef15a6ad78e785fd86e966f901b4e2b02e8ad7360daa1b939cc0aa96c8d",
+    "scripts/prepare_kimi_native_task035.py": "75f6eab9b124c7d9567adf49ef385d727967e6c27d24971118f058bc81933089",
+    "scripts/probe_k3_official_compatibility.py": "5deb747eab1e7c14ee6eae315efe103c8be8f63f8d78d98a795978a4a1a51b18",
+    "scripts/probe_official_qwen_xml.py": "a4ad7a5cb89af70a8a306e8a882154400860723f62a100a60daac6d65f87f535",
+    "scripts/probe_qwen_cua_endpoint.py": "0a3f52a6391dc024999546a6b4c14eb149eb4e8646919f6119c4b6f252c90c47",
+    "scripts/run_official_native_tasks.py": "1d147a9d225d2b66e7d14f084d7d4730ccc36604443307d5b7227e7841482e16",
+    "scripts/run_official_qwen_task035.py": "6ff11d505820672b9bdd1d381d5c5fde76163a68ca86c14b6e2f796ca4411a21",
+    "scripts/validate_cua.py": "46c43e349deb53986f01280faa313704b2e1c888d5822d167f01c2768582ab91",
+    "scripts/validate_native_tasks.py": "312b9adfad3961e1cb7a4f33dd30bf60eabd7c633e9f81003fc4b49f2bd17d05",
+    "scripts/validate_task_control_memory_replay.py": "784ac94e3124d8f8ccdfe6f6bf782cb72e4b9650c2af06a060179eebc26acdba"
+  },
+  "project_source_unchanged": true,
+  "scope_limit": 134217728,
+  "memory_swap_max": 0,
+  "memory_peak": 134217728,
+  "memory_events": "low 0\nhigh 0\nmax 79\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "worker_policy": "one PID exec chain; sequential fresh interpreters; one registered scope",
+  "live_api_called": false,
+  "gui_operated": false
+}

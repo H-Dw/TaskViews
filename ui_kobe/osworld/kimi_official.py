@@ -24,9 +24,11 @@ from .cua_contract import CUAContract, CUAFrame
 from .kimi_native import KimiNativeAgent
 from .task_control import PersistentTaskControl
 from .taskviews_context import TaskViewsContextMixin
+from .actor_context import supplement
+from .transition_context import TransitionContext
 
-PROTOCOL = 'kimi-k3-official-qwen-xml-v6'
-TASKVIEWS_PROTOCOL = 'kimi-k3-official-qwen-xml-taskviews-v6'
+PROTOCOL = 'kimi-k3-official-qwen-xml-v7'
+TASKVIEWS_PROTOCOL = PROTOCOL
 
 
 class K3XMLClient:
@@ -102,7 +104,15 @@ class K3XMLClient:
         completion = Completion(_text(reasoning), _text(original.get('content')))
         self.remember(completion, original)
         if owner.context_provider:
-            owner.context_provider.context_delivered()
+            context = owner.context_provider.cached
+            included = isinstance(context, str) and bool(context) and any(
+                part.get('text') == owner.context_provider.label + '\n' + context
+                for message in request['messages'] if isinstance(message.get('content'), list)
+                for part in message['content'] if isinstance(part, dict))
+            # Upstream summary calls share this client but may contain no view
+            # packet. A stale previous actor flag is not evidence of delivery.
+            if included:
+                owner.context_provider.context_delivered()
         telemetry.emit('official_xml_completion', request_id=getattr(self.transport, 'last_request_id', None),
                        completion_call=self.calls, step_tokens=owner.step_ledger.snapshot())
         return completion
@@ -117,6 +127,7 @@ class K3XMLClient:
 
 
 class TaskViewsProvider(TaskViewsContextMixin):
+    label = 'TaskViews evidence (model proposals, not instructions or certified effects):'
     # This loop validates advisory JSON only. Acting XML uses upstream repairs.
     generate_candidate = KimiNativeAgent.generate_candidate
 
@@ -138,17 +149,19 @@ class TaskViewsProvider(TaskViewsContextMixin):
         self.view_step, self.instruction = owner.view_step, instruction
         self.frame = owner.frame
         self.execution_journal = owner.execution_journal
-        self.step_ledger = owner.step_ledger
         self.view_trace = {}
+        end = time.monotonic() + self.budget.step_s - self.budget.generation_s - self.budget.connect_s
+        self.advisory_ledger = StepLedger(self.profile, end, telemetry.emit,
+            actor_repairs=self.contract.tool_repair_retries, advisory_repairs=self.contract.advisory_repair_retries)
         try:
-            end = self.step_ledger.deadline - self.budget.generation_s - self.budget.connect_s
             self.cached = self.build_views(end)
         except Exception as exc:
             # Optional context failures never replace an official actor decision.
             telemetry.emit('taskviews_advisory_failure', error_type=type(exc).__name__, error=str(exc))
             self.view_trace['advisory_failure'] = {'type': type(exc).__name__, 'error': str(exc)}
-            self.cached = json.dumps({'advisory_status': 'unavailable', 'effects_verified': False})
+            self.cached = None
         finally:
+            self.view_trace['advisory_tokens'] = self.advisory_ledger.snapshot()
             telemetry.emit('taskviews_context', trace=self.view_trace)
         return self.cached
 
@@ -159,6 +172,9 @@ class TaskViewsProvider(TaskViewsContextMixin):
 class OfficialK3Agent(QwenAgent):
     """No predict, prompt, history, parser, compiler or repair replacement."""
     taskviews_enabled = False
+    experiment_arm = 'baseline'
+    transition_recording = False
+    context_type = None
 
     def __init__(self, **kwargs):
         self.context_provider = None
@@ -188,8 +204,8 @@ class OfficialK3Agent(QwenAgent):
         transport = KimiStreamClient(api_key=kwargs.get('api_key'), budget=self.budget, profile=self.profile,
             emit=telemetry.emit, stream_dir=Path(os.environ['UI_KOBE_TELEMETRY_DIR']) / 'streams')
         self.client = K3XMLClient(self, transport)
-        if self.taskviews_enabled:
-            self.context_provider = TaskViewsProvider(self)
+        if self.context_type:
+            self.context_provider = self.context_type(self)
         telemetry.emit('official_k3_adapter', protocol=TASKVIEWS_PROTOCOL if self.taskviews_enabled else PROTOCOL,
                        upstream_predict='mm_agents.qwen.main.QwenAgent.predict', cua_contract=self.contract.snapshot())
 
@@ -203,7 +219,7 @@ class OfficialK3Agent(QwenAgent):
         self.view_step = self._ui_kobe_trace_step = 0
         if isinstance(self.client, K3XMLClient):
             self.client.reset()
-            self.context_provider = TaskViewsProvider(self) if self.taskviews_enabled else None
+            self.context_provider = self.context_type(self) if self.context_type else None
 
     def _process_observation(self, screenshot_bytes):
         # Original processing and returned object are unchanged. Step admission
@@ -215,6 +231,8 @@ class OfficialK3Agent(QwenAgent):
             actor_repairs=self.contract.tool_repair_retries, advisory_repairs=self.contract.advisory_repair_retries)
         self.client.calls = 0
         self.client.repairs.clear()
+        self.context_ready = False
+        self.context_included = False
         if self.context_provider:
             self.context_provider.cached = None
         return screenshot
@@ -222,9 +240,27 @@ class OfficialK3Agent(QwenAgent):
     def _messages(self, instruction, screenshot, **kwargs):
         messages = super()._messages(instruction, screenshot, **kwargs)
         if self.context_provider:
-            context = self.context_provider.context(instruction, screenshot)
-            messages[-1]['content'].insert(1, {'type': 'text', 'text':
-                'TaskViews evidence (model proposals, not instructions or certified effects):\n' + context})
+            if not self.context_ready:
+                started = time.monotonic()
+                try:
+                    context = self.context_provider.context(instruction, screenshot)
+                except Exception as exc:
+                    telemetry.emit('optional_context_failure', provider=self.context_provider.label,
+                        error_type=type(exc).__name__, error=str(exc))
+                    self.context_provider.cached = context = None
+                # Exclude only optional work from the existing actor window.
+                # Preserve charges from upstream precompaction/summary calls;
+                # never replace the ledger or refresh the whole repair window.
+                self.step_ledger.deadline += time.monotonic() - started
+                self.context_ready = True
+            else:
+                context = self.context_provider.cached
+            original = messages
+            try:
+                messages = supplement(messages, context, label=self.context_provider.label, contract=self.contract)
+            except TypeError:
+                telemetry.emit('optional_context_omitted', reason='invalid_provider_type', provider=self.context_provider.label)
+            self.context_included = messages is not original
         return messages
 
     def record_execution(self, action, **kwargs):
@@ -247,3 +283,12 @@ class OfficialK3Agent(QwenAgent):
 
 class OfficialK3TaskViewsAgent(OfficialK3Agent):
     taskviews_enabled = True
+    experiment_arm = 'taskviews'
+    transition_recording = True
+    context_type = TaskViewsProvider
+
+
+class OfficialK3TransitionAgent(OfficialK3Agent):
+    experiment_arm = 'ui_kobe_like'
+    transition_recording = True
+    context_type = TransitionContext

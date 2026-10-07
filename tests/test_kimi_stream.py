@@ -269,7 +269,9 @@ def test_history_context_limit_keeps_original_pairs_and_current_frame(monkeypatc
         assert agent.last_trace['history_turns_omitted'] == expected_drop
         assert sum(p.get('type') == 'image_url' for m in messages if isinstance(m.get('content'), list)
                    for p in m['content']) <= 20
-        assert messages[-1]['content'][0]['text'].startswith('Original task: 当前原文目标')
+        assert 'Task: 当前原文目标' in messages[1]['content'][-1]['text']
+        assert messages[-1]['content'][0]['type'] == 'image_url'
+        assert not any('当前原文目标' in part.get('text', '') for part in messages[-1]['content'])
         assert [m for m in messages if m['role'] in ('assistant', 'tool')] == [
             m for turn in saved[expected_drop:] for m in turn[1:]]
     finally:

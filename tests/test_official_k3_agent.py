@@ -1,6 +1,7 @@
 from copy import deepcopy
 import hashlib
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -8,7 +9,7 @@ from mm_agents.qwen.main import QwenAgent
 from mm_agents.qwen.client import Completion as OfficialCompletion
 from ui_kobe.api.kimi_stream import Completion, SSEAccumulator, StreamProtocolError, OutputTokenLimitError
 from ui_kobe.osworld.cua_contract import CUAContract
-from ui_kobe.osworld.kimi_official import OfficialK3Agent, OfficialK3TaskViewsAgent
+from ui_kobe.osworld.kimi_official import OfficialK3Agent, OfficialK3TaskViewsAgent, OfficialK3TransitionAgent
 from test_cua_contract import png
 from ui_kobe.api.kimi import content_text
 
@@ -138,7 +139,7 @@ def test_taskviews_changes_only_optional_context_and_uses_same_acting_image(monk
     monkeypatch.setattr(provider, 'build_views', views)
     agent.predict('literal goal', {'screenshot': png()})
     request = agent.client.transport.requests[0]
-    assert request['messages'][-1]['content'][1]['text'].startswith('TaskViews evidence')
+    assert request['messages'][-1]['content'][-1]['text'].startswith('TaskViews evidence')
     assert next(x for x in request['messages'][-1]['content'] if x['type'] == 'image_url') == seen[0][0]
     assert seen[0][1] < request['deadline']
     assert len(agent.client.transport.requests) == 1
@@ -154,8 +155,81 @@ def test_optional_context_error_keeps_literal_task_and_actor(monkeypatch, tmp_pa
     _, commands = agent.predict('literal goal', {'screenshot': png()})
     assert commands
     assert any('literal goal' in content_text(m['content']) for m in agent.client.transport.requests[0]['messages'])
-    assert 'unavailable' in agent.context_provider.cached
+    assert agent.context_provider.cached is None
+    assert 'unavailable' not in json.dumps(agent.client.transport.requests[0]['messages'])
     agent.close()
+
+
+def test_omitted_xml_context_does_not_advance_memory_delivery(monkeypatch, tmp_path):
+    agent = build(OfficialK3TaskViewsAgent, monkeypatch, tmp_path, [xml()])
+    delivered = []
+    monkeypatch.setattr(agent.context_provider, 'build_views', lambda end: 'x' * 32001)
+    monkeypatch.setattr(agent.context_provider, 'context_delivered', lambda: delivered.append(True))
+    try:
+        _, commands = agent.predict('literal goal', {'screenshot': png()})
+        assert commands and not delivered
+        assert not agent.context_included
+        assert not any(part.get('text', '').startswith('TaskViews evidence') for part in
+            agent.client.transport.requests[0]['messages'][-1]['content'])
+    finally:
+        agent.close()
+
+
+def test_summary_completion_cannot_acknowledge_an_unsent_view_packet(monkeypatch, tmp_path):
+    agent = build(OfficialK3TaskViewsAgent, monkeypatch, tmp_path, [xml(), 'ordinary summary'])
+    delivered = []
+    monkeypatch.setattr(agent.context_provider, 'build_views', lambda end: '{"grade":"model_proposal"}')
+    monkeypatch.setattr(agent.context_provider, 'context_delivered', lambda: delivered.append(True))
+    try:
+        agent.predict('literal goal', {'screenshot': png()})
+        assert delivered == [True] and agent.context_included
+        summary = {'model': 'kimi-k3', 'messages': [
+            {'role': 'system', 'content': 'Summarize previous actions'},
+            {'role': 'user', 'content': 'previous actions'}]}
+        agent.client.complete(summary)
+        assert delivered == [True]
+    finally:
+        agent.close()
+
+
+def test_xml_optional_work_preserves_summary_charges_and_runs_once_per_observation(monkeypatch, tmp_path):
+    clock = [100.0]
+    monkeypatch.setattr(time, 'monotonic', lambda: clock[0])
+    agent = build(OfficialK3TaskViewsAgent, monkeypatch, tmp_path, [])
+    try:
+        screenshot = agent._process_observation(png())
+        ledger = agent.step_ledger
+        ledger.reserve('summary', 'executor', 4096)
+        ledger.settle('summary', {'prompt_tokens': 10, 'completion_tokens': 20, 'total_tokens': 30})
+        agent.client.calls = 1  # Original context rescue already called the shared client.
+        clock[0] += 10
+        seen = []
+        def fail(end):
+            seen.append(end)
+            clock[0] += 100
+            raise OSError('optional projection unavailable')
+        monkeypatch.setattr(agent.context_provider, 'build_views', fail)
+        agent._messages('goal', screenshot)
+        assert agent.step_ledger is ledger and ledger.charged_output == 20
+        assert ledger.deadline == 100 + agent.budget.step_s + 100
+        deadline = ledger.deadline
+        agent._messages('goal', screenshot)
+        assert len(seen) == 1 and ledger.deadline == deadline
+    finally:
+        agent.close()
+
+
+def test_xml_graph_read_failure_keeps_the_common_actor(monkeypatch, tmp_path):
+    agent = build(OfficialK3TransitionAgent, monkeypatch, tmp_path, [xml()])
+    def fail(*args):
+        raise OSError('graph read unavailable')
+    monkeypatch.setattr(agent.context_provider, 'context', fail)
+    try:
+        _, commands = agent.predict('literal goal', {'screenshot': png()})
+        assert commands and agent.context_provider.cached is None
+        assert 'graph read unavailable' not in json.dumps(agent.client.transport.requests[0]['messages'])
+    finally:
+        agent.close()
 
 
 def test_collision_is_not_resolved_by_guessing_reasoning(monkeypatch, tmp_path):
@@ -215,7 +289,7 @@ def test_taskviews_consumes_shared_transition_records_across_actual_predictions(
         assert not modules.gaps
         assert modules.active and len(modules.modules[modules.active]['outputs']) == 2
         assert agent.context_provider.view_trace['view_changes']['executor']['base_revision'] is not None
-        context = actor.requests[-1]['messages'][-1]['content'][1]['text']
+        context = actor.requests[-1]['messages'][-1]['content'][-1]['text']
         assert 'recent_transitions' in context and 'mouse_move' in context
         previous = modules.previous_revision
         previous_views = modules.views

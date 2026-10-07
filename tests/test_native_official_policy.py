@@ -124,8 +124,9 @@ def test_batch_commands_not_joined_and_feedback_ids_preserved(monkeypatch, tmp_p
     messages = agent.client.request['messages']
     assert messages[2] == completion.model_dump()['choices'][0]['message']
     assert [m['tool_call_id'] for m in messages if m['role'] == 'tool'] == ['call-0', 'call-1']
-    assert len(json.loads(messages[3]['content'])['executions']) == 2
-    assert json.loads(messages[4]['content'])['executions'][0]['controller_receipts'][0]['result']['returncode'] == 1
+    assert json.loads(messages[3]['content']) == {'returncode': 1}
+    assert json.loads(messages[4]['content']) == {'returncode': 1}
+    assert 'controller_receipts' not in messages[3]['content'] and 'pyautogui' not in messages[4]['content']
     agent.close()
 
 
