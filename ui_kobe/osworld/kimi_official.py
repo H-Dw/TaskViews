@@ -15,7 +15,7 @@ from pathlib import Path
 import time
 
 from mm_agents.qwen.main import QwenAgent
-from mm_agents.qwen.client import Completion
+from mm_agents.qwen.client import Completion, _text
 from ui_kobe.api.kimi import BASE_URL, content_text, generation_profile
 from ui_kobe.api.kimi_budget import StepLedger
 from ui_kobe.api.kimi_stream import KimiStreamClient, StreamBudget, StreamProtocolError
@@ -93,9 +93,13 @@ class K3XMLClient:
         if choice['finish_reason'] != 'stop' or original.get('tool_calls'):
             raise StreamProtocolError('XML trial received non-XML native tool response; no automatic fallback',
                                       code='xml_interface_mismatch', observed_response=response)
-        if not isinstance(original.get('reasoning_content'), str) or not isinstance(original.get('content'), str):
-            raise StreamProtocolError('K3 response lacks complete reasoning/content', code='xml_response_fields')
-        completion = Completion(original['reasoning_content'], original['content'])
+        # Use the pinned client's text normalization at the Completion boundary.
+        # Empty content is legal, including native reasoning-only responses. Keep
+        # the original nullable message for provider history and raw evidence.
+        reasoning = original.get('reasoning_content')
+        if reasoning is None:
+            reasoning = original.get('reasoning')
+        completion = Completion(_text(reasoning), _text(original.get('content')))
         self.remember(completion, original)
         if owner.context_provider:
             owner.context_provider.context_delivered()

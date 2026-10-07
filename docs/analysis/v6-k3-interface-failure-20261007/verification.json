@@ -1,0 +1,32 @@
+{
+  "time_utc": "2026-10-07T04:44:18.045529+00:00",
+  "frozen_source_plan_assets_passed": true,
+  "sealed_files_unchanged": {
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task059-20261007-official-v6-max16/baseline/audit.json": "51ca40d5311d61e065b3c1372a3077364dcf14a356961e86b315a39e2f76465b",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task059-20261007-official-v6-max16/baseline/terminal-diagnosis.json": "f838cffb54d434581d4316d0f73bf7f71a12ab45984816cc3fb242165af19534",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task059-20261007-official-v6-max16/baseline/terminal-report.md": "87e5234d1717424e2b4eb3598718617703ee9bb6b748713674a2cf1971580a6a",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task059-20261007-official-v6-max16/baseline/terminal-evidence-index.jsonl": "949206951c86ddf841753828817c089bf6669318148b490db80d6f6369f38048",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task059-20261007-official-v6-max16/taskviews/audit.json": "08a723ea5fe9d2e52f03824035bf2abb9c132c3fc107facff43ddfed1a8c33cc",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task059-20261007-official-v6-max16/taskviews/terminal-diagnosis.json": "0ca5bc0511ec24872d375a9a618211ea10652320c03274dfaba379f2a16dfdfb",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task059-20261007-official-v6-max16/taskviews/terminal-report.md": "8c23f81b65ffabde015b911ff59e47d54bd277858a376bdba12e14a8beb931f4",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task059-20261007-official-v6-max16/taskviews/terminal-evidence-index.jsonl": "49c517b739c313e05d68b38aa606234f27c37e3f8e354406fb2ab0e28590c373",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task046-20261007-official-v6-max16/baseline/audit.json": "ba07cdab831e113131011d0ce2fd0e4797acf23bd942ef4b48e627331a2a8d26",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task046-20261007-official-v6-max16/baseline/terminal-diagnosis.json": "c69814d97e4aaf7f0183565a13809efc500a5c113334bc17ccf6fd023bd15109",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task046-20261007-official-v6-max16/baseline/terminal-report.md": "4252dd59274c06f20e812d8e7d7518e55af174384123a4237d01f16c7a1b8326",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task046-20261007-official-v6-max16/baseline/terminal-evidence-index.jsonl": "8fc63cbcc64c3dcb60d49b8e6a49c63b57ff14026741c7c0d4b9766d023c70ee",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task046-20261007-official-v6-max16/taskviews/audit.json": "2474afde8ad8b85a572a4764c41cbd8b195ae4abc4e22763d3ab5623d0edcf9a",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task046-20261007-official-v6-max16/taskviews/terminal-diagnosis.json": "1396d510fa6a4aad524bec2af8207f7489c2982bfbe590c3d70dc0e1ef5fbac3",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task046-20261007-official-v6-max16/taskviews/terminal-report.md": "a121303ad9e50e289d1e6d15a19a4de5f326addf64490e730223602231eb2c85",
+    "/mnt/d/cua_lty/OSWorld-K3-TaskViews/docs/experiments/osworld21-kimi-k3-task046-20261007-official-v6-max16/taskviews/terminal-evidence-index.jsonl": "ced04cde4d2456100a030d3947fa33ec4cc402d2ba6470a322b01830dbff789c"
+  },
+  "sources_match_evidence": true,
+  "analysis_evidence_sha256": {
+    "evidence.json": "6abed2295f5e55735272c5da7b557d89b7fbfb8f0b1ba51f59ae58c6f145891f",
+    "nullable-replay.json": "3f82c55baf1470f0afcaffeb4a560d5ce8d868f7afd3fbd08c653fbbee8c6a87",
+    "report.md": "e32d228d7e20f4f12f815a6c160436fb84212a7cfc7c4f405469b979e6551515"
+  },
+  "analysis_only": true,
+  "model_requests": 0,
+  "gui_actions": 0,
+  "runtime_edits": 0
+}

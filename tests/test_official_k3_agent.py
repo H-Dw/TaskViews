@@ -1,10 +1,12 @@
 from copy import deepcopy
+import hashlib
 import json
+from pathlib import Path
 
 import pytest
 from mm_agents.qwen.main import QwenAgent
 from mm_agents.qwen.client import Completion as OfficialCompletion
-from ui_kobe.api.kimi_stream import Completion, StreamProtocolError, OutputTokenLimitError
+from ui_kobe.api.kimi_stream import Completion, SSEAccumulator, StreamProtocolError, OutputTokenLimitError
 from ui_kobe.osworld.cua_contract import CUAContract
 from ui_kobe.osworld.kimi_official import OfficialK3Agent, OfficialK3TaskViewsAgent
 from test_cua_contract import png
@@ -80,6 +82,49 @@ def test_original_reasoning_restored_for_history_and_official_xml_repair(monkeyp
     assert assistant == {'role': 'assistant', 'content': xml(), 'reasoning_content': 'original reasoning 2'}
     assert agent.user_responses[2] == 'original user response'
     assert agent.tool_call_counts == [1, 1] and len(agent.responses) == 2
+    agent.close()
+
+
+@pytest.mark.parametrize('label', ['task059-taskviews', 'task046-baseline', 'task046-taskviews'])
+def test_sealed_empty_content_sse_uses_official_normalization_and_preserves_history(monkeypatch, tmp_path, label):
+    fixtures = Path(__file__).parent / 'fixtures/k3-empty-content'
+    data = (fixtures / (label + '.jsonl')).read_bytes()
+    provenance = json.loads((fixtures / 'provenance.json').read_text())
+    original = next(case for case in provenance['cases'] if case['fixture'] == label + '.jsonl')
+    assert hashlib.sha256(data).hexdigest() == original['sha256']
+    accumulator = SSEAccumulator()
+    for line in data.decode().splitlines():
+        accumulator.add(json.loads(line)['data'])
+    raw = accumulator.complete().model_dump()
+    message = raw['choices'][0]['message']
+    assert raw['choices'][0]['finish_reason'] == 'stop' and accumulator.done
+    assert message['content'] is None and message['reasoning_content']
+    assert raw['usage']['total_tokens'] == raw['usage']['prompt_tokens'] + raw['usage']['completion_tokens']
+    agent = build(OfficialK3Agent, monkeypatch, tmp_path, [message, xml('wait', '')])
+    returned, commands = agent.predict('literal goal', {'screenshot': png()})
+    assert commands == [] and message['reasoning_content'] in returned
+    assert len(agent.client.transport.requests) == 1  # No fabricated XML or extra action repair.
+    _, following = agent.predict('literal goal', {'screenshot': png(), 'user_response': 'original reply'})
+    history = [entry for entry in agent.client.transport.requests[1]['messages'] if entry['role'] == 'assistant']
+    assert history == [message] and history[0]['content'] is None
+    assert following == ['WAIT'] and not agent.client.repairs
+    agent.close()
+
+
+@pytest.mark.parametrize('fields', [{}, {'content': None, 'reasoning_content': None},
+    {'content': [{'text': 'text'}], 'reasoning': 'fallback reasoning'}])
+def test_xml_completion_field_normalization_matches_pinned_client(monkeypatch, tmp_path, fields):
+    from mm_agents.qwen.client import _text
+    message = {'role': 'assistant', **fields}
+    agent = build(OfficialK3Agent, monkeypatch, tmp_path, [message])
+    # Initialize the same ledger/frame as predict without changing the parser.
+    screenshot = agent._process_observation(png())
+    completion = agent.client.complete(agent._payload(agent._messages('goal', screenshot)))
+    reasoning = fields.get('reasoning_content')
+    if reasoning is None:
+        reasoning = fields.get('reasoning')
+    assert completion == OfficialCompletion(_text(reasoning), _text(fields.get('content')))
+    assert agent.client.restore_messages([{'role': 'assistant', 'content': completion.rendered(True)}]) == [message]
     agent.close()
 
 

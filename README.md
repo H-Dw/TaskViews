@@ -2,6 +2,8 @@
 
 两臂共用 OSWorld 官方执行与评分，以及被动的执行转换记录。v6 的首选路径直接继承固定版本 QwenAgent，保留其 `predict`、提示、历史、XML 解析和修复；薄 K3 层只适配供应商参数、完整 SSE 与原始响应历史。TaskViews 在同一路径增加可选上下文提供器，从转换图维护任务模块和自适应视图。
 
+2026-10-07 的接口修复见 [空字段与被动记录修复](docs/native-cua-fixes.md)：复用固定官方客户端的空文本兼容规则，修复 SQLite 事件引用输出的字段冲突，并用三份真实失败 SSE 回归。新的 native 动作链路验证预选相同 absolute 1920×1080 契约，串行运行两臂；短程链路检查与正式任务成绩分开。
+
 迁移前必须取得当前源码、配置与 K3 的真实 XML/历史兼容证明。K3 native function calls 仍保留为另一组预先选择的两臂比较；不混用协议，不根据某次输出自动切换。实现、UI-KOBE 关系与证据限制见 [v6 说明](docs/cua-v6.md)。
 
 官方底座固定为 `xlang-ai/OSWorld-V2@3d778a3c9a34a079316f70df023b166700445792`，从外部 checkout 加载；仓库不复制或修改官方执行器、评分器或任务答案。运行前逐字节检查关键官方文件，并保存运行前后源码索引。
@@ -15,9 +17,9 @@
 - 历史默认使用官方 runner 的 500 轮、20 图、10 轮折叠步幅。XML 路径使用官方 `build_messages`、上下文处理与原修复提示；原始 K3 reasoning/content 在供应商请求中恢复。官方 XML 历史的 success 文本是合成反馈，不冒充真实回执。native 组单独保留完整 assistant/tool ID 与实际反馈。
 - actor 保留官方默认的最多两次动作修复；TaskViews 分析共用另一个最多两次修复池。所有请求仍共用原整步时间/输出预算，失败与未知费用保留。分析不能消耗 actor 输出预留；分析还须提前让出 actor 的完整生成时间窗口。修复次数不保证在额度耗尽后仍可重试。
 - TaskViews 的业务 JSON、角色范围在同一个有界校验修复流程中检查；控制器收到各消费者实际允许的 anchors。权限与范围检查继续生效。最终分析不可用时，原目标与同一截图继续交给 actor。
-- 关闭 terminal judge、endless retry、summary LLM 和 zoom；不支持的开关明确拒绝。模型显式 terminate 或官方决策上限后，由原 runner 执行原任务评估。模型 success 与官方得分分开记录。
+- 关闭 terminal judge、endless retry、一般 summary folding 和 zoom；XML 的原官方 context rescue 仍可调用摘要 LLM，native 历史封装另列。模型显式 terminate 或官方决策上限后，由原 runner 执行原任务评估。模型 success 与官方得分分开记录。
 
-此前 v5 实现见 [接口优化说明](docs/cua-v5.md)。v6 未进行新的在线任务评测；协议兼容探针不等于任务成绩，单位合法也不等于视觉目标识别正确。
+此前 v5 实现见 [接口优化说明](docs/cua-v5.md)。v6 official-xml 四组评测已封存，其失败分析见 [接口异常分析](docs/analysis/v6-k3-interface-failure-20261007/report.md)。协议兼容探针不等于任务成绩，单位合法也不等于视觉目标识别正确。
 
 新授权的 max/16K 配置及单独验证见 [max16 配置说明](docs/max16-profile.md)：max/16000、整步32000、actor保留16000、分析4000。正式任务评测记录与此前兼容探针分开管理。
 
@@ -61,6 +63,6 @@ PYTHONDONTWRITEBYTECODE=1 systemd-run --user --scope \
 
 若选择 `--agent-interface k3-native`，两臂都使用同一个 native 适配器，作为单独的比较组。XML 迁移证据不能代替其他 profile、截图契约或修改后源码的兼容检查。配置文件的 v5 名称保持，但共同截图/坐标配置继续供 v6 使用。
 
-本次交付源码、离线验证与协议检查工具，没有创建新任务实验计划或启动评测服务。
+为接口验证可预先声明 `--purpose cua_smoke --max-steps 3 --agent-interface k3-native`，使用 Task059 原任务和官方 runner 的短程决策上限。两臂共用同一冻结计划；`benchmark_comparable=false`，不得与正式 500 决策任务成绩比较。正式 evaluation 的上限保持 500。
 
 `ui_kobe`、`kobe_views` 与部分旧集成/测试工具保留上游来源；旧 GLM/Qwen/Task035 入口不属于本次 v6 比较路径。不要据其旧单动作策略推断当前行为。项目是本地 Git 仓库，尚未建立 GitHub 远程或推送。

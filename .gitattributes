@@ -1,3 +1,5 @@
 * text=auto eol=lf
 *.png binary
 *.jpg binary
+# Real SSE fixtures are hashed against sealed originals; preserve their bytes.
+tests/fixtures/k3-empty-content/*.jsonl -text

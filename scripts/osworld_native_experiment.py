@@ -126,8 +126,18 @@ def check_interface(plan):
         raise RuntimeError('Official XML interface requires passing K3 response/history compatibility evidence')
 
 
+def trial_max_steps(purpose, max_steps=None):
+    if purpose == 'cua_smoke':
+        if type(max_steps) is not int or not 1 <= max_steps <= 10:
+            raise ValueError('Declare 1..10 official decisions for a CUA smoke trial before freezing')
+        return max_steps
+    if purpose not in ('evaluation', 'setup_validation') or max_steps not in (None, 500):
+        raise ValueError('Formal evaluations retain the official 500-decision limit')
+    return 500
+
+
 def prepare(root, task, validation, purpose="evaluation", admission=None, profile_name="low-16k", cua_config=None,
-            agent_interface='official-xml', compatibility=None):
+            agent_interface='official-xml', compatibility=None, max_steps=None):
     from examples.osworld2_eval import official_identity
     from ui_kobe.osworld.task_examples import task_example
     from ui_kobe.osworld.runner import source_snapshot
@@ -137,6 +147,9 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     from ui_kobe.osworld.official_base import verify_official_base, OFFICIAL_COMMIT
     verify_official_base(REPO)
     contract = CUAContract(**load(cua_config)) if cua_config else CUAContract()
+    decisions = trial_max_steps(purpose, max_steps)
+    if purpose == 'cua_smoke' and (task != '059' or agent_interface != 'k3-native'):
+        raise ValueError('This CUA smoke trial uses Task059 with the preselected K3 native interface')
     from scripts.native_resource_accounting import POLICY, STARTUP_AVAILABLE_GIB, RUNTIME_AVAILABLE_GIB
     if root.exists():
         raise RuntimeError("Use a new plan directory; never overwrite a trial")
@@ -167,7 +180,7 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         "generation_profile": generation_profile(profile_name).__dict__,
         "arm_admission": {"baseline_score_required": False, "baseline_run_required": False,
             "serial_execution": True, "existing_baseline_source_and_cleanup_required": True},
-        "max_steps": 500, "screen": [1920, 1080], "sleep_after_execution": 3,
+        "max_steps": decisions, "screen": [1920, 1080], "sleep_after_execution": 3,
         "history": {"turns": contract.history_n, "images": contract.image_max, "fold_size": contract.fold_size,
                     "context_max_text_chars": contract.context_max_text_chars},
         "resource_limits": {"vm": 3 * GIB, "guest": 2 * GIB, "vcpus": 2, "web": 3 * GIB // 4,
@@ -187,6 +200,9 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         "user_authorization": "User requested a shared official CUA interface and source commit; preparing this plan does not authorize a new evaluation episode. Launch requires experiment authorization; generation profiles and resource protections remain declared in this plan",
         "taskviews_variant": "optional context provider consumes shared passive execution graph and task modules; same selected actor interface"}
     plan["purpose"] = purpose
+    if purpose == 'cua_smoke':
+        plan['benchmark_comparable'] = False
+        plan['user_authorization'] = 'User requested real K3 native CUA chain validation in both arms; the predeclared short official decision limit is a compatibility smoke trial, not a benchmark rerun'
     if task == "046":
         from scripts.native_task046_web import deployment_snapshot, validate_admission
         plan["native_web_deployment"] = deployment_snapshot()
@@ -194,7 +210,7 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
             if admission is None:
                 raise RuntimeError("Task046 requires a completed official setup/resource proof before evaluation")
             plan["setup_admission"] = validate_admission(admission, project_snapshot())
-    elif purpose != "evaluation":
+    elif purpose not in ("evaluation", 'cua_smoke'):
         raise RuntimeError("Setup validation is only supported for Task046")
     root.mkdir(parents=True, exist_ok=False)
     write(root / "plan.json", plan)
@@ -206,7 +222,7 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     print(json.dumps({"prepared": str(root), "task": task, "windows": status}), flush=True)
 
 
-def official_arguments(task, output, profile=None, contract=None):
+def official_arguments(task, output, profile=None, contract=None, max_steps=500):
     from ui_kobe.osworld.cua_contract import CUAContract
     cua = CUAContract(**contract) if contract else CUAContract()
     return ["--headless", "--provider_name", "docker", "--path_to_vm", str(ROOT / "images/osworld-v2-ubuntu-x86.qcow2"),
@@ -223,7 +239,7 @@ def official_arguments(task, output, profile=None, contract=None):
         "--context_rough_text_token_budget", str(cua.context_rough_text_token_budget),
         "--context_rescue" if cua.enable_context_rescue else "--no-context_rescue",
         "--no-terminal_status_judge", "--temperature", "1", "--top_p", "0.95",
-        "--max_tokens", str((profile or {}).get("max_completion_tokens", 16000)), "--max_steps", "500", "--sleep_after_execution", "3", "--num_envs", "1",
+        "--max_tokens", str((profile or {}).get("max_completion_tokens", 16000)), "--max_steps", str(max_steps), "--sleep_after_execution", "3", "--num_envs", "1",
         "--eval_version", "v2", "--domain", "tasks", "--specific_task_id", task,
         "--client_password", "osworld-public-evaluation", "--max_api_retries", "2", "--request_timeout", "900",
         "--generation_timeout", "600", "--cache_dir", str(output.parent / "cache"), "--result_dir", str(output),
@@ -234,6 +250,7 @@ def launch(root, arm):
     frozen_check(root)
     plan = load(root / "plan.json")
     check_interface(plan)
+    decisions = trial_max_steps(plan.get('purpose', 'evaluation'), plan.get('max_steps'))
     from ui_kobe.osworld.cua_contract import CUAContract
     if not isinstance(plan.get("cua_contract"), dict):
         raise RuntimeError("This v6 entry requires a fresh frozen plan with its predeclared CUA contract")
@@ -267,10 +284,12 @@ def launch(root, arm):
         "arm": arm, "agent_protocol": plan["protocols"][plan["arms"].index(arm)], "unit": unit,
         'agent_interface': plan['agent_interface'], 'implementation_version': 6,
         "official_results": str(output), "official_arguments": official_arguments(plan["task_id"], output,
-                                                    plan.get("generation_profile"), plan.get("cua_contract")),
+                                                    plan.get("generation_profile"), plan.get("cua_contract"), decisions),
         "cua_contract": plan.get("cua_contract"),
         "generation_profile": plan.get("generation_profile"),
         "model": "kimi-k3", "base_url": "https://api.moonshot.ai/v1", "web_container_ids": [], "web_owned": False,
+        'purpose': plan.get('purpose', 'evaluation'), 'max_steps': decisions,
+        'benchmark_comparable': plan.get('benchmark_comparable', True),
         "runtime_paths": [], "created_utc": now()}
     manifest["setup_only"] = plan.get("purpose") == "setup_validation"
     write(stage / "manifest.json", manifest)
@@ -589,7 +608,8 @@ def main():
     parser.add_argument("--task", choices=("059", "046"))
     parser.add_argument("--arm", choices=("baseline", "taskviews"))
     parser.add_argument("--validation", type=Path)
-    parser.add_argument("--purpose", choices=("evaluation", "setup_validation"), default="evaluation")
+    parser.add_argument("--purpose", choices=("evaluation", "setup_validation", "cua_smoke"), default="evaluation")
+    parser.add_argument('--max-steps', type=int, help='Predeclare a short official decision limit for cua_smoke only')
     parser.add_argument("--admission", type=Path)
     parser.add_argument("--profile", choices=("low-16k", "max-16k", "max-32k"), default="low-16k")
     parser.add_argument("--cua-config", type=Path)
@@ -600,7 +620,7 @@ def main():
     root = args.root.resolve()
     if args.action == "prepare":
         prepare(root, args.task, args.validation, args.purpose, args.admission, args.profile, args.cua_config,
-                args.agent_interface, args.k3_compatibility)
+                args.agent_interface, args.k3_compatibility, args.max_steps)
     elif args.action == "launch":
         lock = Path.home() / ".cache/ui-kobe-osworld-experiment.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)

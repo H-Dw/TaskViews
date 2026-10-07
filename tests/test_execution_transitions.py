@@ -205,3 +205,32 @@ def test_redaction_failure_is_an_observer_warning_not_an_execution_gate(monkeypa
     assert telemetry.record_transition(SimpleNamespace(execution_journal=log), 'result', 'WAIT',
                                        step=1, observation=image()) is None
     log.close()
+
+
+def test_real_emitter_matches_sqlite_records_and_keeps_evidence_grades(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from ui_kobe.osworld import telemetry
+    log = journal(tmp_path)
+    monkeypatch.setattr(telemetry, '_root', tmp_path)
+    monkeypatch.setattr(telemetry, '_context', SimpleNamespace(step=1, phase='agent'))
+    agent = SimpleNamespace(execution_journal=log)
+    telemetry.record_transition(agent, 'begin', 'literal instruction', image(), step=1)
+    decision = telemetry.record_transition(agent, 'decide', 'model proposal', ['move'], step=1,
+        tools=[{'id': 'native-call', 'arguments': {'action': 'mouse_move', 'coordinate': [1, 2]},
+                'command_indices': [0]}])
+    receipt = {'result': {'returncode': 0, 'output': 'actual command response'}}
+    edge = telemetry.record_transition(agent, 'result', 'move', step=1,
+        observation=image('red'), receipts=[receipt], info={'official': True})
+    evaluation = telemetry.record_transition(agent, 'phase', 'evaluation_result', score=0.2)
+    rows = [json.loads(line) for path in tmp_path.glob('events-*.jsonl') for line in path.read_text().splitlines()]
+    assert [row['event'] for row in rows] == ['execution_journal_event'] * 3
+    assert [row['journal_kind'] for row in rows] == ['decision', 'transition', 'evaluation_result']
+    assert [row['ref'] for row in rows] == [log.reference(record) for record in (decision, edge, evaluation)]
+    persisted = {row['id']: row for row in log.read()}
+    assert edge['id'] in persisted and edge['source'] != edge['target']
+    assert edge['instruction'] == 'literal instruction' and edge['controller_receipts'] == [receipt]
+    assert edge['tool']['id'] == 'native-call' and edge['effect_status'] == 'unknown'
+    assert persisted[edge['target']]['phase'] == 'action_output'
+    exported = log.export_ui_kobe()['edges'][0]
+    assert exported['schema_delta'] is None and exported['target_observation']
+    log.close()

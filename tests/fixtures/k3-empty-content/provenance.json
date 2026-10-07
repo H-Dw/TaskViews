@@ -1,0 +1,24 @@
+{
+  "source_commit": "bd1e64762fb6f82fcd0981547ab6163cc0f59444",
+  "copied_without_modification": true,
+  "cases": [
+    {
+      "fixture": "task059-taskviews.jsonl",
+      "original": "docs/experiments/osworld21-kimi-k3-task059-20261007-official-v6-max16/taskviews/telemetry/streams/k3s-22dd237ef6164a0fb7df889062a03938.jsonl",
+      "request_id": "k3s-22dd237ef6164a0fb7df889062a03938",
+      "sha256": "b8dd21d044e5de7ec606b0078482b35ad68979cb2b71af3beefaf1e6f86e052d"
+    },
+    {
+      "fixture": "task046-baseline.jsonl",
+      "original": "docs/experiments/osworld21-kimi-k3-task046-20261007-official-v6-max16/baseline/telemetry/streams/k3s-c76f112f1f2e4b659bc44f714ee2e860.jsonl",
+      "request_id": "k3s-c76f112f1f2e4b659bc44f714ee2e860",
+      "sha256": "009980787856e71ded4441ff82b20764eefae651b53bc2a308d2f314fbe9b362"
+    },
+    {
+      "fixture": "task046-taskviews.jsonl",
+      "original": "docs/experiments/osworld21-kimi-k3-task046-20261007-official-v6-max16/taskviews/telemetry/streams/k3s-457d4f7c88aa49a5b80e62917218b964.jsonl",
+      "request_id": "k3s-457d4f7c88aa49a5b80e62917218b964",
+      "sha256": "e8def0f799690aa1abb61b69b4c76132a465cf343384b063d8bc2eb2d12d2592"
+    }
+  ]
+}

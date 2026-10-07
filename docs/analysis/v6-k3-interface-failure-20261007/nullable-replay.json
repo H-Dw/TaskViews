@@ -1,0 +1,50 @@
+{
+  "time_utc": "2026-10-07T04:40:49.101962+00:00",
+  "offline_replay": true,
+  "model_requests": 0,
+  "gui_actions": 0,
+  "runtime_edits": 0,
+  "result": "The original QwenClient accepts the same complete recorded streams as empty text; the local native-capable accumulator represents absent text as null. The XML bridge rejects that representation.",
+  "rows": [
+    {
+      "order": 2,
+      "request_id": "k3s-22dd237ef6164a0fb7df889062a03938",
+      "raw_sse_sha256": "b8dd21d044e5de7ec606b0078482b35ad68979cb2b71af3beefaf1e6f86e052d",
+      "raw_content_delta_values": {
+        "empty_string": 1
+      },
+      "upstream_completion_content": "",
+      "local_sse_accumulator_content": null,
+      "upstream_reasoning_preserved": true,
+      "xml_calls_after_original_client": 0,
+      "original_adapter_str_condition_passes": false
+    },
+    {
+      "order": 3,
+      "request_id": "k3s-c76f112f1f2e4b659bc44f714ee2e860",
+      "raw_sse_sha256": "009980787856e71ded4441ff82b20764eefae651b53bc2a308d2f314fbe9b362",
+      "raw_content_delta_values": {
+        "empty_string": 1
+      },
+      "upstream_completion_content": "",
+      "local_sse_accumulator_content": null,
+      "upstream_reasoning_preserved": true,
+      "xml_calls_after_original_client": 0,
+      "original_adapter_str_condition_passes": false
+    },
+    {
+      "order": 4,
+      "request_id": "k3s-457d4f7c88aa49a5b80e62917218b964",
+      "raw_sse_sha256": "e8def0f799690aa1abb61b69b4c76132a465cf343384b063d8bc2eb2d12d2592",
+      "raw_content_delta_values": {
+        "empty_string": 1
+      },
+      "upstream_completion_content": "",
+      "local_sse_accumulator_content": null,
+      "upstream_reasoning_preserved": true,
+      "xml_calls_after_original_client": 0,
+      "original_adapter_str_condition_passes": false
+    }
+  ],
+  "limit": "This replay checks response normalization only. It does not claim an unobserved task run or fabricate actions or results."
+}

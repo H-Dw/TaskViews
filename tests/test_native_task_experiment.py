@@ -230,3 +230,24 @@ def test_official_task_arguments_keep_budget_and_task_identity(task, tmp_path):
                        "--screen_width": "1920", "--screen_height": "1080", "--sleep_after_execution": "3"}.items():
         assert arguments[arguments.index(key) + 1] == value
     assert "--stream" in arguments and "--batch_actions" in arguments
+
+
+def test_predeclared_native_smoke_uses_official_max_steps_without_changing_evaluations(launch_sandbox):
+    root, checks, commands = launch_sandbox
+    plan = experiment.load(root / 'plan.json')
+    experiment.write(root / 'plan.json', {**plan, 'purpose': 'cua_smoke', 'max_steps': 3,
+                                        'benchmark_comparable': False})
+    experiment.launch(root, 'baseline')
+    manifest = experiment.load(root / 'baseline/manifest.json')
+    arguments = manifest['official_arguments']
+    assert arguments[arguments.index('--max_steps') + 1] == '3'
+    assert not manifest['benchmark_comparable'] and manifest['purpose'] == 'cua_smoke'
+    assert checks == [('source', root), ('resources', None)] and commands
+    assert experiment.trial_max_steps('evaluation') == 500
+
+
+@pytest.mark.parametrize('purpose, limit', [('evaluation', 3), ('setup_validation', 1),
+    ('cua_smoke', None), ('cua_smoke', 0), ('cua_smoke', 11), ('cua_smoke', True), ('unknown', 500)])
+def test_short_limit_requires_explicit_smoke_purpose(purpose, limit):
+    with pytest.raises(ValueError):
+        experiment.trial_max_steps(purpose, limit)

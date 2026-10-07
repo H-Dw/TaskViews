@@ -51,7 +51,7 @@ def record_transition(agent, operation, *args, **kwargs):
         if journal is not None and not journal.closed:
             result = getattr(journal, operation)(*args, **kwargs)
             if result:
-                emit('execution_journal_event', ref=journal.reference(result), kind=result['kind'])
+                emit('execution_journal_event', ref=journal.reference(result), journal_kind=result['kind'])
             return result
     except Exception as exc:
         emit('transition_recording_warning', operation=operation, error_type=type(exc).__name__, error=str(exc))
