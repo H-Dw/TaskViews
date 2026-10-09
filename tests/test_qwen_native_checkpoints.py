@@ -10,6 +10,7 @@ import time
 import httpx
 from PIL import Image
 import pytest
+from kobe_views.task_memory import TaskMemory
 
 from scripts import osworld_native_experiment as experiment
 from scripts.run_official_native_tasks import agent_class
@@ -160,6 +161,27 @@ def test_actual_official_parser_turns_off_its_enabled_defaults(tmp_path):
     assert args.model == MODEL and args.max_steps == 500 and args.max_tokens == 16000
 
 
+def test_identity_preflight_does_not_publish_or_rename_task(tmp_path):
+    memory = TaskMemory('identity-repair', tmp_path)
+    try:
+        memory.initialize('Original exact user instruction')
+        entity = dict(memory.read().entities['task'])
+        before = memory.read().revision
+        original_journal = memory.journal.read_bytes()
+        with pytest.raises(ValueError, match='immutable'):
+            memory.validate_proposal_identity({'entities':[{**entity,'label':'Model rewritten task label'}], 'claims':[]})
+        memory.validate_proposal_identity({'entities':[entity], 'claims':[]})
+        assert memory.read().revision == before and memory.journal.read_bytes() == original_journal
+        claim = next(c for c in memory.read().claims.values() if c['subject'] == 'task')
+        changed = {k:claim[k] for k in ('id','subject','predicate','value')}
+        changed.update(locator='visible frame', value='changed evidence')
+        with pytest.raises(ValueError, match='new claim id'):
+            memory.validate_proposal_identity({'entities':[], 'claims':[changed]})
+        assert dict(memory.read().entities['task']) == entity
+    finally:
+        memory.close()
+
+
 class NativeTransport:
     last_timing = {}
     def __init__(self, invalid_read=False):
@@ -182,6 +204,39 @@ class NativeTransport:
         return Completion(body)
     def close(self):
         pass
+
+
+def test_conflicting_task_label_gets_bounded_model_repair_before_graph_publish(tmp_path, monkeypatch):
+    monkeypatch.setenv('QWEN_API_KEY', 'offline-key')
+    monkeypatch.setenv('UI_KOBE_TELEMETRY_DIR', str(tmp_path))
+    monkeypatch.setenv('UI_KOBE_TASK_ID', '059')
+    monkeypatch.setenv('UI_KOBE_CHECKPOINT_READS', '1')
+    class ConflictingIdentity(NativeTransport):
+        failed = False
+        def create(self, **kwargs):
+            if kwargs['budget_role']=='perception' and not self.failed:
+                self.failed=True
+                self.requests.append(deepcopy(kwargs))
+                return Completion(completed(json.dumps({'summary':'Visible application','elements':[],
+                    'semantics':{'entities':[{'id':'task','type':'task','label':'Model rewritten task label'}], 'claims':[]}})))
+            return super().create(**kwargs)
+    actor = QwenTaskViewsNativeAgent(model=MODEL, base_url=BASE_URL, temperature=0, max_tokens=16000)
+    transport = ConflictingIdentity()
+    actor.transport = actor.client.transport = transport
+    image = BytesIO()
+    Image.new('RGB',(1920,1080),'white').save(image,'PNG')
+    try:
+        _, commands = actor.predict('Original exact user instruction', {'screenshot':image.getvalue()})
+        assert len(commands)==1 and transport.actor==1
+        assert actor.advisory_ledger.repair_counts['advisory']==1
+        assert actor.step_ledger.repair_counts['executor']==0
+        context = json.loads(transport.requests[0]['messages'][1]['content'][0]['text'])
+        bindings = context['role_evidence']['entity_records']
+        assert next(e for e in bindings if e['id']=='task') == dict(actor.control.memory.read().entities['task'])
+        assert actor.control.memory.read().entities['task']['label'] != 'Model rewritten task label'
+        assert 'advisory_failure' not in actor.view_trace
+    finally:
+        actor.close()
 
 
 @pytest.mark.parametrize('invalid_read', [False, True])

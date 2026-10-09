@@ -61,9 +61,18 @@ class TaskViewsContextMixin:
         width, height = screenshot.model_width, screenshot.model_height
         model_bytes = base64.b64decode(screenshot.data_url.split(",", 1)[1])
         inventory = control.inventory()
+        # A bare ID list does not tell the reader the immutable type/label.
+        # Preserve exact existing records within a separate bounded packet;
+        # omission is explicit, never a renamed or truncated identity.
+        bindings = []
+        for entity in inventory['entities']:
+            if len(dumps(bindings + [entity]).encode()) <= 6000:
+                bindings.append(entity)
         request = control._context(core, extra={"frame": self.frame.metadata, "image_size": [width, height],
             "semantic_schema": inventory["schema"], "entity_ids": [e["id"] for e in inventory["entities"]],
             "omitted_entity_ids": inventory["omitted_entities"],
+            'entity_records': bindings,
+            'omitted_entity_records': inventory['omitted_entities'] + len(inventory['entities']) - len(bindings),
             "execution_modules": self.modules.packet() if getattr(self, 'modules', None) else None})
         def validate_perception(raw):
             if not {"summary", "elements", "semantics"} <= set(raw) or set(raw) - {"summary", "elements", "semantics", "ui_state"}:
@@ -84,9 +93,12 @@ class TaskViewsContextMixin:
                     not isinstance(semantics["entities"], list) or len(semantics["entities"]) > 32 or
                     not isinstance(semantics["claims"], list) or len(semantics["claims"]) > 64):
                 raise ValueError("Semantics requires <=32 entities and <=64 claims")
-            control.memory.validate_proposal_structure(semantics)
+            control.memory.validate_proposal_identity(semantics)
         prompt = (SEMANTIC_PERCEPTION + '\nKeep this read concise: prefer <=8 entities and <=12 claims; '
             'report only new task-relevant evidence. Empty lists are valid. Do not enumerate old history. '
+            'Existing entity id/type/label are immutable. Do not redeclare an existing entity unless '
+            'you copy its exact entity_records entry; changed visible names belong in new claims. '
+            'Claim IDs are immutable: use new IDs for changed evidence. Never rename IDs to evade a conflict. '
             'All limits count reasoning plus JSON output.\nOptionally add ui_state={page_id:str|null,fields:object}. '
             'Use a page identity only when supported by this screenshot; preserve visible state fields. '
             'These are model proposals, not verified effects. Never put pointer coordinates in fields.\n'

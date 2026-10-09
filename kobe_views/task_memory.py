@@ -380,6 +380,28 @@ class TaskMemory:
                 if not isinstance(refs, list) or len(refs) > 32 or any(not isinstance(r, str) or not r for r in refs):
                     raise ValueError("Invalid semantic references")
 
+    def validate_proposal_identity(self, proposals):
+        """Check immutable graph identities without publishing or editing a candidate.
+
+        The native reader can repair a conflicting candidate before observing
+        the frame. Full admission still validates provenance and graph rules.
+        """
+        self.validate_proposal_structure(proposals)
+        snapshot = self.snapshot
+        for entity in proposals['entities']:
+            existing = snapshot.entities.get(entity['id'])
+            if existing is not None and plain(existing) != entity:
+                raise ValueError('Existing entity id/type/label are immutable; copy its exact inventory record or omit redeclaration')
+        for claim in proposals['claims']:
+            old = snapshot.claims.get(claim['id'])
+            if old is None:
+                continue
+            fields = ('subject', 'predicate', 'value')
+            same = all(dumps(claim[k]) == dumps(old[k]) for k in fields)
+            same = same and all(dumps(claim.get(k, [])) == dumps(old[k]) for k in ('objects', 'basis'))
+            if not same or claim.get('supersedes') or snapshot.statuses[claim['id']] != 'active':
+                raise ValueError('Claim ids are immutable; new or revised evidence requires a new claim id')
+
     def accept_proposals(self, proposals, *, frame_id=None, source_ref=None):
         """Accept bounded open-schema semantic proposals bound to a trusted frame.
 
