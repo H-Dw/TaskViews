@@ -89,6 +89,11 @@ def main():
     install(root / "telemetry")
     install_official_k3_transport()
     install_qwen_judge_backend()
+    if manifest.get('checkpoint_policy', {}).get('enabled'):
+        os.environ['UI_KOBE_CHECKPOINT_READS'] = '1'
+        os.environ['UI_KOBE_ADVISORY_EFFORT'] = manifest['checkpoint_policy']['advisory_effort']
+        from ui_kobe.osworld.checkpoints import install as install_checkpoints
+        install_checkpoints(root, manifest)
     if manifest["task_id"] == "046":
         from scripts.native_task046_setup import install_setup_verification
         install_setup_verification(root)

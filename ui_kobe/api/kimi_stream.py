@@ -10,6 +10,8 @@ import queue
 import threading
 import time
 import uuid
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
 
 import httpx
 
@@ -30,6 +32,25 @@ class OutputTokenLimitError(StreamProtocolError):
 
 class StreamDeadlineError(TimeoutError):
     pass
+
+
+class RateLimitDeferred(httpx.HTTPStatusError):
+    """A provider-directed wait exceeds this request's remaining deadline."""
+
+
+def retry_after_seconds(value, *, now=None):
+    if not value:
+        return None
+    try:
+        seconds = float(value)
+        if not 0 <= seconds < float('inf'):
+            return None
+        return seconds
+    except ValueError:
+        try:
+            return max(0, (parsedate_to_datetime(value) - (now or datetime.now(timezone.utc))).total_seconds())
+        except (ValueError, TypeError, OverflowError):
+            return None
 
 
 @dataclass(frozen=True)
@@ -184,7 +205,15 @@ class KimiStreamClient:
         messages = deepcopy(kwargs.get('messages', []))
         # Native history already contains complete assistant messages, keyed by
         # tool_call_id rather than the legacy XML adapter's content-only cache.
-        request = K3Requests(profile=self.profile).prepare({'model': 'kimi-k3', **kwargs, 'messages': []})
+        # Advisory effort is independently declared for checkpoint-enabled runs;
+        # the actor retains its own frozen effort/cap.
+        requested_effort = kwargs.get('reasoning_effort', self.profile.reasoning_effort if self.profile else 'max')
+        if self.profile and budget_role == 'executor' and requested_effort != self.profile.reasoning_effort:
+            raise ValueError('Actor reasoning effort must match its frozen profile')
+        from dataclasses import replace
+        selected_profile = replace(self.profile, reasoning_effort=requested_effort) if self.profile else None
+        request = K3Requests(effort=requested_effort, profile=selected_profile).prepare(
+            {'model': 'kimi-k3', **kwargs, 'messages': []})
         for message in messages:
             if message.get('role') == 'assistant' and 'reasoning_content' not in message:
                 raise StreamProtocolError('Native history must preserve original assistant reasoning')
@@ -204,9 +233,18 @@ class KimiStreamClient:
                 status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
                 if (status is not None and status not in (408, 429) and status < 500) or attempt + 1 == self.budget.attempts:
                     raise
-                if time.monotonic() + 3 >= end:
+                delay = 3
+                if status == 429:
+                    delay = retry_after_seconds(exc.response.headers.get('retry-after'))
+                    delay = max(60, delay if delay is not None else 60)
+                    self.emit('rate_limit_wait', request_id=self.last_request_id, wait_s=delay,
+                              provider_retry_after=exc.response.headers.get('retry-after'))
+                if time.monotonic() + delay >= end:
+                    if status == 429:
+                        raise RateLimitDeferred('Provider cooldown exceeds role deadline',
+                                                request=exc.request, response=exc.response) from exc
                     raise StreamDeadlineError('No retry budget remains') from None
-                time.sleep(3)
+                time.sleep(delay)
         raise AssertionError('unreachable')
 
     def _attempt(self, payload, end, attempt, *, step_ledger=None, budget_role='executor', generation_attempt=1, parent_request_id=None):
@@ -237,7 +275,19 @@ class KimiStreamClient:
                 with self.http_factory(timeout=timeout) as client:
                     with client.stream('POST', BASE_URL + '/chat/completions',
                             headers={'Authorization': 'Bearer ' + self.key}, json=payload) as response:
-                        put('headers', {'status': response.status_code, 'request_id': response.headers.get('x-request-id')})
+                        allowed = ('retry-after', 'x-request-id', 'x-ratelimit-limit-requests',
+                                   'x-ratelimit-remaining-requests', 'x-ratelimit-reset-requests',
+                                   'x-ratelimit-limit-tokens', 'x-ratelimit-remaining-tokens', 'x-ratelimit-reset-tokens')
+                        put('headers', {'status': response.status_code, 'request_id': response.headers.get('x-request-id'),
+                                        'rate_headers': {k: response.headers[k] for k in allowed if k in response.headers}})
+                        if response.status_code >= 400:
+                            # Bounded provider diagnostics; never log request headers.
+                            body = bytearray()
+                            for part in response.iter_bytes():
+                                body.extend(part[:8192-len(body)])
+                                if len(body) >= 8192:
+                                    break
+                            put('http_error_body', bytes(body).decode('utf-8', errors='replace').replace(self.key, '[REDACTED]'))
                         response.raise_for_status()
                         data = []
                         for line in response.iter_lines():
@@ -279,7 +329,10 @@ class KimiStreamClient:
                     status = value['status']
                     timing.update(headers_s=elapsed, server_request_id=value['request_id'])
                     self.emit('http_response', status_code=status, request_id=request_id,
-                              duration_s=elapsed, url=BASE_URL + '/chat/completions', method='POST')
+                              duration_s=elapsed, url=BASE_URL + '/chat/completions', method='POST',
+                              rate_headers=value['rate_headers'])
+                elif kind == 'http_error_body':
+                    self.emit('http_error_body', request_id=request_id, status_code=status, body=value)
                 elif kind == 'data':
                     if log:
                         log.write(json.dumps({'elapsed_s': elapsed, 'data': value.replace(self.key, '[REDACTED]')}, ensure_ascii=False) + '\n')

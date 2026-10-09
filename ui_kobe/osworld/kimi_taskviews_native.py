@@ -19,7 +19,12 @@ class KimiTaskViewsNativeAgent(TaskViewsContextMixin, KimiNativeAgent):
 
     def __init__(self, **kwargs):
         self.control = None
+        self.checkpoint_reads = os.environ.get('UI_KOBE_CHECKPOINT_READS') == '1'
+        self.advisory_effort = os.environ.get('UI_KOBE_ADVISORY_EFFORT', 'low' if self.checkpoint_reads else
+                                             os.environ.get('UI_KOBE_GENERATION_EFFORT', 'max'))
         super().__init__(**kwargs)
+        if not self.checkpoint_reads:
+            self.advisory_effort = self.profile.reasoning_effort
         telemetry.emit('taskviews_native_adapter', protocol=PROTOCOL,
             action_policy='shared KimiNativeAgent.predict/transport/compiler',
             context_policy='execution graph plus task modules and adaptive views',
@@ -34,6 +39,7 @@ class KimiTaskViewsNativeAgent(TaskViewsContextMixin, KimiNativeAgent):
             'memory_dir': str(Path(os.environ['UI_KOBE_TELEMETRY_DIR']) / 'task-memory'),
             'task_id': 'osworld2-' + os.environ['UI_KOBE_TASK_ID']},
             context_bytes=self.contract.taskviews_context_bytes)
+        self.control.compact_core = self.checkpoint_reads
 
     def optional_context(self, instruction, obs):
         self.instruction, self.observation = instruction, obs
@@ -46,6 +52,9 @@ class KimiTaskViewsNativeAgent(TaskViewsContextMixin, KimiNativeAgent):
         except Exception as exc:
             telemetry.emit('taskviews_advisory_failure', error_type=type(exc).__name__, error=str(exc))
             self.view_trace['advisory_failure'] = {'type': type(exc).__name__, 'error': str(exc)}
+            if self.checkpoint_reads:
+                from .checkpoints import ReadAnomaly
+                raise ReadAnomaly('TaskViews read failed before actor dispatch: ' + str(exc)) from exc
             return None
         finally:
             self.view_trace['advisory_tokens'] = self.advisory_ledger.snapshot()

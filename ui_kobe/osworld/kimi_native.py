@@ -195,7 +195,9 @@ class KimiNativeAgent:
         while True:
             ledger = self.step_ledger if role == 'executor' else (getattr(self, 'advisory_ledger', None) or self.step_ledger)
             payload = deepcopy(request)
-            payload.update(reasoning_effort=self.profile.reasoning_effort,
+            effort = (getattr(self, 'advisory_effort', self.profile.reasoning_effort)
+                      if role != 'executor' else self.profile.reasoning_effort)
+            payload.update(reasoning_effort=effort,
                            max_completion_tokens=ledger.allowance(role))
             observed = None
             try:

@@ -666,7 +666,7 @@ class TaskMemory:
             except (ValueError, TypeError, KeyError, RecursionError):
                 return {"accepted": False, "reason": "invalid_action_feedback", "revision": self.snapshot.revision}
 
-    def core_packet(self, budget_bytes):
+    def core_packet(self, budget_bytes, *, contract_only=False):
         """Reserve whole core facts before any other view receives context budget."""
         with self._lock:
             if isinstance(budget_bytes, bool) or not isinstance(budget_bytes, int) or budget_bytes < 256:
@@ -678,6 +678,10 @@ class TaskMemory:
             for cid, claim in snapshot.claims.items():
                 category = _PREDICATES.get(claim["predicate"])
                 if category is None or snapshot.statuses[cid] != "active":
+                    continue
+                # An execution intent is historical evidence, not a new mandatory
+                # task requirement. Keep it in the graph and assigned subviews.
+                if contract_only and claim["evidence"]["source"] != "task-contract":
                     continue
                 slot = (category, dumps(claim["value"]))
                 if slot in seen:

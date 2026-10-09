@@ -85,13 +85,19 @@ class TaskViewsContextMixin:
                     not isinstance(semantics["claims"], list) or len(semantics["claims"]) > 64):
                 raise ValueError("Semantics requires <=32 entities and <=64 claims")
             control.memory.validate_proposal_structure(semantics)
-        prompt = (SEMANTIC_PERCEPTION + '\nOptionally add ui_state={page_id:str|null,fields:object}. '
+        prompt = (SEMANTIC_PERCEPTION + '\nKeep this read concise: prefer <=8 entities and <=12 claims; '
+            'report only new task-relevant evidence. Empty lists are valid. Do not enumerate old history. '
+            'All limits count reasoning plus JSON output.\nOptionally add ui_state={page_id:str|null,fields:object}. '
             'Use a page identity only when supported by this screenshot; preserve visible state fields. '
             'These are model proposals, not verified effects. Never put pointer coordinates in fields.\n'
             'Bounding boxes are in the supplied MODEL IMAGE pixels. ' + self.frame.instruction)
         raw = self.role("perception", prompt, request, image, deadline, validate_perception)
         evidence, normalization = bounded_visual_evidence({k: raw[k] for k in ("summary", "elements")}, width, height)
         core = control.observe(self.instruction, frame, model_bytes, raw, evidence)
+        if getattr(self, 'checkpoint_reads', False):
+            admitted = control.observation_meta.get('semantic_proposals', {})
+            if not admitted.get('accepted') or admitted.get('rejected'):
+                raise ValueError('Current-frame semantic evidence rejected: ' + dumps(admitted.get('rejected', [])))
         journal = getattr(self, 'execution_journal', None)
         if journal and journal.current and raw.get('ui_state'):
             import hashlib
@@ -122,16 +128,26 @@ class TaskViewsContextMixin:
                 raise ValueError("Every need requires the six documented fields")
             needs, _ = control._resolve_core_anchors(snapshot, core, proposed["needs"])
             control.views.validate_needs(snapshot, needs)
-        proposed = self.role("view_controller", CONTROLLER,
-            control._context(core, extra={"graph_inventory": control.inventory(),
-                "consumer_allowed_anchors": control.views.allowed_anchor_inventory(snapshot),
-                "frame": self.frame.metadata,
-                "execution_modules": self.modules.packet() if getattr(self, 'modules', None) else None}), image, deadline, validate_controller)
+        # Put the selector table in the mandatory controller input. Optional
+        # module/history packets must never evict the IDs required for validation.
+        selectors = control.views.allowed_anchor_inventory(snapshot, limit=16)
+        controller_input = {'mandatory_core': core, 'role_evidence': {'consumer_allowed_anchors': selectors,
+                            'frame': self.frame.metadata, 'semantic_schema': inventory['schema']}}
+        if len(dumps(controller_input).encode()) > control.budget:
+            raise ValueError('Mandatory controller input exceeds context budget')
+        proposed = self.role("view_controller", CONTROLLER + '\nPrefer one executor need. '
+            'Add planner/verifier only when needed. Copy exact entity IDs from the selector table; '
+            'claim IDs, module IDs and labels are not entity selectors.',
+            controller_input, image, deadline, validate_controller)
         needs, resolutions = control._resolve_core_anchors(snapshot, core, proposed["needs"])
         # Leave room for the module packet (<=6k), two reports (<=12k),
         # and omission/change metadata. They should not lose to page history.
-        reserve = 20_000 if getattr(self, 'modules', None) else 1024
-        compiled = control.views.compile(snapshot, needs, control.budget - len(dumps(core).encode()) - reserve)
+        residual = control.budget - len(dumps({'mandatory_core': core}).encode()) - 1024
+        if residual <= 0:
+            raise ValueError('Mandatory core leaves no positive view budget')
+        # Reserve is proportional to the actual core, not a second fixed 20k
+        # subtraction. Whole optional reports still pass _context admission.
+        compiled = control.views.compile(snapshot, needs, min(16000, residual))
         control.views.dispatch(compiled)
         if getattr(self, 'modules', None):
             module = self.modules.select(proposed['stage'], needs, frame=frame,

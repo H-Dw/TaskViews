@@ -130,7 +130,9 @@ class PersistentTaskControl:
                               for k in ("constraints", "delivery_files", "key_semantics")})
 
     def _core(self):
-        core = self.memory.core_packet(self.budget - 512)
+        compact_core = getattr(self, 'compact_core', False)
+        core = self.memory.core_packet(min(8000, self.budget - 512) if compact_core else self.budget - 512,
+                                      contract_only=compact_core)
         hard = any(g.get("code") == "core_budget_exceeded" for g in core.get("gaps", [])
                    if isinstance(g, dict))
         if hard or not any(f["category"] == "goal" for f in core.get("facts", [])):

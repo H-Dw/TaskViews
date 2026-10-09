@@ -142,7 +142,7 @@ def trial_max_steps(purpose, max_steps=None):
 
 
 def prepare(root, task, validation, purpose="evaluation", admission=None, profile_name="low-16k", cua_config=None,
-            agent_interface='official-xml', compatibility=None, max_steps=None):
+            agent_interface='official-xml', compatibility=None, max_steps=None, checkpoints=False):
     from examples.osworld2_eval import official_identity
     from ui_kobe.osworld.task_examples import task_example
     from ui_kobe.osworld.runner import source_snapshot
@@ -216,6 +216,19 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         "user_authorization": "User requested a shared official CUA interface and source commit; preparing this plan does not authorize a new evaluation episode. Launch requires experiment authorization; generation profiles and resource protections remain declared in this plan",
         "taskviews_variant": "optional context provider consumes experimental passive execution graph and task modules; same selected actor interface"}
     plan["purpose"] = purpose
+    if checkpoints:
+        if task != '059' or agent_interface != 'k3-native':
+            raise ValueError('Checkpoint rewind requires isolated Task059 native TaskViews')
+        plan['runtime_revision'] = 8
+        plan['checkpoint_policy'] = {'enabled': True, 'before_every_decision': True, 'retained_snapshots': 3,
+                                     'startup_resume_probe': True,
+            'advisory_effort': 'low', 'read_error_policy': 'pause before actor; repair and resume aligned snapshot',
+            'inspection_minutes': 60, 'no_reset_on_resume': True, 'cumulative_max_steps': decisions,
+            'scope': 'Task059 local guest; not external web side effects', 'core': 'original task contract mandatory; candidates in views'}
+        plan['benchmark_comparable'] = False
+        plan['execution_policy']['taskviews_advisers'] = 'invalid reads pause before executor; aligned checkpoint repair/resume'
+        plan['taskviews_variant'] = 'strict bounded context reads; independent low-effort advisory pool; checkpoint recovery'
+        plan['user_authorization'] = 'User authorized TaskViews fixes, a new Task059 run, checkpoints and 60-minute inspection on 2026-10-09'
     if purpose == 'cua_smoke':
         plan['benchmark_comparable'] = False
         plan['user_authorization'] = 'The predeclared short official decision limit is a compatibility smoke trial, not a benchmark rerun. Preparation does not authorize a new evaluation episode'
@@ -311,6 +324,11 @@ def launch(root, arm):
         'purpose': plan.get('purpose', 'evaluation'), 'max_steps': decisions,
         'benchmark_comparable': plan.get('benchmark_comparable', True),
         "runtime_paths": [], "created_utc": now()}
+    if plan.get('checkpoint_policy', {}).get('enabled'):
+        if arm != 'taskviews':
+            raise ValueError('Checkpoint-enabled recovery run is TaskViews only')
+        manifest['checkpoint_policy'] = plan['checkpoint_policy']
+        manifest['runtime_revision'] = plan['runtime_revision']
     manifest["setup_only"] = plan.get("purpose") == "setup_validation"
     write(stage / "manifest.json", manifest)
     command = shlex.join([str(PYTHON), str(Path(__file__).resolve()), "supervise", "--root", str(stage)])
@@ -336,7 +354,14 @@ def supervise(stage):
     group = require_scope(2 * GIB)
     manifest = load(stage / "manifest.json")
     frozen_check(Path(manifest["plan_root"]))
-    resources_ready()
+    recovering = manifest.get('checkpoint_policy', {}).get('enabled') and (stage/'resume-request.json').exists()
+    if not recovering:
+        resources_ready()
+    else:
+        # Startup admission with the preserved owned VM credited exactly once.
+        current = sample(__import__('docker').from_env(), manifest, host_status, group)['windows']
+        if not reserve_ok(current, startup=True):
+            raise RuntimeError('Preserved checkpoint waiting for startup resource reserve')
     if not os.environ.get("KIMI_API_KEY"):
         raise RuntimeError("KIMI_API_KEY missing; no VM was allocated")
     manifest.update(cgroup=str(group), started_utc=now(), started_epoch=time.time(),
@@ -366,7 +391,7 @@ def supervise(stage):
             native_web = NativeWeb(stage, client)
             native_web.start()
             manifest = load(stage / "manifest.json")
-        with (stage / "console.log").open("w", encoding="utf-8") as log:
+        with (stage / "console.log").open("a" if recovering else "w", encoding="utf-8") as log:
             child = subprocess.Popen(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             state["runner_pid"] = child.pid
             while child.poll() is None:
@@ -397,6 +422,15 @@ def supervise(stage):
                 # mistaking released VM memory for an active-task RAM failure.
                 if (not teardown and not reserve_ok(reserve)) or (teardown and
                         (reserve["c_free_gib"] < 35 or reserve["d_free_gib"] < 10)):
+                    if manifest.get('checkpoint_policy', {}).get('enabled') and (stage/'checkpoint-vm.json').exists():
+                        write(stage/'pause-request.json', {'reason': 'runtime resource threshold', 'windows': reserve,
+                                                         'time_utc': now()})
+                        vm = load(stage/'checkpoint-vm.json')
+                        os.kill(vm['worker_pid'], signal.SIGUSR1)
+                        child.wait(timeout=120)
+                        if not (stage/'paused.json').exists():
+                            raise RuntimeError('Checkpoint resource pause did not complete')
+                        break
                     raise RuntimeError("Windows runtime reserve excluding experiment memory below 4/35/10 GiB")
                 if any(item["oom_killed"] for item in record["containers"]):
                     raise RuntimeError("Owned container OOM")
@@ -431,12 +465,32 @@ def supervise(stage):
             service_memory_peak=int((group / "memory.peak").read_text()),
             service_memory_events=(group / "memory.events").read_text())
         write(stage / "state.json", state)
+        if manifest.get('checkpoint_policy', {}).get('enabled') and (stage/'paused.json').exists():
+            state.update(status='checkpoint_paused', pause=load(stage/'paused.json'))
+            write(stage/'state.json', state)
+            return
         # Exactly one external 128 MiB auxiliary scope; never overlap helpers.
         subprocess.run(AUX + ["cleanup", "--root", str(stage)], check=True)
 
 
 def cleanup(stage):
     if not (stage / "manifest.json").exists():
+        return
+    if (load(stage/'manifest.json').get('checkpoint_policy', {}).get('enabled')
+            and (stage/'paused.json').exists()):
+        # ExecStopPost also calls cleanup. A recoverable pause is not terminal
+        # teardown; deleting this overlay would destroy the user's checkpoint.
+        return
+    manifest = load(stage/'manifest.json')
+    if (manifest.get('checkpoint_policy', {}).get('enabled')
+            and (stage/'checkpoint-vm.json').exists() and (stage/'checkpoints/latest.json').exists()
+            and not any(event.get('event') == 'evaluation_result' for _, _, event in event_stream(stage))):
+        # Covers an unexpected worker/service failure before its own pause hook.
+        # Preserve real evidence; never invent a provider outcome or usage=0.
+        from ui_kobe.osworld.checkpoints import Checkpoints, QMP
+        vm = load(stage/'checkpoint-vm.json')
+        Checkpoints(stage, manifest, qmp=QMP(Path(vm['storage'])/'taskviews.qmp')).pause(
+            RuntimeError('Service ended before original evaluation; inspect failed branch before checkpoint resume'))
         return
     from scripts import osworld_task035_background as base
     base.render_report = lambda root: base.read_json(root / "state.json", {})
@@ -548,7 +602,8 @@ def audit(stage):
                 usage[key] += measured[key]
             phase = phases.setdefault(request_phases.get(request_id, "unknown"), {"success": 0, "total_tokens": 0})
             phase["total_tokens"] += measured['total_tokens']
-    results = sorted(output.glob(f"**/tasks/{manifest['task_id']}/result.txt"))
+    outputs = [Path(p) for p in manifest.get('result_segments', [str(output)])]
+    results = sorted(p for segment in outputs for p in segment.glob(f"**/tasks/{manifest['task_id']}/result.txt"))
     score = None
     if len(results) == 1:
         try:
@@ -565,7 +620,7 @@ def audit(stage):
     for metric in timing.values():
         metric["mean"] = metric.pop("total") / metric["count"]
     terminals.sort(key=lambda item: item.get("time_utc") or "")
-    trajectories = sorted(output.glob(f"**/tasks/{manifest['task_id']}/traj.jsonl"))
+    trajectories = sorted(p for segment in outputs for p in segment.glob(f"**/tasks/{manifest['task_id']}/traj.jsonl"))
     source_ok = not changed and source_audit["project_unchanged"] and source_audit["plan_unchanged"] and not changed_assets
     # The official persisted result defines the score. Provenance/telemetry
     # warnings are reported separately, not extra conditions on that grade.
@@ -635,12 +690,13 @@ def main():
     parser.add_argument("--cua-config", type=Path)
     parser.add_argument('--agent-interface', choices=('official-xml', 'k3-native'), default='official-xml')
     parser.add_argument('--k3-compatibility', type=Path)
+    parser.add_argument('--checkpoints', action='store_true')
     args = parser.parse_args()
     require_scope(2 * GIB if args.action == "supervise" else 128 * 1024**2)
     root = args.root.resolve()
     if args.action == "prepare":
         prepare(root, args.task, args.validation, args.purpose, args.admission, args.profile, args.cua_config,
-                args.agent_interface, args.k3_compatibility, args.max_steps)
+                args.agent_interface, args.k3_compatibility, args.max_steps, args.checkpoints)
     elif args.action == "launch":
         lock = Path.home() / ".cache/ui-kobe-osworld-experiment.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)

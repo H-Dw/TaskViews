@@ -151,7 +151,10 @@ class DynamicViewController:
             if consumer not in scopes:
                 scopes[consumer], _ = _reachable(snapshot, role, role.anchors, role.max_hops)
             if any(anchor not in snapshot.entities for anchor in anchors):
-                raise InvalidViewNeed("Unknown semantic anchor")
+                invalid = [a for a in anchors if a not in snapshot.entities]
+                allowed = self.allowed_anchor_inventory(snapshot, limit=16)[consumer]['anchors']
+                raise InvalidViewNeed(f"Unknown semantic anchor: invalid={invalid}; "
+                                      f"consumer={consumer}; exact allowed entity IDs={allowed}")
             if not set(anchors) <= scopes[consumer]:
                 invalid = sorted(set(anchors) - scopes[consumer])
                 raise InvalidViewNeed(f"Semantic anchor outside trusted role scope: consumer={consumer}, "
