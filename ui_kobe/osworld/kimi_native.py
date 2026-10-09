@@ -83,15 +83,14 @@ def validate_native(response, frame):
 
 
 class KimiNativeAgent:
+    model_name = 'kimi-k3'
+    protocol = PROTOCOL
     experiment_arm = 'baseline'
     transition_recording = False
     context_label = ''
 
     def __init__(self, *, model, base_url, temperature, max_tokens, **options):
-        self.profile = generation_profile(os.environ.get("UI_KOBE_GENERATION_PROFILE", "low-16k"))
-        if (model != "kimi-k3" or base_url != BASE_URL or temperature != 1 or
-                max_tokens != self.profile.max_completion_tokens):
-            raise ValueError("K3 requires the declared model and generation profile")
+        self.profile = self.provider_profile(model, base_url, temperature, max_tokens)
         declared = os.environ.get("UI_KOBE_CUA_CONTRACT_JSON")
         if declared:
             expected = CUAContract(**json.loads(declared)).snapshot()
@@ -99,16 +98,32 @@ class KimiNativeAgent:
                 if name in options and options[name] != value:
                     raise ValueError("Official runner option differs from frozen CUA contract: " + name)
             options = {**expected, **options}
-        self.contract, self.budget, api_key, inactive = options_contract(options)
+        self.contract, self.budget, api_key, inactive = options_contract(options, provider=self.provider_name)
         self.tool_repair_retries = self.contract.tool_repair_retries
         trace = Path(os.environ["UI_KOBE_TELEMETRY_DIR"])
-        self.transport = KimiStreamClient(api_key=api_key, budget=self.budget, profile=self.profile,
-                                         emit=telemetry.emit, stream_dir=trace / "streams")
+        self.transport = self.provider_transport(api_key, trace)
         self.client = ContextClient(self, self.transport)
         self.reset()
-        telemetry.emit("native_adapter", protocol=PROTOCOL, cua_contract=self.contract.snapshot(),
+        telemetry.emit("native_adapter", protocol=self.protocol, cua_contract=self.contract.snapshot(),
             budget=self.budget.__dict__, generation_profile=self.profile.__dict__, inactive_options=inactive,
             compiler="unchanged mm_agents.qwen.actions.translate_tool_calls", terminal_status_judge=False)
+
+    provider_name = 'kimi'
+
+    def provider_profile(self, model, base_url, temperature, max_tokens):
+        profile = generation_profile(os.environ.get('UI_KOBE_GENERATION_PROFILE', 'low-16k'))
+        if (model != self.model_name or base_url != BASE_URL or temperature != 1
+                or max_tokens != profile.max_completion_tokens):
+            raise ValueError('K3 requires the declared model and generation profile')
+        return profile
+
+    def provider_transport(self, api_key, trace):
+        return KimiStreamClient(api_key=api_key, budget=self.budget, profile=self.profile,
+                                emit=telemetry.emit, stream_dir=trace / 'streams')
+
+    def generation_fields(self, ledger, role):
+        effort = getattr(self, 'advisory_effort', self.profile.reasoning_effort) if role != 'executor' else self.profile.reasoning_effort
+        return {'reasoning_effort': effort, 'max_completion_tokens': ledger.allowance(role)}
 
     def reset(self, _logger=None):
         journal = getattr(self, 'execution_journal', None)
@@ -153,7 +168,7 @@ class KimiNativeAgent:
         messages = [system, *(message for turn in self.turns for message in turn), user]
         telemetry.set_context(self.view_step, 'native_executor')
         response, (arguments, batch) = self.generate_candidate(self.client, "executor", deadline,
-            {"model": "kimi-k3", "messages": messages, "tools": [native_schema(self.frame)], "tool_choice": "auto"},
+            {"model": self.model_name, "messages": messages, "tools": [native_schema(self.frame)], "tool_choice": "auto"},
             lambda response: validate_native(response, self.frame))
         original = response.model_dump()["choices"][0]["message"]
         ids = [call["id"] for call in original.get("tool_calls") or []]
@@ -163,7 +178,7 @@ class KimiNativeAgent:
             self.command_call_indices.extend([index] * len(official_compile([value], self.frame).commands))
         self.turns.append([user, original])
         self.action_descriptions.append(batch.description)
-        self.last_trace = {"protocol": PROTOCOL, "native_actions": arguments,
+        self.last_trace = {"protocol": self.protocol, "native_actions": arguments,
             "native_action": arguments[0] if len(arguments) == 1 else None, "native_tool_call_count": len(arguments),
             "frame": self.frame.metadata, "cua_contract": self.contract.snapshot(), "timings": self.client.last_timing,
             "history_turns_omitted": removed, "retained_history_text_chars": text_chars,
@@ -195,10 +210,7 @@ class KimiNativeAgent:
         while True:
             ledger = self.step_ledger if role == 'executor' else (getattr(self, 'advisory_ledger', None) or self.step_ledger)
             payload = deepcopy(request)
-            effort = (getattr(self, 'advisory_effort', self.profile.reasoning_effort)
-                      if role != 'executor' else self.profile.reasoning_effort)
-            payload.update(reasoning_effort=effort,
-                           max_completion_tokens=ledger.allowance(role))
+            payload.update(self.generation_fields(ledger, role))
             observed = None
             try:
                 response = transport.create(deadline=deadline, step_ledger=ledger, budget_role=role,

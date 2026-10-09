@@ -111,6 +111,9 @@ def frozen_check(root):
     admission = plan.get("setup_admission")
     if admission and digest(Path(admission["path"])) != admission["sha256"]:
         raise RuntimeError("Task046 setup admission changed")
+    proof = plan.get('provider_compatibility_ref')
+    if proof and digest(Path(proof['path'])) != proof['sha256']:
+        raise RuntimeError('Frozen provider compatibility evidence changed')
 
 
 ARMS = ('baseline', 'ui_kobe_like', 'taskviews')
@@ -123,6 +126,17 @@ def interface_protocols(interface):
 
 
 def check_interface(plan):
+    if plan.get('agent_interface') == 'qwen-native':
+        from ui_kobe.api.qwen_native import BASE_URL, MODEL, PROTOCOL, QwenGenerationProfile
+        if (plan.get('implementation_version') != 9 or plan.get('arms') != ['taskviews']
+                or plan.get('protocols') != [PROTOCOL] or plan.get('task_id') != '059'
+                or plan.get('model') != MODEL or plan.get('base_url') != BASE_URL
+                or plan.get('api_key_env') != 'QWEN_API_KEY'
+                or plan.get('generation_profile') != QwenGenerationProfile().__dict__
+                or not plan.get('provider_compatibility', {}).get('compatible')
+                or not plan.get('checkpoint_policy', {}).get('enabled')):
+            raise RuntimeError('Use a fresh Qwen Task059 TaskViews checkpoint plan with passing provider evidence')
+        return
     if (plan.get('implementation_version') != 7 or plan.get('arms') != list(ARMS)
             or plan.get('agent_interface') not in ('official-xml', 'k3-native')
             or plan.get('protocols') != interface_protocols(plan['agent_interface'])):
@@ -148,6 +162,11 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     from ui_kobe.osworld.runner import source_snapshot
     from ui_kobe.api.kimi_stream import StreamBudget
     from ui_kobe.api.kimi import generation_profile
+    from ui_kobe.api.qwen_native import BASE_URL as QWEN_URL, MODEL as QWEN_MODEL, PROTOCOL as QWEN_PROTOCOL, QwenGenerationProfile
+    qwen = agent_interface == 'qwen-native'
+    if qwen and (task != '059' or not checkpoints or purpose != 'evaluation'):
+        raise ValueError('Qwen native runs require isolated Task059 TaskViews checkpoints')
+    profile = QwenGenerationProfile() if qwen else generation_profile(profile_name)
     from ui_kobe.osworld.cua_contract import CUAContract
     from ui_kobe.osworld.official_base import verify_official_base, OFFICIAL_COMMIT
     verify_official_base(REPO)
@@ -162,6 +181,13 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     if checked["exit_code"] != 0 or checked["project_source"] != project_snapshot():
         raise RuntimeError("Current interface needs passing bounded validation")
     proof = load(compatibility) if compatibility else None
+    if qwen and (not proof or not all(proof.get(k) is True for k in
+            ['compatible', 'vision_json', 'native_tools', 'original_tool_history'])
+            or proof.get('model') != QWEN_MODEL or proof.get('base_url') != QWEN_URL
+            or proof.get('key_env') != 'QWEN_API_KEY' or proof.get('stream') is not False
+            or len(proof.get('requests', [])) != 3
+            or any(r.get('http_status') != 200 or not r.get('usage') for r in proof['requests'])):
+        raise RuntimeError('Qwen requires actual vision, native tools and original tool history compatibility evidence')
     if agent_interface == 'official-xml':
         if (not proof or not proof.get('compatible') or not proof.get('live_api_called')
                 or proof.get('official_commit') != OFFICIAL_COMMIT
@@ -176,16 +202,16 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     assets = {str(ROOT / "assets/osworld-v2.1" / f"task_{task}" / name):
               digest(ROOT / "assets/osworld-v2.1" / f"task_{task}" / name)
               for name in task_example(task).assets}
-    plan = {"created_utc": now(), "task_id": task, "model": "kimi-k3", "base_url": "https://api.moonshot.ai/v1",
-        "api_key_env": "KIMI_API_KEY", "official": identity, "asset_sha256": assets,
-        "arms": list(ARMS), "protocols": interface_protocols(agent_interface),
-        'implementation_version': 7, 'agent_interface': agent_interface,
+    plan = {"created_utc": now(), "task_id": task, "model": QWEN_MODEL if qwen else "kimi-k3", "base_url": QWEN_URL if qwen else "https://api.moonshot.ai/v1",
+        "api_key_env": "QWEN_API_KEY" if qwen else "KIMI_API_KEY", "official": identity, "asset_sha256": assets,
+        "arms": ['taskviews'] if qwen else list(ARMS), "protocols": [QWEN_PROTOCOL] if qwen else interface_protocols(agent_interface),
+        'implementation_version': 9 if qwen else 7, 'agent_interface': agent_interface,
         'arm_variables': {'baseline': 'no transition database or optional memory context',
                          'ui_kobe_like': 'transition database and bounded edge retrieval',
                          'taskviews': 'transition database plus task modules and adaptive context'},
         'k3_compatibility': proof, 'stream_budget': StreamBudget().__dict__,
         "cua_contract": contract.snapshot(),
-        "generation_profile": generation_profile(profile_name).__dict__,
+        "generation_profile": profile.__dict__,
         "arm_admission": {"baseline_score_required": False, "baseline_run_required": False,
             "serial_execution": True, "existing_predecessor_source_and_cleanup_required": True},
         'actor_policy': {'shared_entry': 'one selected actor implementation for all three arms',
@@ -216,21 +242,32 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         "user_authorization": "User requested a shared official CUA interface and source commit; preparing this plan does not authorize a new evaluation episode. Launch requires experiment authorization; generation profiles and resource protections remain declared in this plan",
         "taskviews_variant": "optional context provider consumes experimental passive execution graph and task modules; same selected actor interface"}
     plan["purpose"] = purpose
+    if qwen:
+        plan['provider_compatibility'] = proof
+        plan['provider_compatibility_ref'] = {'path': str(compatibility.resolve()), 'sha256': digest(compatibility)}
+        plan['provider_request'] = {'stream': False, 'enable_thinking': False, 'temperature': 0, 'top_p': 0.9,
+            'actor_max_tokens': 16000, 'advisory_max_tokens': 4000, 'response_format': 'native tools / advisory JSON',
+            'transport': 'non-stream HTTP JSON; preserve actual raw response and usage; no synthetic SSE'}
+        plan['k3_compatibility'] = None
+        plan['actor_policy']['shared_entry'] = 'Qwen native actor using original official CUA compiler and common native history'
     if checkpoints:
-        if task != '059' or agent_interface != 'k3-native':
+        if task != '059' or agent_interface not in ('k3-native', 'qwen-native'):
             raise ValueError('Checkpoint rewind requires isolated Task059 native TaskViews')
-        plan['runtime_revision'] = 8
+        plan['runtime_revision'] = 9 if qwen else 8
         plan['checkpoint_policy'] = {'enabled': True, 'before_every_decision': True, 'retained_snapshots': 3,
                                      'startup_resume_probe': True,
             'cpu_flags': 'migratable=on,-invtsc', 'snapshot_preflight_before_task_reset': True,
             'firmware_storage': 'same pinned UEFI bytes; writable qcow2 pflash included in savevm',
-            'advisory_effort': 'low', 'read_error_policy': 'pause before actor; repair and resume aligned snapshot',
+            'advisory_effort': 'disabled' if qwen else 'low', 'read_error_policy': 'pause before actor; repair and resume aligned snapshot',
             'inspection_minutes': 60, 'no_reset_on_resume': True, 'cumulative_max_steps': decisions,
             'scope': 'Task059 local guest; not external web side effects', 'core': 'original task contract mandatory; candidates in views'}
         plan['benchmark_comparable'] = False
         plan['execution_policy']['taskviews_advisers'] = 'invalid reads pause before executor; aligned checkpoint repair/resume'
-        plan['taskviews_variant'] = 'strict bounded context reads; independent low-effort advisory pool; checkpoint recovery'
+        plan['taskviews_variant'] = 'strict bounded context reads; independent advisory pool; checkpoint recovery'
         plan['user_authorization'] = 'User authorized TaskViews fixes, a new Task059 run, checkpoints and 60-minute inspection on 2026-10-09'
+        if qwen:
+            plan['user_authorization'] += '; explicitly requested qwen3.8-max Task059 TaskViews execution and real-time debugging'
+            plan['comparison_limit'] = 'New Qwen native-tools, non-stream, thinking-disabled protocol; not the original Qwen XML agent or the completed Kimi comparison conditions'
     if purpose == 'cua_smoke':
         plan['benchmark_comparable'] = False
         plan['user_authorization'] = 'The predeclared short official decision limit is a compatibility smoke trial, not a benchmark rerun. Preparation does not authorize a new evaluation episode'
@@ -253,13 +290,17 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     print(json.dumps({"prepared": str(root), "task": task, "windows": status}), flush=True)
 
 
-def official_arguments(task, output, profile=None, contract=None, max_steps=500):
+def official_arguments(task, output, profile=None, contract=None, max_steps=500, provider='kimi'):
     from ui_kobe.osworld.cua_contract import CUAContract
     cua = CUAContract(**contract) if contract else CUAContract()
+    if provider not in ('kimi', 'qwen'):
+        raise ValueError('Unknown official runner provider')
+    from ui_kobe.api.qwen_native import BASE_URL, MODEL
+    qwen = provider == 'qwen'
     return ["--headless", "--provider_name", "docker", "--path_to_vm", str(ROOT / "images/osworld-v2-ubuntu-x86.qcow2"),
         "--screen_width", "1920", "--screen_height", "1080", "--observation_type", "screenshot",
-        "--action_space", "pyautogui", "--model", "kimi-k3", "--base_url", "https://api.moonshot.ai/v1",
-        "--enable_thinking", "--stream", "--batch_actions",
+        "--action_space", "pyautogui", "--model", MODEL if qwen else "kimi-k3", "--base_url", BASE_URL if qwen else "https://api.moonshot.ai/v1",
+        *([] if qwen else ["--enable_thinking", "--stream"]), "--batch_actions",
         "--coord", cua.coordinate_type,
         *([] if cua.model_screen_width is None else ["--model_screen_width", str(cua.model_screen_width),
                                                     "--model_screen_height", str(cua.model_screen_height)]),
@@ -269,7 +310,7 @@ def official_arguments(task, output, profile=None, contract=None, max_steps=500)
         "--context_max_text_chars", str(cua.context_max_text_chars),
         "--context_rough_text_token_budget", str(cua.context_rough_text_token_budget),
         "--context_rescue" if cua.enable_context_rescue else "--no-context_rescue",
-        "--no-terminal_status_judge", "--temperature", "1", "--top_p", "0.95",
+        "--no-terminal_status_judge", "--temperature", "0" if qwen else "1", "--top_p", "0.9" if qwen else "0.95",
         "--max_tokens", str((profile or {}).get("max_completion_tokens", 16000)), "--max_steps", str(max_steps), "--sleep_after_execution", "3", "--num_envs", "1",
         "--eval_version", "v2", "--domain", "tasks", "--specific_task_id", task,
         "--client_password", "osworld-public-evaluation", "--max_api_retries", "2", "--request_timeout", "900",
@@ -283,7 +324,7 @@ def launch(root, arm):
     check_interface(plan)
     decisions = trial_max_steps(plan.get('purpose', 'evaluation'), plan.get('max_steps'))
     from ui_kobe.osworld.cua_contract import CUAContract
-    if arm not in ARMS:
+    if arm not in ARMS or arm not in plan['arms']:
         raise ValueError('Unknown experimental arm')
     if not isinstance(plan.get("cua_contract"), dict):
         raise RuntimeError("This v7 entry requires a fresh frozen plan with its predeclared CUA contract")
@@ -316,13 +357,15 @@ def launch(root, arm):
     output = ROOT / "results" / run_id / "qwen"
     manifest = {"run_id": run_id, "run_dir": str(stage), "plan_root": str(root), "task_id": plan["task_id"],
         "arm": arm, "agent_protocol": plan["protocols"][plan["arms"].index(arm)], "unit": unit,
-        'agent_interface': plan['agent_interface'], 'implementation_version': 7,
+        'agent_interface': plan['agent_interface'], 'implementation_version': plan['implementation_version'],
         'transition_recording': arm != 'baseline',
         "official_results": str(output), "official_arguments": official_arguments(plan["task_id"], output,
-                                                    plan.get("generation_profile"), plan.get("cua_contract"), decisions),
+                                                    plan.get("generation_profile"), plan.get("cua_contract"), decisions,
+                                                    provider='qwen' if plan['agent_interface'] == 'qwen-native' else 'kimi'),
         "cua_contract": plan.get("cua_contract"),
         "generation_profile": plan.get("generation_profile"),
-        "model": "kimi-k3", "base_url": "https://api.moonshot.ai/v1", "web_container_ids": [], "web_owned": False,
+        "model": plan.get('model', 'kimi-k3'), "base_url": plan.get('base_url', 'https://api.moonshot.ai/v1'),
+        'api_key_env': plan.get('api_key_env', 'KIMI_API_KEY'), "web_container_ids": [], "web_owned": False,
         'purpose': plan.get('purpose', 'evaluation'), 'max_steps': decisions,
         'benchmark_comparable': plan.get('benchmark_comparable', True),
         "runtime_paths": [], "created_utc": now()}
@@ -335,7 +378,7 @@ def launch(root, arm):
     write(stage / "manifest.json", manifest)
     command = shlex.join([str(PYTHON), str(Path(__file__).resolve()), "supervise", "--root", str(stage)])
     cleanup_command = shlex.join(AUX + ["cleanup", "--root", str(stage)])
-    text = ("[Unit]\nDescription=Frozen K3 native OSWorld experiment\n\n[Service]\nType=simple\n"
+    text = ("[Unit]\nDescription=Frozen native OSWorld experiment\n\n[Service]\nType=simple\n"
         f"WorkingDirectory={REPO}\nExecStart=/bin/bash -ic {shlex.quote('source ~/osworld2/env.sh; exec ' + command)}\n"
         f"ExecStopPost={cleanup_command}\nMemoryMax=2G\nMemoryHigh=1792M\nMemorySwapMax=0\n"
         "OOMPolicy=stop\nKillMode=control-group\nTimeoutStopSec=120\nRestart=no\nCPUQuota=100%\n"
@@ -364,8 +407,9 @@ def supervise(stage):
         current = sample(__import__('docker').from_env(), manifest, host_status, group)['windows']
         if not reserve_ok(current, startup=True):
             raise RuntimeError('Preserved checkpoint waiting for startup resource reserve')
-    if not os.environ.get("KIMI_API_KEY"):
-        raise RuntimeError("KIMI_API_KEY missing; no VM was allocated")
+    key_env = manifest.get('api_key_env', 'KIMI_API_KEY')
+    if not os.environ.get(key_env):
+        raise RuntimeError(key_env + " missing; no VM was allocated")
     manifest.update(cgroup=str(group), started_utc=now(), started_epoch=time.time(),
         service_limits={p: (group / p).read_text().strip() for p in ("memory.max", "memory.swap.max")})
     write(stage / "manifest.json", manifest)
@@ -690,8 +734,8 @@ def main():
     parser.add_argument("--admission", type=Path)
     parser.add_argument("--profile", choices=("low-16k", "max-16k", "max-32k"), default="low-16k")
     parser.add_argument("--cua-config", type=Path)
-    parser.add_argument('--agent-interface', choices=('official-xml', 'k3-native'), default='official-xml')
-    parser.add_argument('--k3-compatibility', type=Path)
+    parser.add_argument('--agent-interface', choices=('official-xml', 'k3-native', 'qwen-native'), default='official-xml')
+    parser.add_argument('--k3-compatibility', '--provider-compatibility', type=Path)
     parser.add_argument('--checkpoints', action='store_true')
     args = parser.parse_args()
     require_scope(2 * GIB if args.action == "supervise" else 128 * 1024**2)

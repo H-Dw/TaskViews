@@ -40,7 +40,7 @@ class TaskViewsContextMixin:
                 raise StreamProtocolError("Invalid " + name + " JSON/schema: " + str(exc),
                                           code='invalid_adviser_json', retryable=True) from exc
         _, value = self.generate_candidate(self.transport, name, deadline,
-            {'model': 'kimi-k3', 'messages': [{"role": "system", "content": prompt}, {"role": "user", "content": [
+            {'model': getattr(self, 'model_name', 'kimi-k3'), 'messages': [{"role": "system", "content": prompt}, {"role": "user", "content": [
                 {"type": "text", "text": dumps(context)}, image]}], 'response_format': {"type": "json_object"}}, validate)
         return value
 

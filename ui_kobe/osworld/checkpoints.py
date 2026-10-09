@@ -421,13 +421,14 @@ def checkpoint_volume_finalizer(original, resuming):
     return finalize
 
 
-def install(stage, manifest):
+def install(stage, manifest, *, agent_type=None):
     if manifest['task_id'] != '059' or manifest['arm'] != 'taskviews':
         raise ValueError('Desktop rewind currently supports only isolated Task059 TaskViews')
     from desktop_env.desktop_env import DesktopEnv
     from desktop_env.providers.docker import provider
     from desktop_env.providers.docker import local_budget
     from .kimi_taskviews_native import KimiTaskViewsNativeAgent
+    agent_type = agent_type or KimiTaskViewsNativeAgent
     import lib_run_single
     manager = Checkpoints(stage, manifest)
     # The existing guard shares the same adjusted reserve formula. It requests
@@ -519,7 +520,7 @@ def install(stage, manifest):
             return  # supervisor preserves this owned VM and snapshot directory
         return old_close(env)
     DesktopEnv.close = close
-    old_agent_reset = KimiTaskViewsNativeAgent.reset
+    old_agent_reset = agent_type.reset
     def agent_reset(agent, *args, **kwargs):
         if resuming and agent.control is not None and not getattr(agent, '_checkpoint_restored', False):
             try:
@@ -532,8 +533,8 @@ def install(stage, manifest):
             agent._checkpoint_restored = True
             return
         return old_agent_reset(agent, *args, **kwargs)
-    KimiTaskViewsNativeAgent.reset = agent_reset
-    old_predict = KimiTaskViewsNativeAgent.predict
+    agent_type.reset = agent_reset
+    old_predict = agent_type.predict
     @functools.wraps(old_predict)
     def predict(agent, instruction, obs):
         try:
@@ -550,7 +551,7 @@ def install(stage, manifest):
         except Exception as exc:
             manager.pause(exc)
             raise CheckpointPaused(str(exc)) from exc
-    KimiTaskViewsNativeAgent.predict = predict
+    agent_type.predict = predict
     def interrupt(signum, frame):
         exc = ReadAnomaly('Supervisor resource threshold pause')
         manager.pause(exc)

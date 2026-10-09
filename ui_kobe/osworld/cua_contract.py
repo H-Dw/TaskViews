@@ -92,7 +92,7 @@ class CUAFrame:
                 "The declared unit never changes in response to a candidate. Old geometry must be re-grounded.")
 
 
-def options_contract(options):
+def options_contract(options, *, provider='kimi'):
     """Honor official runner options; reject features that lack a native implementation."""
     values = dict(options)
     contract_fields = CUAContract.__dataclass_fields__
@@ -104,6 +104,10 @@ def options_contract(options):
                 "summary_folding": False, "terminal_status_judge": False, "enable_endless_retry": False,
                 "enable_thinking": True, "action_space": "pyautogui", "observation_type": "screenshot",
                 "top_p": 0.95, "top_k": None}
+    if provider == 'qwen':
+        required.update(stream=False, enable_thinking=False, top_p=0.9)
+    elif provider != 'kimi':
+        raise ValueError('Unknown native provider')
     for name, expected in required.items():
         if name in values and values.pop(name) != expected:
             raise ValueError(f"Unsupported native option {name}; use {expected!r}")

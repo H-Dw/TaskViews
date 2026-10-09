@@ -7,7 +7,7 @@ import time
 
 from ui_kobe.api.kimi_budget import StepLedger
 from . import telemetry
-from .kimi_native import KimiNativeAgent, PROTOCOL
+from .kimi_native import KimiNativeAgent, PROTOCOL as PROTOCOL
 from .task_control import PersistentTaskControl
 from .taskviews_context import TaskViewsContextMixin
 
@@ -25,8 +25,8 @@ class KimiTaskViewsNativeAgent(TaskViewsContextMixin, KimiNativeAgent):
         super().__init__(**kwargs)
         if not self.checkpoint_reads:
             self.advisory_effort = self.profile.reasoning_effort
-        telemetry.emit('taskviews_native_adapter', protocol=PROTOCOL,
-            action_policy='shared KimiNativeAgent.predict/transport/compiler',
+        telemetry.emit('taskviews_native_adapter', protocol=self.protocol,
+            action_policy='shared native predict/history/compiler with declared provider transport',
             context_policy='execution graph plus task modules and adaptive views',
             role_protocol='non-executable JSON', analysis_budget='separate from actor')
 

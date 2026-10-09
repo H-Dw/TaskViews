@@ -1,4 +1,4 @@
-"""Run any K3 arm through the pinned, untouched official execution/evaluation runner."""
+"""Run a declared native provider through the pinned official runner."""
 from __future__ import annotations
 
 import argparse
@@ -20,6 +20,9 @@ def agent_class(interface, arm):
         from ui_kobe.osworld.kimi_taskviews_native import KimiTaskViewsNativeAgent
         classes = {'baseline': KimiNativeAgent, 'ui_kobe_like': KimiTransitionNativeAgent,
                    'taskviews': KimiTaskViewsNativeAgent}
+    elif interface == 'qwen-native':
+        from ui_kobe.osworld.qwen_taskviews_native import QwenTaskViewsNativeAgent
+        classes = {'taskviews': QwenTaskViewsNativeAgent}
     else:
         raise ValueError('Unknown Agent interface')
     return classes[arm]
@@ -51,27 +54,35 @@ def main():
     if manifest.get("cua_contract") != contract.snapshot():
         raise RuntimeError("Manifest CUA contract differs from frozen plan")
     os.environ["UI_KOBE_CUA_CONTRACT_JSON"] = json.dumps(contract.snapshot())
-    from ui_kobe.api.kimi import generation_profile
     profile = manifest['generation_profile']
-    if generation_profile(profile['name']).__dict__ != profile:
+    qwen = manifest['agent_interface'] == 'qwen-native'
+    if qwen:
+        from ui_kobe.api.qwen_native import QwenGenerationProfile
+        expected_profile = QwenGenerationProfile().__dict__
+    else:
+        from ui_kobe.api.kimi import generation_profile
+        expected_profile = generation_profile(profile['name']).__dict__
+    if expected_profile != profile:
         raise RuntimeError('Manifest generation profile does not match frozen implementation')
     os.environ['UI_KOBE_GENERATION_PROFILE'] = profile['name']
-    if not os.environ.get("KIMI_API_KEY"):
-        raise RuntimeError("KIMI_API_KEY is absent")
-    os.environ.update(OPENAI_API_KEY=os.environ["KIMI_API_KEY"], OSWORLD_LOCAL_WEB="0",
+    key_env = 'QWEN_API_KEY' if qwen else 'KIMI_API_KEY'
+    if manifest.get('api_key_env', key_env) != key_env or not os.environ.get(key_env):
+        raise RuntimeError(key_env + " is absent or differs from the frozen provider")
+    os.environ.update(OPENAI_API_KEY=os.environ[key_env], OSWORLD_LOCAL_WEB="0",
         UI_KOBE_TASK_ID=manifest["task_id"], UI_KOBE_TELEMETRY_DIR=str(root / "telemetry"),
         OSWORLD_FULL_RUN_ID=manifest["run_id"],
         WEBSITE_HOST_SUFFIX="127.0.0.1.nip.io:21280",
         OSWORLD_BENCHMARK_RELEASE="osworld-v2.1",
         OSWORLD_FILE_BASE_URL=str(Path.home() / "osworld2/assets/osworld-v2.1"))
-    # Preserve the existing K3 judge/user-simulator compatibility configuration.
+    # Task059 is deterministically scored. Any original runner-side provider
+    # use nevertheless receives this run's declared model and endpoint.
     os.environ.update(OSWORLD_EVAL_MODEL_PROVIDER="ui_kobe_qwen_judge",
-        OSWORLD_EVAL_MODEL_API_KEY_ENV="KIMI_API_KEY", OSWORLD_EVAL_MODEL_NAME="kimi-k3",
-        OSWORLD_EVAL_MODEL_BASE_URL="https://api.moonshot.ai/v1", OSWORLD_EVAL_MODEL_TEMPERATURE="1",
+        OSWORLD_EVAL_MODEL_API_KEY_ENV=key_env, OSWORLD_EVAL_MODEL_NAME=manifest['model'],
+        OSWORLD_EVAL_MODEL_BASE_URL=manifest['base_url'], OSWORLD_EVAL_MODEL_TEMPERATURE="0" if qwen else "1",
         OSWORLD_EVAL_MODEL_MAX_OUTPUT_TOKENS="16000", OSWORLD_EVAL_MODEL_RETRY_ATTEMPTS="2",
-        OSWORLD_USER_SIM_PROVIDER="openai_compatible", OSWORLD_USER_SIM_API_KEY_ENV="KIMI_API_KEY",
-        OSWORLD_USER_SIM_MODEL="kimi-k3", OSWORLD_USER_SIM_BASE_URL="https://api.moonshot.ai/v1",
-        OSWORLD_USER_SIM_TEMPERATURE="1", OSWORLD_USER_SIM_MAX_TOKENS="16000")
+        OSWORLD_USER_SIM_PROVIDER="openai_compatible", OSWORLD_USER_SIM_API_KEY_ENV=key_env,
+        OSWORLD_USER_SIM_MODEL=manifest['model'], OSWORLD_USER_SIM_BASE_URL=manifest['base_url'],
+        OSWORLD_USER_SIM_TEMPERATURE="0" if qwen else "1", OSWORLD_USER_SIM_MAX_TOKENS="16000")
     from desktop_env.providers.docker import local_budget
     from scripts.native_resource_accounting import BudgetHostProbe, STARTUP_AVAILABLE_GIB
     local_budget.host_status = BudgetHostProbe(args.manifest, host_status)
@@ -87,13 +98,14 @@ def main():
     from ui_kobe.api.kimi import install_official_k3_transport
     from ui_kobe.osworld.qwen_judge import install_qwen_judge_backend
     install(root / "telemetry")
-    install_official_k3_transport()
+    if not qwen:
+        install_official_k3_transport()
     install_qwen_judge_backend()
     if manifest.get('checkpoint_policy', {}).get('enabled'):
         os.environ['UI_KOBE_CHECKPOINT_READS'] = '1'
         os.environ['UI_KOBE_ADVISORY_EFFORT'] = manifest['checkpoint_policy']['advisory_effort']
         from ui_kobe.osworld.checkpoints import install as install_checkpoints
-        install_checkpoints(root, manifest)
+        install_checkpoints(root, manifest, agent_type=selected)
     if manifest["task_id"] == "046":
         from scripts.native_task046_setup import install_setup_verification
         install_setup_verification(root)
