@@ -1,6 +1,10 @@
 from copy import deepcopy
 from io import BytesIO
+import argparse
+import ast
 import json
+import os
+from pathlib import Path
 import time
 
 import httpx
@@ -139,9 +143,21 @@ def test_qwen_options_and_frozen_arguments():
                         '--max_steps':'500', '--max_tokens':'16000', '--coord':'absolute'}.items():
         assert args[args.index(name)+1] == value
     assert '--stream' not in args and '--enable_thinking' not in args
+    assert '--no-stream' in args and '--no-enable_thinking' in args
     assert '--batch_actions' in args and agent_class('qwen-native', 'taskviews') is QwenTaskViewsNativeAgent
     with pytest.raises(KeyError):
         agent_class('qwen-native', 'baseline')
+
+
+def test_actual_official_parser_turns_off_its_enabled_defaults(tmp_path):
+    repo = Path(os.environ.get('UI_KOBE_OFFICIAL_REPO', str(Path.home()/'osworld2/OSWorld-V2')))
+    source = ast.parse((repo/'scripts/python/run_multienv_qwen.py').read_text())
+    functions = [n for n in source.body if isinstance(n, ast.FunctionDef) and n.name in ('config','_volume_size')]
+    namespace = {'argparse':argparse}
+    exec(compile(ast.Module(body=functions, type_ignores=[]), 'pinned-official-argument-parser', 'exec'), namespace)
+    args = namespace['config'](experiment.official_arguments('059', tmp_path, provider='qwen'))
+    assert args.stream is False and args.enable_thinking is False
+    assert args.model == MODEL and args.max_steps == 500 and args.max_tokens == 16000
 
 
 class NativeTransport:
