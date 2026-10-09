@@ -74,7 +74,7 @@ def inspect_stage(stage):
     return result
 
 
-def resume(stage, validation, reason, checkpoint=None):
+def resume(stage, validation, reason, checkpoint=None, provider_ready=False):
     import docker
     from scripts.native_resource_accounting import sample, reserve_ok
     from scripts.osworld_task035_background import cgroup
@@ -88,6 +88,7 @@ def resume(stage, validation, reason, checkpoint=None):
         raise RuntimeError('Task is still running; cannot replay a checkpoint')
     if not (stage/'paused.json').exists():
         raise RuntimeError('No paused checkpoint; never relaunch a terminal/fresh episode')
+    require_provider_recovery(stage, provider_ready)
     if time.time() < load(stage/'paused.json').get('retry_not_before', 0):
         return {'status':'waiting_for_provider_cooldown'}
     checked = load(validation)
@@ -132,6 +133,10 @@ def resume(stage, validation, reason, checkpoint=None):
                'validation_sha256':digest(validation), 'time':time.time(), 'reset':False}
     write(stage/'resume-history'/(uuid.uuid4().hex+'.json'), request)
     write(stage/'resume-request.json', request)
+    if (stage/'provider-access-block.json').exists():
+        write(stage/'provider-recovery-confirmations'/(uuid.uuid4().hex+'.json'),
+              {'time':time.time(),'reason':reason,'user_confirmed_provider_ready':provider_ready,
+               'block_sha256':digest(stage/'provider-access-block.json'),'checkpoint':saved['tag']})
     (stage/'pause-request.json').unlink(missing_ok=True)
     restart_checkpoint_unit(manifest['unit'])
     return {'status':'resuming','checkpoint':saved['tag'],'completed_steps':saved['completed_steps'], 'reset':False}
@@ -151,6 +156,11 @@ def restart_checkpoint_unit(unit):
     subprocess.run(['systemctl','--user','start',unit], check=True)
 
 
+def require_provider_recovery(stage, provider_ready):
+    if (stage/'provider-access-block.json').exists() and not provider_ready:
+        raise RuntimeError('Provider billing/quota blocked; user must confirm recovery before checkpoint continuation')
+
+
 def pause(stage, reason):
     import os
     import signal
@@ -160,6 +170,10 @@ def pause(stage, reason):
     vm = load(stage/'checkpoint-vm.json')
     pid = vm['worker_pid']
     group = Path('/proc')/str(pid)/'cgroup'
+    if not group.exists() and (stage/'paused.json').exists():
+        from ui_kobe.osworld.checkpoints import Checkpoints
+        _, saved = Checkpoints(stage,manifest).read(metadata_only=True)
+        return {'status':'already_paused','checkpoint':saved['tag'],'completed_steps':saved['completed_steps']}
     relative = group.read_text().strip().split('::',1)[1]
     if str(Path('/sys/fs/cgroup')/relative.lstrip('/')) != manifest['cgroup']:
         raise RuntimeError('Checkpoint worker no longer belongs to this run')
@@ -175,12 +189,13 @@ def main():
     p.add_argument('--validation',type=Path)
     p.add_argument('--reason')
     p.add_argument('--checkpoint', help='Exact retained checkpoint tag; default is last safe boundary')
+    p.add_argument('--provider-ready', action='store_true', help='Only after the user confirms provider billing/quota recovery')
     args=p.parse_args()
     require_scope(128*1024**2)
     if args.action == 'resume':
         if not args.validation or not args.reason:
             p.error('Resume requires validation and a specific repair/cooldown reason')
-        result=resume(args.stage,args.validation,args.reason,args.checkpoint)
+        result=resume(args.stage,args.validation,args.reason,args.checkpoint,args.provider_ready)
     elif args.action == 'pause':
         if not args.reason:
             p.error('Pause requires a specific anomaly reason')

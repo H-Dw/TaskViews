@@ -372,9 +372,16 @@ class Checkpoints:
         if monitor_error:
             record['hypervisor_pause_error'] = monitor_error
         import httpx
-        from ui_kobe.api.kimi_stream import retry_after_seconds
+        from ui_kobe.api.kimi_stream import retry_after_seconds, ProviderQuotaBlocked
         cause = exc
         for _ in range(8):
+            if isinstance(cause, ProviderQuotaBlocked):
+                record['provider_access_blocked'] = True
+                blocked = {'time':time.time(),'reason':'Provider explicitly reports account quota/billing blocked',
+                           'error_code':cause.code,'checkpoint':latest,'requires_user_recovery':True}
+                atomic(self.stage/'provider-access-block-history'/(uuid.uuid4().hex+'.json'), blocked)
+                atomic(self.stage/'provider-access-block.json', blocked)
+                break
             if isinstance(cause, httpx.HTTPStatusError) and cause.response.status_code == 429:
                 delay = retry_after_seconds(cause.response.headers.get('retry-after'))
                 record['retry_not_before'] = time.time()+max(60, delay if delay is not None else 60)

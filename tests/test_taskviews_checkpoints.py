@@ -286,6 +286,32 @@ def test_429_defers_without_exceeding_role_deadline():
     assert retry_after_seconds('nonsense') is None
 
 
+def test_billing_quota_429_pauses_without_retry_and_redacts_escaped_ids(monkeypatch):
+    from ui_kobe.api.kimi_stream import ProviderQuotaBlocked
+    from scripts.taskviews_recovery import require_provider_recovery
+    events, calls = [], []
+    monkeypatch.setattr('ui_kobe.api.kimi_stream.time.sleep', lambda seconds:pytest.fail('Billing error must not sleep/retry'))
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(429, text='{"error":{"type":"exceeded_current_quota_error","message":"org-private \\u003cak-private\\u003e insufficient balance"}}')
+    c=KimiStreamClient(api_key='offline',http_factory=lambda **kw:httpx.Client(transport=httpx.MockTransport(handler),**kw),
+                       emit=lambda event,**fields:events.append((event,fields)))
+    with pytest.raises(ProviderQuotaBlocked):
+        c.create(messages=[],max_completion_tokens=16000)
+    assert len(calls)==1
+    assert 'ak-private' not in str(events) and 'org-private' not in str(events)
+    assert sum(e=='request_outcome' and f['usage'] is None for e,f in events)==1
+    assert require_provider_recovery is not None
+
+
+def test_account_block_requires_explicit_recovery_before_resuming(tmp_path):
+    from scripts.taskviews_recovery import require_provider_recovery
+    (tmp_path/'provider-access-block.json').write_text('{}')
+    with pytest.raises(RuntimeError, match='user must confirm'):
+        require_provider_recovery(tmp_path,False)
+    require_provider_recovery(tmp_path,True)
+
+
 def test_invalid_view_read_stops_before_any_actor_or_command(tmp_path, monkeypatch):
     from test_cua_contract import build_agent, png
     from test_native_task_experiment import Transport, response

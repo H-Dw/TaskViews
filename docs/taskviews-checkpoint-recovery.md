@@ -2,6 +2,8 @@
 
 固件兼容：固定Docker镜像原先通过可写raw pflash加载UEFI。检查点模式在启动前将同一份固定固件字节转换成qcow2，仍连接pflash设备，使固件写入与guest RAM、任务磁盘共同保存。首次reset前验证实际可写盘格式及整机save/load/delvm；不改变官方镜像或已初始化guest。
 
+账户额度：429正文若明确为exceeded_current_quota_error，表示账户额度/账单阻塞，不按临时限流重试。直接保存UNKNOWN usage并暂停原检查点，写入provider-access-block。仅用户确认充值或额度恢复后，resume才可显式携带--provider-ready；60分钟巡检不自动试探API。错误正文先解码JSON再遮盖账户和key标识。普通临时429仍按Retry-After及原有界池等待。
+
 这是用户于2026-10-09授权的新TaskViews修复运行。旧v7六组的计划、原始证据、成绩和封存记录均不修改。新运行改变了分析配置与恢复策略，不用于声称旧三组同条件比较。
 
 执行端保持KimiNativeAgent、原官方提示与1920×1080绝对坐标、完整批次编译、控制器、任务首次reset及最终评价。actor effort=max，每请求16000，独立32000输出池/930秒/最多2次语义修复。分析端effort=low，每请求至多4000，独立available16000/315秒/最多2次语义修复。费用按真实唯一request_id保存；unknown usage保持NULL，恢复分段的额外请求计费保留。恢复已完成步数累计到500，不重新获得500步；恢复请求会开始新的有界请求尝试，不退回此前费用。

@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import threading
 import time
 import uuid
@@ -36,6 +37,27 @@ class StreamDeadlineError(TimeoutError):
 
 class RateLimitDeferred(httpx.HTTPStatusError):
     """A provider-directed wait exceeds this request's remaining deadline."""
+
+
+class ProviderQuotaBlocked(httpx.HTTPStatusError):
+    code = 'provider_quota_blocked'
+
+
+def safe_error_body(text, key):
+    # Provider errors can echo an account/key ID in escaped JSON. Decode the
+    # strings first so credential-prefix redaction also covers \u003c...\u003e.
+    def redact(value):
+        if isinstance(value, str):
+            return re.sub(r'\b(?:ak-|sk-|org-)[A-Za-z0-9_-]+', '[REDACTED-ID]', value.replace(key, '[REDACTED]'))
+        if isinstance(value, dict):
+            return {k:redact(v) for k,v in value.items()}
+        if isinstance(value, list):
+            return [redact(v) for v in value]
+        return value
+    try:
+        return json.dumps(redact(json.loads(text)), ensure_ascii=False)[:8192]
+    except (ValueError, TypeError):
+        return redact(text)[:8192]
 
 
 def retry_after_seconds(value, *, now=None):
@@ -230,6 +252,8 @@ class KimiStreamClient:
                     step_ledger=step_ledger, budget_role=budget_role, generation_attempt=generation_attempt,
                     parent_request_id=parent_request_id)
             except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+                if isinstance(exc, ProviderQuotaBlocked):
+                    raise  # Billing suspension cannot recover through retries.
                 status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
                 if (status is not None and status not in (408, 429) and status < 500) or attempt + 1 == self.budget.attempts:
                     raise
@@ -287,7 +311,15 @@ class KimiStreamClient:
                                 body.extend(part[:8192-len(body)])
                                 if len(body) >= 8192:
                                     break
-                            put('http_error_body', bytes(body).decode('utf-8', errors='replace').replace(self.key, '[REDACTED]'))
+                            text = bytes(body).decode('utf-8', errors='replace')
+                            put('http_error_body', safe_error_body(text, self.key))
+                            try:
+                                error_type = (json.loads(text).get('error') or {}).get('type')
+                            except (ValueError, TypeError, AttributeError):
+                                error_type = None
+                            if response.status_code == 429 and error_type == 'exceeded_current_quota_error':
+                                raise ProviderQuotaBlocked('Provider account quota/billing is blocked; user recovery required',
+                                                           request=response.request, response=response)
                         response.raise_for_status()
                         data = []
                         for line in response.iter_lines():
