@@ -403,6 +403,17 @@ def resume_loop(function):
     return namespace[function.__name__]
 
 
+def checkpoint_volume_finalizer(original, resuming):
+    def finalize(env):
+        if not resuming:
+            return original(env)
+        # The saved VM already contains its finalized volume. Its CPU is
+        # paused until loadvm in reset(), so startup setup requests here would
+        # hang and, if unpaused, would mutate the snapshot before restoration.
+        return None
+    return finalize
+
+
 def install(stage, manifest):
     if manifest['task_id'] != '059' or manifest['arm'] != 'taskviews':
         raise ValueError('Desktop rewind currently supports only isolated Task059 TaskViews')
@@ -471,6 +482,7 @@ def install(stage, manifest):
         snapshot_preflight(self.container, stage)
         return result
     provider.DockerProvider.start_emulator = start
+    DesktopEnv._finalize_volume = checkpoint_volume_finalizer(DesktopEnv._finalize_volume, resuming)
     old_reset = DesktopEnv.reset
     def reset(env, *args, **kwargs):
         if resuming:
@@ -543,5 +555,6 @@ def install(stage, manifest):
         'official_function': 'lib_run_single.run_single_example',
         'official_source_sha256': sha(official_source),
         'changed_assignments': ['step_idx = saved completed steps', 'global_action_index = saved commands'],
+        'resume_volume_finalization': 'skip already finalized volume contained in snapshot',
         'reset_on_resume': False, 'official_loop_body_preserved': True, 'resuming': resuming})
     return manager

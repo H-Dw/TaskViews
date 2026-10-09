@@ -133,9 +133,22 @@ def resume(stage, validation, reason, checkpoint=None):
     write(stage/'resume-history'/(uuid.uuid4().hex+'.json'), request)
     write(stage/'resume-request.json', request)
     (stage/'pause-request.json').unlink(missing_ok=True)
-    subprocess.run(['systemctl','--user','reset-failed',manifest['unit']], check=True)
-    subprocess.run(['systemctl','--user','start',manifest['unit']], check=True)
+    restart_checkpoint_unit(manifest['unit'])
     return {'status':'resuming','checkpoint':saved['tag'],'completed_steps':saved['completed_steps'], 'reset':False}
+
+
+def restart_checkpoint_unit(unit):
+    # A successfully paused inactive service may already be garbage-collected
+    # by systemd. reset-failed rejects that unloaded unit; only failed services
+    # require clearing failure state before starting the saved unit file.
+    subprocess.run(['systemctl','--user','daemon-reload'], check=True)
+    state = subprocess.run(['systemctl','--user','is-active',unit],
+                           text=True, capture_output=True, check=False).stdout.strip()
+    if state == 'active':
+        raise RuntimeError('Checkpoint unit became active before continuation')
+    if state == 'failed':
+        subprocess.run(['systemctl','--user','reset-failed',unit], check=True)
+    subprocess.run(['systemctl','--user','start',unit], check=True)
 
 
 def pause(stage, reason):

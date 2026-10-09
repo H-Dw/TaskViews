@@ -15,6 +15,33 @@ from ui_kobe.osworld.transitions import TransitionJournal
 from ui_kobe.osworld import checkpoints
 
 
+@pytest.mark.parametrize('state', ['inactive','unknown','failed','active'])
+def test_resume_handles_systemd_unloaded_and_failed_units(monkeypatch, state):
+    from scripts import taskviews_recovery
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command[2])
+        return SimpleNamespace(stdout=state, returncode=0)
+    monkeypatch.setattr(taskviews_recovery.subprocess, 'run', run)
+    if state == 'active':
+        with pytest.raises(RuntimeError, match='became active'):
+            taskviews_recovery.restart_checkpoint_unit('owned.service')
+        assert 'start' not in calls
+    else:
+        taskviews_recovery.restart_checkpoint_unit('owned.service')
+        assert ('reset-failed' in calls) == (state == 'failed')
+        assert calls[-1] == 'start'
+
+
+def test_resume_does_not_expand_or_contact_paused_guest_before_loadvm():
+    calls = []
+    def original(env): calls.append(env)
+    checkpoints.checkpoint_volume_finalizer(original, True)('paused-saved-vm')
+    assert calls == []
+    checkpoints.checkpoint_volume_finalizer(original, False)('fresh-vm')
+    assert calls == ['fresh-vm']
+
+
 class VM:
     def __init__(self):
         self.calls = []
