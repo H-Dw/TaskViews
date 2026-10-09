@@ -103,6 +103,41 @@ class QMP:
         self.call('cont')
 
 
+CHECKPOINT_CPU_FLAGS = 'migratable=on,-invtsc'
+
+
+def configure_snapshot_cpu(environment):
+    # The image appends explicit CPU_FLAGS after its automatic host flags.
+    # Its default migratable=no,+invtsc blocks savevm in QEMU 9.1.
+    # Configure this only before boot; never alter an initialized CPU/guest.
+    environment['CPU_FLAGS'] = CHECKPOINT_CPU_FLAGS
+    environment['ARGUMENTS'] = '-qmp unix:/storage/taskviews.qmp,server=on,wait=off'
+
+
+def snapshot_preflight(container, stage):
+    container.reload()
+    storage = next(m['Source'] for m in container.attrs['Mounts'] if m['Destination'] == '/storage')
+    for command in (['chown', f'{os.getuid()}:{os.getgid()}', '/storage/taskviews.qmp'],
+                    ['chmod', '600', '/storage/taskviews.qmp']):
+        code, _ = container.exec_run(command)
+        if code:
+            raise RuntimeError('Cannot secure checkpoint preflight socket')
+    qmp = QMP(Path(storage)/'taskviews.qmp')
+    cpus = qmp.call('query-cpus-fast')
+    properties = [{name: qmp.call('qom-get', {'path':cpu['qom-path'], 'property':name})
+                   for name in ('migratable','invtsc')} for cpu in cpus]
+    if len(properties) != 2 or any(not p['migratable'] or p['invtsc'] for p in properties):
+        raise RuntimeError('Checkpoint CPU flags not applied; refuse task initialization')
+    tag = 'preflight-'+uuid.uuid4().hex
+    qmp.save(tag)
+    qmp.load(tag)
+    qmp.hmp('delvm '+tag)
+    atomic(Path(stage)/'snapshot-preflight.json', {
+        'whole_vm_save_load': True, 'container': container.id, 'before_task_reset': True,
+        'cpu_flags': CHECKPOINT_CPU_FLAGS, 'cpu_properties': properties,
+        'version': qmp.call('query-version'), 'time': time.time()})
+
+
 ACTOR_FIELDS = ('turns', 'pending', 'last_trace', 'executions', 'command_call_indices',
                 'action_descriptions', 'total_steps', 'folded_prefix_count', '_ui_kobe_trace_step')
 JOURNAL_FIELDS = ('task_id', 'run_id', 'episode_id', 'current', 'decision', 'task_input', 'position')
@@ -397,8 +432,10 @@ def install(stage, manifest):
             local_budget.STOP_EVENTS[self.container.id] = event
             threading.Thread(target=watch, args=(self.container, event), daemon=True).start()
             return
-        self.environment['ARGUMENTS'] = '-qmp unix:/storage/taskviews.qmp,server=on,wait=off'
-        return old_start(self, path_to_vm, headless, os_type)
+        configure_snapshot_cpu(self.environment)
+        result = old_start(self, path_to_vm, headless, os_type)
+        snapshot_preflight(self.container, stage)
+        return result
     provider.DockerProvider.start_emulator = start
     old_reset = DesktopEnv.reset
     def reset(env, *args, **kwargs):

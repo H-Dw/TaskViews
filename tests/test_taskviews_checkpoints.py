@@ -8,7 +8,7 @@ import pytest
 from kobe_views.task_memory import TaskMemory
 from ui_kobe.api.kimi import generation_profile
 from ui_kobe.api.kimi_stream import KimiStreamClient, RateLimitDeferred, retry_after_seconds
-from ui_kobe.osworld.checkpoints import ACTOR_FIELDS, Checkpoints, resume_loop
+from ui_kobe.osworld.checkpoints import ACTOR_FIELDS, Checkpoints, configure_snapshot_cpu, resume_loop
 from ui_kobe.osworld.cua_contract import CUAContract
 from ui_kobe.osworld.task_control import PersistentTaskControl
 from ui_kobe.osworld.transitions import TransitionJournal
@@ -176,6 +176,14 @@ def test_resume_output_is_separate_so_official_filter_cannot_delete_failed_branc
         assert manifest['official_arguments'][index] == item
     second = continuation_output(manifest, 'resume-two')
     assert manifest['result_segments'] == [str(original),str(output),str(second)]
+
+
+def test_snapshot_cpu_is_declared_before_boot_without_changing_resource_limits():
+    environment = {'RAM_SIZE':'2G','CPU_CORES':'2','DISK_SIZE':'32G'}
+    configure_snapshot_cpu(environment)
+    assert environment['CPU_FLAGS'] == 'migratable=on,-invtsc'
+    assert environment['RAM_SIZE'] == '2G' and environment['CPU_CORES'] == '2'
+    assert '-qmp' in environment['ARGUMENTS']
 
 
 def test_execution_history_does_not_displace_original_task_contract(tmp_path):

@@ -10,7 +10,7 @@ HTTP 429保存至多8192字节的去凭证错误正文与白名单限流响应�
 
 每次决策读取前保存QEMU整个guest的内存与所有可写qcow2磁盘快照，并保存原始输入截图、actor历史/reasoning/tool IDs/反馈/步数、执行SQLite事务备份、TaskViews图与模块游标。每个检查点使用独立UUID、完整文件hash与原子提交；保留最近3个可用快照。旧快照的manifest/hash与全部原始运行证据保留，过期payload仅在检查点目录内删除。检查点意味着状态一致性，不代表界面语义正确或任务成功。
 
-首次模型/API/GUI动作前进行实际save/load回环，并提交第0步检查点后暂停进程，验证同一VM的完整进程续跑后才开始推理，失败则保留现场暂停。运行中的资源门槛依旧为adjusted>=4/C>=35/D>=10 GiB，启动及续跑为adjusted>=5/C>=45/D>=12 GiB；VM3GiB/guest2GiB/2CPU/service2GiB/aux128MiB/Swap0不提高。门槛中断请求停止该worker及VM CPU，保留快照和overlay；ExecStopPost不删除可恢复现场。异常后API/控制器/失败图分支的原始证据保留。
+QEMU首次启动时显式使用migratable=on,-invtsc，启动后核验两CPU实际属性并在首次官方任务reset前验证save/load/delvm；任何不兼容在任务初始化前拦截。首次模型/API/GUI动作前再进行实际save/load回环，并提交第0步检查点后暂停进程，验证同一VM的完整进程续跑后才开始推理，失败则保留现场暂停。运行中的资源门槛依旧为adjusted>=4/C>=35/D>=10 GiB，启动及续跑为adjusted>=5/C>=45/D>=12 GiB；VM3GiB/guest2GiB/2CPU/service2GiB/aux128MiB/Swap0不提高。门槛中断请求停止该worker及VM CPU，保留快照和overlay；ExecStopPost不删除可恢复现场。异常后API/控制器/失败图分支的原始证据保留。
 
 恢复验证检查点所有文件hash、任务/actor契约、VM完整ID所有权、官方源码与素材、修复离线测试以及资源/冷却条件。重新连接原VM并loadvm；恢复actor、环境动作历史和累计计数，执行SQLite复制到新的恢复分支，官方结果写入独立续跑分段，原失败分支不覆盖。原官方运行循环仅在内存中改变step_idx与global_action_index的初值；官方源码磁盘字节不变，恢复路径不调用env.reset。原reset只在新运行第一次启动执行。
 

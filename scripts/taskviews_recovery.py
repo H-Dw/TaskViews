@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 import json
 from pathlib import Path
 import subprocess
@@ -105,7 +106,7 @@ def resume(stage, validation, reason, checkpoint=None):
     for path, expected in old_plan['asset_sha256'].items():
         if digest(Path(path)) != expected:
             raise RuntimeError('Original task asset changed')
-    with docker.from_env() as client:
+    with closing(docker.from_env()) as client:
         owned = client.containers.get(saved['vm']['container'])
         owned.reload()
         if owned.labels.get('ui-kobe.osworld.run') != manifest['run_id']:
