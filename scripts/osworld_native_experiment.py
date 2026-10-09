@@ -223,6 +223,7 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         plan['checkpoint_policy'] = {'enabled': True, 'before_every_decision': True, 'retained_snapshots': 3,
                                      'startup_resume_probe': True,
             'cpu_flags': 'migratable=on,-invtsc', 'snapshot_preflight_before_task_reset': True,
+            'firmware_storage': 'same pinned UEFI bytes; writable qcow2 pflash included in savevm',
             'advisory_effort': 'low', 'read_error_policy': 'pause before actor; repair and resume aligned snapshot',
             'inspection_minutes': 60, 'no_reset_on_resume': True, 'cumulative_max_steps': decisions,
             'scope': 'Task059 local guest; not external web side effects', 'core': 'original task contract mandatory; candidates in views'}

@@ -12,6 +12,7 @@ from ui_kobe.osworld.checkpoints import ACTOR_FIELDS, Checkpoints, configure_sna
 from ui_kobe.osworld.cua_contract import CUAContract
 from ui_kobe.osworld.task_control import PersistentTaskControl
 from ui_kobe.osworld.transitions import TransitionJournal
+from ui_kobe.osworld import checkpoints
 
 
 class VM:
@@ -184,6 +185,37 @@ def test_snapshot_cpu_is_declared_before_boot_without_changing_resource_limits()
     assert environment['CPU_FLAGS'] == 'migratable=on,-invtsc'
     assert environment['RAM_SIZE'] == '2G' and environment['CPU_CORES'] == '2'
     assert '-qmp' in environment['ARGUMENTS']
+
+
+@pytest.mark.parametrize('firmware_format', ['raw', 'qcow2'])
+def test_preflight_covers_writable_firmware_before_task_reset(tmp_path, monkeypatch, firmware_format):
+    calls = []
+    class Probe:
+        def __init__(self, path): pass
+        def call(self, name, args=None):
+            if name == 'query-cpus-fast':
+                return [{'qom-path':'cpu0'}, {'qom-path':'cpu1'}]
+            if name == 'qom-get':
+                return args['property'] == 'migratable'
+            if name == 'query-block':
+                return [{'device':'pflash0','inserted':{'ro':False,'drv':firmware_format}}]
+            return {'qemu':{'major':9,'minor':1}}
+        def save(self, tag): calls.append('save')
+        def load(self, tag): calls.append('load')
+        def hmp(self, command): calls.append('delete')
+    monkeypatch.setattr(checkpoints, 'QMP', Probe)
+    container = SimpleNamespace(id='original-vm', attrs={'Mounts':[{'Source':str(tmp_path),'Destination':'/storage'}]},
+                                reload=lambda:None, exec_run=lambda command:(0,b''))
+    if firmware_format == 'raw':
+        with pytest.raises(RuntimeError, match='not qcow2'):
+            checkpoints.snapshot_preflight(container, tmp_path)
+        assert calls == []
+    else:
+        checkpoints.snapshot_preflight(container, tmp_path)
+        assert calls == ['save','load','delete']
+    record = json.loads((tmp_path/'snapshot-preflight.json').read_text())
+    assert record['whole_vm_save_load'] == (firmware_format == 'qcow2')
+    assert record['before_task_reset'] and record['container'] == 'original-vm'
 
 
 def test_execution_history_does_not_displace_original_task_contract(tmp_path):

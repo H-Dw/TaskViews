@@ -104,6 +104,24 @@ class QMP:
 
 
 CHECKPOINT_CPU_FLAGS = 'migratable=on,-invtsc'
+SNAPSHOT_FIRMWARE_BOOT = '''set -eu
+flash=/storage/taskviews-uefi.qcow2
+if [ ! -s "$flash" ]; then
+    qemu-img convert -f raw -O qcow2 /usr/share/OVMF/edk2-x86_64-code.fd "$flash"
+fi
+export BOOT_MODE=legacy
+export ARGUMENTS="$ARGUMENTS -drive if=pflash,format=qcow2,file=$flash"
+exec /run/entry.sh
+'''
+
+
+def snapshot_container_options(options):
+    # The pinned image's boot.sh uses writable raw '-pflash ...uefi.rom'.
+    # Preserve those firmware bytes and the same pflash device, but make its
+    # backing store qcow2 so savevm includes firmware writes with guest RAM.
+    # This wrapper executes before the original entrypoint and only on fresh
+    # checkpoint-enabled boots. No initialized guest/image is modified.
+    return {**options, 'entrypoint': ['/bin/bash', '-c', SNAPSHOT_FIRMWARE_BOOT]}
 
 
 def configure_snapshot_cpu(environment):
@@ -129,13 +147,25 @@ def snapshot_preflight(container, stage):
     if len(properties) != 2 or any(not p['migratable'] or p['invtsc'] for p in properties):
         raise RuntimeError('Checkpoint CPU flags not applied; refuse task initialization')
     tag = 'preflight-'+uuid.uuid4().hex
-    qmp.save(tag)
-    qmp.load(tag)
-    qmp.hmp('delvm '+tag)
-    atomic(Path(stage)/'snapshot-preflight.json', {
-        'whole_vm_save_load': True, 'container': container.id, 'before_task_reset': True,
+    record = {
+        'whole_vm_save_load': False, 'container': container.id, 'before_task_reset': True,
         'cpu_flags': CHECKPOINT_CPU_FLAGS, 'cpu_properties': properties,
-        'version': qmp.call('query-version'), 'time': time.time()})
+        'blocks': qmp.call('query-block'),
+        'version': qmp.call('query-version'), 'time': time.time()}
+    try:
+        for block in record['blocks']:
+            inserted = block.get('inserted')
+            if inserted and not inserted['ro'] and inserted['drv'] != 'qcow2':
+                raise RuntimeError('Writable checkpoint disk is not qcow2: '+block['device'])
+        qmp.save(tag)
+        qmp.load(tag)
+        qmp.hmp('delvm '+tag)
+        record['whole_vm_save_load'] = True
+    except Exception as exc:
+        record['error'] = str(exc)
+        raise
+    finally:
+        atomic(Path(stage)/'snapshot-preflight.json', record)
 
 
 ACTOR_FIELDS = ('turns', 'pending', 'last_trace', 'executions', 'command_call_indices',
@@ -412,6 +442,10 @@ def install(stage, manifest):
         vm = json.loads((Path(stage)/'checkpoint-vm.json').read_text())
         manager.qmp = QMP(Path(vm['storage'])/'taskviews.qmp')
     old_start = provider.DockerProvider.start_emulator
+    old_run_limited = provider.run_limited
+    def run_limited(client, image, **options):
+        return old_run_limited(client, image, **snapshot_container_options(options))
+    provider.run_limited = run_limited
     def start(self, path_to_vm, headless, os_type):
         if resuming:
             vm = json.loads((Path(stage)/'checkpoint-vm.json').read_text())
