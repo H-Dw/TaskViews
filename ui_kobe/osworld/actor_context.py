@@ -44,6 +44,27 @@ the experimental journals. A returned command does not certify its effect.
     return json.dumps(value, ensure_ascii=False)
 
 
+def _declared_native_actions(request):
+    """Return bounded exact spellings from this request's tool, never aliases."""
+    tools = request.get('tools')
+    if not isinstance(tools, list) or len(tools) > 16:
+        return None
+    functions = [tool.get('function') for tool in tools if isinstance(tool, dict)
+                 and isinstance(tool.get('function'), dict)
+                 and tool['function'].get('name') == 'computer_use']
+    if len(functions) != 1:
+        return None
+    parameters = functions[0].get('parameters', {})
+    properties = parameters.get('properties', {}) if isinstance(parameters, dict) else {}
+    action = properties.get('action', {}) if isinstance(properties, dict) else {}
+    values = action.get('enum') if isinstance(action, dict) else None
+    if (not isinstance(values, list) or not 1 <= len(values) <= 32
+            or any(not isinstance(v, str) or not v or len(v) > 64 for v in values)
+            or len(set(values)) != len(values)):
+        return None
+    return list(values)
+
+
 def repair_messages(request, observed, error, *, role):
     """Keep a complete rejected native candidate and resolve its tool IDs.
 
@@ -70,6 +91,13 @@ assistant/tool history. No rejected call is submitted to env.step.
     target = 'native tool call with all required parameters' if role == 'executor' else 'JSON object'
     result['messages'].append({'role': 'user', 'content': [{'type': 'text', 'text':
         f'Your previous computer_use response could not execute: {error}. Return a corrected complete {target}.'}]})
+    if role == 'executor' and str(getattr(error, 'code', '')).startswith('unsupported_tool_action:'):
+        actions = _declared_native_actions(request)
+        if actions:
+            result['messages'][-1]['content'][0]['text'] += (
+                '\nUse an exact action identifier from the current computer_use schema (underscores matter): '
+                + json.dumps(actions, ensure_ascii=False)
+                + '. Python/PyAutoGUI method names and other aliases are invalid.')
     return result
 
 

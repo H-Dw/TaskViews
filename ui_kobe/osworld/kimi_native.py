@@ -33,7 +33,11 @@ def native_system(frame, task_current_date=None):
     # Only replace XML wire-format instructions. Keep the pinned official
     # operating/date/batching rules and the exact official action schema.
     start, end = prompt.index("When using the tool,"), prompt.index("Rules:\n")
-    prompt = prompt[:start] + "Use native computer_use function calls with JSON parameters.\n\n" + prompt[end:]
+    prompt = prompt[:start] + (
+        "Use native computer_use function calls with JSON parameters.\n"
+        "The action field must exactly match the declared enum, including underscores. "
+        "Python/PyAutoGUI method names and other aliases are not action identifiers.\n\n"
+    ) + prompt[end:]
     prompt = prompt.replace("- Return each action as a separate complete <tool_call>...</tool_call> block; do not return an actions array.",
                             "- Return each action as a separate complete native function call; do not return an actions array.")
     return prompt

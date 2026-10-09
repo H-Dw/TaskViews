@@ -15,11 +15,13 @@ from kobe_views.task_memory import TaskMemory
 from scripts import osworld_native_experiment as experiment
 from scripts.run_official_native_tasks import agent_class
 from ui_kobe.api.kimi_budget import StepLedger
-from ui_kobe.api.kimi_stream import Completion, OutputTokenLimitError, ProviderQuotaBlocked, StreamBudget
+from ui_kobe.api.kimi_stream import Completion, OutputTokenLimitError, ProviderQuotaBlocked, StreamBudget, StreamProtocolError
 from ui_kobe.api.qwen_native import BASE_URL, MODEL, PROTOCOL, GatewayRequestError, QwenGenerationProfile, QwenNativeClient
 from ui_kobe.osworld.checkpoints import ReadAnomaly
 from ui_kobe.osworld.cua_contract import options_contract
 from ui_kobe.osworld.qwen_taskviews_native import QwenTaskViewsNativeAgent
+from ui_kobe.osworld.actor_context import repair_messages
+from ui_kobe.osworld.kimi_native import official_compile
 
 
 def make_client(tmp_path, handler, *, role='executor', sleep=lambda _: None):
@@ -269,3 +271,105 @@ def test_qwen_taskviews_keeps_original_tool_identity_or_pauses_before_actor(tmp_
             assert req['max_tokens'] <= (16000 if req.get('tools') else 4000)
     finally:
         actor.close()
+
+
+def native_response(arguments, identifier):
+    body = completed(None, 'tool_calls')
+    body['choices'][0]['message']['tool_calls'] = [{'id':identifier, 'type':'function',
+        'function':{'name':'computer_use', 'arguments':json.dumps(arguments)}}]
+    return body
+
+
+def alias_agent(tmp_path, monkeypatch, candidates):
+    monkeypatch.setenv('QWEN_API_KEY', 'offline-key')
+    monkeypatch.setenv('UI_KOBE_TELEMETRY_DIR', str(tmp_path))
+    monkeypatch.setenv('UI_KOBE_TASK_ID', '059')
+    monkeypatch.setenv('UI_KOBE_CHECKPOINT_READS', '1')
+    actor = QwenTaskViewsNativeAgent(model=MODEL, base_url=BASE_URL, temperature=0, max_tokens=16000)
+    actor.transport.close()
+    sent, original = [], []
+    def handler(req):
+        payload = json.loads(req.content)
+        sent.append(payload)
+        if payload.get('tools'):
+            arguments = candidates[len(original)]
+            body = native_response(arguments, f'original-candidate-{len(original)+1}')
+            original.append(body)
+        elif 'Extract visible evidence' in payload['messages'][0]['content']:
+            body = completed(json.dumps({'summary':'Visible application', 'elements':[],
+                'semantics':{'entities':[], 'claims':[]}}))
+        else:
+            body = completed(json.dumps({'stage':'observe', 'needs':[{'id':'gui', 'consumer':'executor',
+                'purpose':'next action', 'anchors':['task'], 'focus_predicates':['*'], 'max_hops':1}]}))
+        return httpx.Response(200, json=body)
+    client, _, events = make_client(tmp_path/'responses', handler)
+    actor.transport = actor.client.transport = client
+    image = BytesIO()
+    Image.new('RGB', (1920,1080), 'white').save(image,'PNG')
+    return actor, {'screenshot':image.getvalue()}, sent, original, events
+
+
+@pytest.mark.parametrize('bad,good', [
+    ({'action':'doubleClick','coordinate':[100,100]}, {'action':'double_click','coordinate':[100,100]}),
+    ({'action':'hotkey','keys':['CTRL','A']}, {'action':'key','keys':['CTRL','A']}),
+    ({'action':'rightClick','coordinate':[100,100]}, {'action':'right_click','coordinate':[100,100]}),
+])
+def test_qwen_actor_repair_uses_exact_schema_and_preserves_rejected_calls(tmp_path, monkeypatch, bad, good):
+    actor, obs, sent, original, events = alias_agent(tmp_path, monkeypatch, [bad,good])
+    try:
+        _, commands = actor.predict('Original exact instruction',obs)
+        assert commands == official_compile([good],actor.frame).commands
+        executor = [p for p in sent if p.get('tools')]
+        assert len(executor)==2
+        assert 'including underscores' in executor[0]['messages'][0]['content']
+        schema = executor[0]['tools'][0]['function']['parameters']['properties']['action']['enum']
+        repair = executor[1]['messages'][-1]['content'][0]['text']
+        assert json.dumps(schema,ensure_ascii=False) in repair
+        assert 'Python/PyAutoGUI method names and other aliases are invalid' in repair
+        assert executor[0]['tools']==executor[1]['tools']
+        rejected = next(m for m in executor[1]['messages'] if m['role']=='assistant')
+        assert rejected == original[0]['choices'][0]['message']
+        assert json.loads(rejected['tool_calls'][0]['function']['arguments'])==bad
+        reply = next(m for m in executor[1]['messages'] if m['role']=='tool')
+        assert reply['tool_call_id']=='original-candidate-1' and set(json.loads(reply['content']))=={'error'}
+        assert actor.turns[-1][-1]==original[1]['choices'][0]['message']
+        assert actor.pending=='original-candidate-2'
+        assert actor.step_ledger.repair_counts=={'executor':1,'advisory':0}
+        assert actor.step_ledger.snapshot()['known_usage']['total_tokens']==220
+        assert actor.step_ledger.charged_output==20 and actor.advisory_ledger.charged_output==20
+        actor_ids={e['request_id'] for e in events if e['event']=='api_request' and e['budget_role']=='executor'}
+        outcomes=[e for e in events if e['event']=='request_outcome' and e['request_id'] in actor_ids]
+        assert len(outcomes)==2 and all(e['outcome']=='complete' for e in outcomes)
+        assert all(e['usage'] is not None for e in outcomes)
+    finally:
+        actor.close()
+
+
+def test_qwen_never_coerces_aliases_or_exceeds_two_repairs(tmp_path,monkeypatch):
+    candidates=[{'action':'doubleClick','coordinate':[100,100]},
+                {'action':'hotkey','keys':['CTRL','A']},
+                {'action':'rightClick','coordinate':[100,100]}]
+    actor,obs,sent,original,events=alias_agent(tmp_path,monkeypatch,candidates)
+    try:
+        with pytest.raises(StreamProtocolError,match='Unsupported tool action: rightclick'):
+            actor.predict('Original exact instruction',obs)
+        assert len(original)==3 and actor.turns==[] and actor.pending is None
+        assert actor.step_ledger.repair_counts=={'executor':2,'advisory':0}
+        assert actor.step_ledger.charged_output==30
+        assert actor.step_ledger.snapshot()['unknown_usage_requests']==0
+        assert all(json.loads(b['choices'][0]['message']['tool_calls'][0]['function']['arguments'])==c
+                   for b,c in zip(original,candidates))
+        assert sum(e['event']=='api_response' for e in events)==5
+        assert not any(e['event']=='api_error' for e in events)
+    finally:
+        actor.close()
+
+
+@pytest.mark.parametrize('role,code', [('perception','unsupported_tool_action:unknown'),('executor','coordinate')])
+def test_action_vocabulary_hint_does_not_leak_into_other_repairs(role,code):
+    request={'messages':[],'tools':[{'function':{'name':'computer_use','parameters':{
+        'properties':{'action':{'enum':['key','right_click']}}}}}]}
+    original=deepcopy(request)
+    error=StreamProtocolError('original error',code=code,retryable=True)
+    repaired=repair_messages(request,None,error,role=role)
+    assert request==original and 'exact action identifier' not in repaired['messages'][-1]['content'][0]['text']
