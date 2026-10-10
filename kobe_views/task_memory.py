@@ -388,10 +388,23 @@ class TaskMemory:
         """
         self.validate_proposal_structure(proposals)
         snapshot = self.snapshot
+        conflicts, omitted = [], 0
         for entity in proposals['entities']:
             existing = snapshot.entities.get(entity['id'])
             if existing is not None and plain(existing) != entity:
-                raise ValueError('Existing entity id/type/label are immutable; copy its exact inventory record or omit redeclaration')
+                # A bounded inventory can omit an older identity. Return whole
+                # original records for the IDs this candidate actually reused;
+                # never rewrite its labels, IDs, or types to make it admissible.
+                record = plain(existing)
+                if len(dumps(conflicts + [record]).encode()) <= 6000:
+                    conflicts.append(record)
+                else:
+                    omitted += 1
+        if conflicts or omitted:
+            raise ValueError('Existing entity id/type/label are immutable; copy an exact original record '
+                'or omit redeclaration. Conflicting original identities: ' + dumps({
+                    'conflicting_entity_records': conflicts,
+                    'omitted_conflicting_entity_records': omitted}))
         for claim in proposals['claims']:
             old = snapshot.claims.get(claim['id'])
             if old is None:

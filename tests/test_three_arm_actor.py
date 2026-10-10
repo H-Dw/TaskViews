@@ -138,7 +138,11 @@ def test_prompt_is_upstream_with_only_native_wire_instructions():
     expected = build_system_prompt(native_schema(frame), collapsed_screenshot_text=COLLAPSED_SCREENSHOT_TEXT,
         task_current_date='2030-01-02', enable_batch_actions=True)
     start, end = expected.index('When using the tool,'), expected.index('Rules:\n')
-    expected = expected[:start] + 'Use native computer_use function calls with JSON parameters.\n\n' + expected[end:]
+    expected = expected[:start] + (
+        'Use native computer_use function calls with JSON parameters.\n'
+        'The action field must exactly match the declared enum, including underscores. '
+        'Python/PyAutoGUI method names and other aliases are not action identifiers.\n\n'
+    ) + expected[end:]
     expected = expected.replace('- Return each action as a separate complete <tool_call>...</tool_call> block; do not return an actions array.',
         '- Return each action as a separate complete native function call; do not return an actions array.')
     assert native_system(frame, '2030-01-02') == expected

@@ -241,6 +241,107 @@ def test_conflicting_task_label_gets_bounded_model_repair_before_graph_publish(t
         actor.close()
 
 
+def test_omitted_old_identity_is_repaired_from_original_record_without_renaming(tmp_path, monkeypatch):
+    monkeypatch.setenv('QWEN_API_KEY', 'offline-key')
+    monkeypatch.setenv('UI_KOBE_TELEMETRY_DIR', str(tmp_path))
+    monkeypatch.setenv('UI_KOBE_TASK_ID', '059')
+    monkeypatch.setenv('UI_KOBE_CHECKPOINT_READS', '1')
+    goal = 'Original exact user instruction'
+    actor = QwenTaskViewsNativeAgent(model=MODEL, base_url=BASE_URL, temperature=0, max_tokens=16000)
+    actor.control.initialize(goal)
+    memory = actor.control.memory
+    entities = [{'id':f'old-window-{i}', 'type':'ui_window', 'label':f'Original window {i}'}
+                for i in range(80)]
+    memory.graph.ingest({'id':'offline-old-identity-fixture', 'task_id':memory.task_id,
+        'source':'fixture', 'ref':'original-inventory.json', 'observed_at':'2030-01-01T00:00:00Z',
+        'occurred_at':'2030-01-01T00:00:00Z', 'text':'Original identity fixture',
+        'extraction':{'entities':entities, 'claims':[]}})
+    original = entities[20]
+    assert original['id'] not in {e['id'] for e in actor.control.inventory()['entities']}
+    rejected = {**original, 'type':'window', 'label':'Model reinterpreted title'}
+
+    class OmittedIdentity(NativeTransport):
+        reads = 0
+        rejected_message = None
+        def create(self, **kwargs):
+            if kwargs['budget_role'] != 'perception':
+                return super().create(**kwargs)
+            self.requests.append(deepcopy(kwargs))
+            self.reads += 1
+            if self.reads == 1:
+                context = json.loads(kwargs['messages'][1]['content'][0]['text'])
+                assert original['id'] not in context['role_evidence']['entity_ids']
+                candidate = rejected
+            else:
+                assert self.reads == 2
+                assert kwargs['messages'][-2] == self.rejected_message
+                feedback = kwargs['messages'][-1]['content'][0]['text']
+                assert 'conflicting_entity_records' in feedback
+                assert json.dumps(original, ensure_ascii=False, sort_keys=True, separators=(',', ':')) in feedback
+                candidate = original
+            body = completed(json.dumps({'summary':'Visible application', 'elements':[],
+                'semantics':{'entities':[candidate], 'claims':[]}}))
+            if self.reads == 1:
+                self.rejected_message = deepcopy(body['choices'][0]['message'])
+            return Completion(body)
+
+    transport = OmittedIdentity()
+    actor.transport = actor.client.transport = transport
+    image = BytesIO()
+    Image.new('RGB', (1920,1080), 'white').save(image,'PNG')
+    try:
+        _, commands = actor.predict(goal, {'screenshot':image.getvalue()})
+        assert len(commands) == 1 and transport.actor == 1 and transport.reads == 2
+        assert dict(actor.control.memory.read().entities[original['id']]) == original
+        assert actor.advisory_ledger.repair_counts['advisory'] == 1
+        assert actor.step_ledger.repair_counts['executor'] == 0
+        assert all(r['max_tokens'] <= (16000 if r.get('tools') else 4000) for r in transport.requests)
+    finally:
+        actor.close()
+
+
+def test_identity_conflict_feedback_omits_whole_records_within_bound(tmp_path):
+    memory = TaskMemory('bounded-conflicts', tmp_path)
+    try:
+        memory.initialize('Original instruction')
+        entities = [{'id':f'window-{i}', 'type':'ui_window', 'label':'原' * 1000} for i in range(32)]
+        memory.graph.ingest({'id':'identity-fixture', 'task_id':memory.task_id, 'source':'fixture',
+            'ref':'inventory.json', 'observed_at':'2030-01-01T00:00:00Z',
+            'occurred_at':'2030-01-01T00:00:00Z', 'text':'Original identities',
+            'extraction':{'entities':entities, 'claims':[]}})
+        before = memory.snapshot.revision
+        original_db = (memory.directory/'task.sqlite').read_bytes()
+        with pytest.raises(ValueError, match='immutable') as error:
+            memory.validate_proposal_identity({'entities':[{**e,'label':'Rewritten'} for e in entities], 'claims':[]})
+        packet = json.loads(str(error.value).split('Conflicting original identities: ', 1)[1])
+        records = packet['conflicting_entity_records']
+        from kobe_views.model import dumps
+        assert len(dumps(records).encode()) <= 6000
+        assert records and all(e in entities for e in records)
+        assert packet['omitted_conflicting_entity_records'] == len(entities) - len(records) > 0
+        assert memory.snapshot.revision == before
+        assert (memory.directory/'task.sqlite').read_bytes() == original_db
+    finally:
+        memory.close()
+
+
+@pytest.mark.parametrize('finish, executable', [('stop', False), ('length', False), ('stop', True)])
+def test_adviser_repair_preserves_only_complete_nonexecutable_original_response(finish, executable):
+    body = completed('{"rejected":"original"}', finish)
+    message = body['choices'][0]['message']
+    if executable:
+        message['tool_calls'] = [{'id':'never-execute', 'type':'function',
+            'function':{'name':'computer_use', 'arguments':'{}'}}]
+    original = {'messages':[{'role':'user', 'content':[{'type':'text','text':'Original context'}]}]}
+    snapshot = deepcopy(original)
+    corrected = repair_messages(original, body, ValueError('Original identity conflict'), role='perception')
+    assert original == snapshot
+    admitted = [m for m in corrected['messages'] if m['role'] == 'assistant']
+    assert admitted == ([message] if finish == 'stop' and not executable else [])
+    assert not any(m['role'] == 'tool' for m in corrected['messages'])
+    assert 'perception JSON was rejected' in corrected['messages'][-1]['content'][0]['text']
+
+
 @pytest.mark.parametrize('invalid_read', [False, True])
 def test_qwen_taskviews_keeps_original_tool_identity_or_pauses_before_actor(tmp_path, monkeypatch, invalid_read):
     monkeypatch.setenv('QWEN_API_KEY', 'offline-key')

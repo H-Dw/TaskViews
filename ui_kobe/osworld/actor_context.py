@@ -88,9 +88,21 @@ assistant/tool history. No rejected call is submitted to env.step.
             result['messages'].append(deepcopy(message))
             result['messages'].extend({'role': 'tool', 'tool_call_id': identifier,
                 'content': json.dumps({'error': str(error)}, ensure_ascii=False)} for identifier in ids)
+    elif observed:
+        choice = observed.get('choices', [{}])[0]
+        message = choice.get('message', {})
+        if (choice.get('finish_reason') == 'stop' and message.get('role') == 'assistant'
+                and isinstance(message.get('content'), str) and not message.get('tool_calls')
+                and not message.get('function_call')):
+            # Complete adviser JSON remains the original assistant response,
+            # including the rejected fields the reader must repair. Truncated
+            # responses and executable calls remain raw evidence only.
+            result['messages'].append(deepcopy(message))
     target = 'native tool call with all required parameters' if role == 'executor' else 'JSON object'
+    feedback = (f'Your previous computer_use response could not execute: {error}.' if role == 'executor'
+                else f'Your previous {role} JSON was rejected: {error}.')
     result['messages'].append({'role': 'user', 'content': [{'type': 'text', 'text':
-        f'Your previous computer_use response could not execute: {error}. Return a corrected complete {target}.'}]})
+        f'{feedback} Return a corrected complete {target}.'}]})
     if role == 'executor' and str(getattr(error, 'code', '')).startswith('unsupported_tool_action:'):
         actions = _declared_native_actions(request)
         if actions:
