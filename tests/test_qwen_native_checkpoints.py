@@ -137,6 +137,100 @@ def test_actor_and_analysis_admission_remain_independent():
     assert analysis.snapshot()['output_limit'] == actor.snapshot()['output_limit'] == 32000
 
 
+@pytest.mark.parametrize('role,cap', [('executor',16000), ('perception',4000)])
+def test_remote_disconnect_retries_same_payload_with_separate_unknown_usage(tmp_path, role, cap):
+    waits, payloads = [], []
+    def handler(req):
+        payloads.append(json.loads(req.content))
+        if len(payloads) == 1:
+            raise httpx.RemoteProtocolError('Server disconnected without sending a response.', request=req)
+        return httpx.Response(200, json=completed())
+    client, ledger, events = make_client(tmp_path, handler, sleep=waits.append)
+    assert request(client, ledger, role).model_dump() == completed()
+    assert payloads[0] == payloads[1] and waits == [3]
+    outcomes = [e for e in events if e['event'] == 'request_outcome']
+    assert len({e['request_id'] for e in outcomes}) == 2
+    assert [e['outcome'] for e in outcomes] == ['error','complete']
+    assert outcomes[0]['usage'] is None and outcomes[0]['raw_response_path'] is None
+    assert outcomes[0]['observed_response'] is None and outcomes[0]['stream_done'] is False
+    assert outcomes[1]['usage'] == completed()['usage']
+    assert ledger.snapshot()['unknown_usage_requests'] == 1
+    assert ledger.snapshot()['known_usage']['total_tokens'] == 110
+    assert ledger.snapshot()['charged_output'] == cap + 10
+    assert ledger.repair_counts == {'executor':0, 'advisory':0}
+    assert all(e['raw_sse_path'] is None for e in outcomes)
+    client.close()
+
+
+def test_remote_disconnect_attempt_limit_preserves_unknown_usage(tmp_path):
+    waits, attempts = [], []
+    def handler(req):
+        attempts.append(req)
+        raise httpx.RemoteProtocolError('Server disconnected without sending a response.', request=req)
+    client, ledger, events = make_client(tmp_path, handler, sleep=waits.append)
+    with pytest.raises(httpx.RemoteProtocolError):
+        request(client, ledger)
+    assert len(attempts) == 2 and waits == [3]
+    assert not any(e['event'] == 'api_response' for e in events)
+    outcomes = [e for e in events if e['event'] == 'request_outcome']
+    assert len({e['request_id'] for e in outcomes}) == 2
+    assert all(e['usage'] is None and e['outcome'] == 'error' for e in outcomes)
+    assert ledger.snapshot()['unknown_usage_requests'] == 2
+    assert ledger.snapshot()['charged_output'] == 32000
+    assert ledger.snapshot()['known_usage']['total_tokens'] == 0
+    client.close()
+
+
+def test_remote_disconnect_does_not_retry_past_original_deadline(tmp_path):
+    waits, attempts = [], []
+    def handler(req):
+        attempts.append(req)
+        raise httpx.RemoteProtocolError('Server disconnected without sending a response.', request=req)
+    client, ledger, events = make_client(tmp_path, handler, sleep=waits.append)
+    with pytest.raises(httpx.RemoteProtocolError):
+        client.create(model=MODEL, messages=[{'role':'user','content':'test'}], max_tokens=16000,
+                      budget_role='executor', deadline=time.monotonic()+client.budget.connect_s+1,
+                      step_ledger=ledger)
+    assert len(attempts) == 1 and waits == []
+    assert sum(e['event'] == 'request_outcome' for e in events) == 1
+    client.close()
+
+
+def test_local_protocol_error_still_fails_without_transport_retry(tmp_path):
+    waits = []
+    def handler(req):
+        raise httpx.LocalProtocolError('Invalid local request', request=req)
+    client, ledger, events = make_client(tmp_path, handler, sleep=waits.append)
+    with pytest.raises(httpx.LocalProtocolError):
+        request(client, ledger)
+    assert waits == [] and sum(e['event'] == 'api_request' for e in events) == 1
+    assert ledger.snapshot()['unknown_usage_requests'] == 1
+    client.close()
+
+
+def test_partial_remote_disconnect_keeps_redacted_evidence_before_retry(tmp_path):
+    class DisconnectBody(httpx.SyncByteStream):
+        def __iter__(self):
+            yield b'{"message":"offline-key"'
+            raise httpx.RemoteProtocolError('Incomplete response body')
+    attempts = []
+    def handler(req):
+        attempts.append(req)
+        return (httpx.Response(200, stream=DisconnectBody()) if len(attempts)==1
+                else httpx.Response(200, json=completed()))
+    client, ledger, events = make_client(tmp_path, handler)
+    request(client, ledger, 'perception')
+    outcomes = [e for e in events if e['event']=='request_outcome']
+    assert len(outcomes)==2 and outcomes[0]['usage'] is None
+    assert outcomes[0]['raw_response_sha256'] is not None
+    saved = Path(outcomes[0]['raw_response_path'])
+    assert saved.name.endswith('.partial-redacted.txt')
+    assert 'offline-key' not in saved.read_text() and '[REDACTED]' in saved.read_text()
+    assert ledger.snapshot()['unknown_usage_requests']==1
+    assert ledger.snapshot()['known_usage']['total_tokens']==110
+    client.close()
+
+
 def test_qwen_options_and_frozen_arguments():
     options_contract({'stream':False, 'enable_thinking':False, 'top_p':0.9}, provider='qwen')
     with pytest.raises(ValueError, match='stream'):

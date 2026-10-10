@@ -157,7 +157,12 @@ class QwenNativeClient:
                 self.emit('api_error', request_id=rid, error_type=type(failure).__name__,
                           error=safe_error_body(str(failure), self.key), error_code=getattr(failure, 'code', None),
                           status_code=status, observed_response=body if usage is not None else None)
-                transport_retry = isinstance(failure, (httpx.ConnectError, httpx.ReadTimeout))
+                # A reused gateway connection can close before headers, or
+                # during its body. No candidate is returned or executed until
+                # the complete response passes validation. Keep this retry in
+                # the same attempt/time/output bounds and settle unknown usage.
+                transport_retry = isinstance(failure, (httpx.ConnectError, httpx.ReadTimeout,
+                                                        httpx.RemoteProtocolError))
                 if isinstance(failure, httpx.HTTPStatusError) and not isinstance(failure, ProviderQuotaBlocked):
                     transport_retry = status == 429 or status in [502, 503, 504]
                 delay = retry_delay if retry_delay is not None else min(15, 3 * attempt)
