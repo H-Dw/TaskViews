@@ -302,6 +302,102 @@ class NativeTransport:
         pass
 
 
+@pytest.mark.parametrize('predicate,value,reason', [
+    ('coordinates', [3.87, -6.96], 'current_frame_geometry_only'),
+    ('visible.position', {'nested': {'x': 20, 'y': 30}}, 'current_frame_geometry_only'),
+    ('ui.bbox', [1, 2, 3, 4], 'current_frame_geometry_only'),
+    ('observed.value', {'password': 'do-not-publish'}, 'credential_field_or_value'),
+    ('observed.value', 'a' * 8193, 'semantic_value_budget_exceeded'),
+])
+def test_content_preflight_is_pure_and_uses_durable_admission_rules(tmp_path, predicate, value, reason):
+    memory = TaskMemory('content-preflight', tmp_path)
+    try:
+        memory.initialize('Original instruction')
+        proposal = {'entities': [], 'claims': [
+            {'id': 'candidate', 'subject': 'task', 'predicate': predicate, 'value': value, 'locator': 'visible text'},
+            {'id': 'dependent', 'subject': 'task', 'predicate': 'derived.fact', 'value': 'Untrusted derivation',
+             'locator': 'model', 'basis': ['candidate']},
+            {'id': 'indirect', 'subject': 'task', 'predicate': 'derived.fact', 'value': 'Another derivation',
+             'locator': 'model', 'basis': ['dependent']}]}
+        original = deepcopy(proposal)
+        before = memory.snapshot.revision
+        original_db = (memory.directory / 'task.sqlite').read_bytes()
+        with pytest.raises(ValueError, match=reason) as error:
+            memory.validate_proposal_content(proposal)
+        assert 'rejected_evidence_dependency' in str(error.value)
+        assert proposal == original and memory.snapshot.revision == before
+        assert (memory.directory / 'task.sqlite').read_bytes() == original_db
+        assert memory.current_observation is None
+        assert memory._claim_content_rejection(proposal['claims'][0]) == reason
+        memory.validate_proposal_content({'entities': [], 'claims': []})
+    finally:
+        memory.close()
+
+
+@pytest.mark.parametrize('never_correct', [False, True])
+def test_frame_content_repair_precedes_observation_and_actor_dispatch(tmp_path, monkeypatch, never_correct):
+    monkeypatch.setenv('QWEN_API_KEY', 'offline-key')
+    monkeypatch.setenv('UI_KOBE_TELEMETRY_DIR', str(tmp_path))
+    monkeypatch.setenv('UI_KOBE_TASK_ID', '059')
+    monkeypatch.setenv('UI_KOBE_CHECKPOINT_READS', '1')
+    actor = QwenTaskViewsNativeAgent(model=MODEL, base_url=BASE_URL, temperature=0, max_tokens=16000)
+
+    class GeometryRead(NativeTransport):
+        reads = 0
+        previous = None
+        first_revision = None
+        def create(self, **kwargs):
+            if kwargs['budget_role'] != 'perception':
+                return super().create(**kwargs)
+            self.requests.append(deepcopy(kwargs))
+            self.reads += 1
+            memory = actor.control.memory
+            self.first_revision = self.first_revision or memory.snapshot.revision
+            assert memory.snapshot.revision == self.first_revision
+            assert memory.current_observation is None
+            if self.reads > 1:
+                assert kwargs['messages'][-2] == self.previous
+                hint = kwargs['messages'][-1]['content'][0]['text']
+                assert 'current_frame_geometry_only' in hint and 'rejected_evidence_dependency' in hint
+            claims = []
+            if self.reads == 1 or never_correct:
+                claims = [{'id': 'frame:coords', 'subject': 'task', 'predicate': 'coordinates',
+                           'value': [3.87, -6.96], 'locator': 'original visible text'},
+                          {'id': 'frame:dependent', 'subject': 'task', 'predicate': 'derived.fact',
+                           'value': 'proposal', 'locator': 'model', 'basis': ['frame:coords']}]
+            body = completed(json.dumps({'summary': 'Original visible text',
+                'elements': [{'text': 'A = (3.87, -6.96)', 'role': 'text', 'bbox': [1, 2, 40, 30]}],
+                'semantics': {'entities': [], 'claims': claims}}))
+            self.previous = deepcopy(body['choices'][0]['message'])
+            return Completion(body)
+
+    transport = GeometryRead()
+    actor.transport = actor.client.transport = transport
+    image = BytesIO()
+    Image.new('RGB', (1920, 1080), 'white').save(image, 'PNG')
+    try:
+        if never_correct:
+            with pytest.raises(ReadAnomaly, match='current_frame_geometry_only'):
+                actor.predict('Original instruction', {'screenshot': image.getvalue()})
+            assert transport.reads == 3 and transport.actor == 0 and actor.pending is None
+            assert actor.control.memory.current_observation is None
+        else:
+            _, commands = actor.predict('Original instruction', {'screenshot': image.getvalue()})
+            assert len(commands) == 1 and transport.reads == 2 and transport.actor == 1
+            assert actor.control.memory.current_observation['evidence']['elements'][0]['text'] == 'A = (3.87, -6.96)'
+            assert 'frame:coords' not in actor.control.memory.snapshot.claims
+        assert actor.advisory_ledger.repair_counts['advisory'] == (2 if never_correct else 1)
+        assert actor.advisory_ledger.snapshot()['output_limit'] == 32000
+        if never_correct:
+            # The independent actor ledger is created only after a valid read.
+            assert not hasattr(actor, 'step_ledger')
+        else:
+            assert actor.step_ledger.repair_counts['executor'] == 0
+            assert actor.step_ledger.snapshot()['output_limit'] == 32000
+    finally:
+        actor.close()
+
+
 def test_conflicting_task_label_gets_bounded_model_repair_before_graph_publish(tmp_path, monkeypatch):
     monkeypatch.setenv('QWEN_API_KEY', 'offline-key')
     monkeypatch.setenv('UI_KOBE_TELEMETRY_DIR', str(tmp_path))

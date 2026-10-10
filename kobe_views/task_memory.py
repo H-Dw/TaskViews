@@ -415,6 +415,53 @@ class TaskMemory:
             if not same or claim.get('supersedes') or snapshot.statuses[claim['id']] != 'active':
                 raise ValueError('Claim ids are immutable; new or revised evidence requires a new claim id')
 
+    @staticmethod
+    def _claim_content_rejection(claim):
+        """One content rule for pure preflight and durable frame admission."""
+        if claim['predicate'].casefold().split('.')[-1] in _GEOMETRY_KEYS or _contains_geometry(claim['value']):
+            return 'current_frame_geometry_only'
+        try:
+            _credential_safe(claim['value'])
+        except ValueError:
+            return 'credential_field_or_value'
+        if len(dumps(claim['value']).encode('utf-8')) > 8192:
+            return 'semantic_value_budget_exceeded'
+        return None
+
+    @staticmethod
+    def validate_proposal_content(proposals):
+        """Reject content before publication, within the reader's repair loop.
+
+        This writes nothing, edits no candidate and grants no frame provenance.
+        accept_proposals still checks the trusted frame and publishes the patch.
+        Only indices, IDs and fixed reasons enter feedback, never rejected values.
+        """
+        TaskMemory.validate_proposal_structure(proposals)
+        rejected, dropped = [], set()
+        for index, claim in enumerate(proposals['claims']):
+            reason = TaskMemory._claim_content_rejection(claim)
+            if reason:
+                rejected.append({'index': index, 'id': claim['id'], 'reason': reason})
+                dropped.add(claim['id'])
+        while True:
+            dependent = [(index, claim) for index, claim in enumerate(proposals['claims'])
+                         if claim['id'] not in dropped
+                         and set(claim.get('basis', []) + claim.get('supersedes', [])) & dropped]
+            if not dependent:
+                break
+            for index, claim in dependent:
+                rejected.append({'index': index, 'id': claim['id'], 'reason': 'rejected_evidence_dependency'})
+                dropped.add(claim['id'])
+        if rejected:
+            packet = []
+            for entry in rejected:
+                if len(dumps(packet + [entry]).encode()) <= 6000:
+                    packet.append(entry)
+            raise ValueError('Current-frame semantic content rejected: ' + dumps({
+                'rejected': packet, 'omitted_rejections': len(rejected) - len(packet)})
+                + '. Omit rejected claims and their dependent claims; keep geometry only in current-frame '
+                  'visual evidence. Do not rename fields or IDs to evade admission.')
+
     def accept_proposals(self, proposals, *, frame_id=None, source_ref=None):
         """Accept bounded open-schema semantic proposals bound to a trusted frame.
 
@@ -463,18 +510,12 @@ class TaskMemory:
                     predicate = claim["predicate"]
                     if not isinstance(predicate, str) or not _NAME.fullmatch(predicate):
                         raise ValueError("Invalid semantic predicate")
-                    if predicate.casefold().split(".")[-1] in _GEOMETRY_KEYS or _contains_geometry(claim["value"]):
-                        rejected.append({"index": index, "id": claim["id"], "reason": "current_frame_geometry_only"})
-                        dropped_ids.add(claim["id"])
-                        continue
-                    try:
-                        _credential_safe(claim["value"])
-                    except ValueError:
-                        rejected.append({"index": index, "reason": "credential_field_or_value"})
-                        dropped_ids.add(claim["id"])
-                        continue
-                    if len(dumps(claim["value"]).encode("utf-8")) > 8192:
-                        rejected.append({"index": index, "id": claim["id"], "reason": "semantic_value_budget_exceeded"})
+                    reason = self._claim_content_rejection(claim)
+                    if reason:
+                        rejection = {"index": index, "reason": reason}
+                        if reason != 'credential_field_or_value':
+                            rejection['id'] = claim['id']
+                        rejected.append(rejection)
                         dropped_ids.add(claim["id"])
                         continue
                     for key in ("objects", "basis", "supersedes"):

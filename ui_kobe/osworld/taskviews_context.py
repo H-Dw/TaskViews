@@ -94,6 +94,10 @@ class TaskViewsContextMixin:
                     not isinstance(semantics["claims"], list) or len(semantics["claims"]) > 64):
                 raise ValueError("Semantics requires <=32 entities and <=64 claims")
             control.memory.validate_proposal_identity(semantics)
+            if getattr(self, 'checkpoint_reads', False):
+                # Content rejection must reach bounded model repair before the
+                # frame/partial semantic patch is persisted by control.observe.
+                control.memory.validate_proposal_content(semantics)
         prompt = (SEMANTIC_PERCEPTION + '\nKeep this read concise: prefer <=8 entities and <=12 claims; '
             'report only new task-relevant evidence. Empty lists are valid. Do not enumerate old history. '
             'Existing entity id/type/label are immutable. Do not redeclare an existing entity unless '
