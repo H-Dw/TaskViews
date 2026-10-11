@@ -344,6 +344,14 @@ class ExecutionModules:
             value['actor_intent'] = intent
         if last.get('evidence_capture_refs'):
             value['latest_evidence_capture'] = plain(last['evidence_capture_refs'][-1])
+        # Opt-in local verification can share the exact same source image already
+        # present in this packet. Keep the original intent and known state before
+        # dropping values; the immutable native parameters/history remain intact.
+        tool = value['executed_tool_input']
+        if (getattr(self, 'intent_verification_v12', False)
+                and len(dumps(value).encode()) > max_bytes
+                and tool['source_frame_evidence_ref'] == value['before_image']):
+            tool['source_frame_evidence_ref'] = {'record_ref': '#/before_image'}
         # Keep whole known field values. Omitted fields remain at the exact
         # source observation; absence cannot be turned into a changed value.
         state = value.get('before_state')

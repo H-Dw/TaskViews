@@ -1136,6 +1136,65 @@ def test_serialized_native_message_without_prose_does_not_invent_intent(tmp_path
         memory.close()
 
 
+def test_verification_shares_exact_source_image_before_dropping_known_state_or_intent(tmp_path):
+    prose = 'Focus the application before opening its File menu. ' * 20
+    memory, log, module, row = intent_operation(tmp_path, prose)
+    try:
+        full = module.verification_action(max_bytes=20000)
+        original_event = deepcopy(module.event(row['id']))
+        budget = len(dumps(full).encode()) - 1
+        projected = module.verification_action(max_bytes=budget)
+        assert len(dumps(projected).encode()) <= budget
+        reference = projected['executed_tool_input']['source_frame_evidence_ref']
+        assert reference == {'record_ref': '#/before_image'}
+        resolved = deepcopy(projected)
+        resolved['executed_tool_input']['source_frame_evidence_ref'] = deepcopy(projected['before_image'])
+        assert resolved == full
+        assert projected['before_state'] == full['before_state']
+        assert projected['actor_intent']['text'] == prose
+        assert projected['omitted_before_state_keys'] == []
+        assert module.event(row['id']) == original_event
+        assert module.event(row['decision_id'])['response'] == prose
+    finally:
+        log.close()
+        memory.close()
+
+
+def test_wide_and_legacy_verification_packets_keep_full_source_frame_reference(tmp_path):
+    memory, log, module, row = intent_operation(tmp_path, 'Focus this application.')
+    try:
+        wide = module.verification_action(max_bytes=20000)
+        assert wide['executed_tool_input']['source_frame_evidence_ref'] == wide['before_image']
+        assert 'record_ref' not in wide['executed_tool_input']['source_frame_evidence_ref']
+        module.intent_verification_v12 = False
+        legacy = module.verification_action(max_bytes=20000)
+        assert 'actor_intent' not in legacy
+        assert legacy['executed_tool_input']['source_frame_evidence_ref'] == legacy['before_image']
+        legacy['before_state']['fields'] = {}
+        legacy['omitted_before_state_keys'] = list(wide['before_state']['fields'])
+        with pytest.raises(ValueError, match='exact current-action verification references'):
+            module.verification_action(max_bytes=len(dumps(legacy).encode()) - 1)
+    finally:
+        log.close()
+        memory.close()
+
+
+def test_shared_verification_frame_does_not_truncate_native_parameters_or_bypass_capacity(tmp_path):
+    memory, log, module, row = intent_operation(tmp_path, 'Enter the original text.')
+    try:
+        original = module.last_action()
+        original['executed_tool_input']['parameters'] = {'action': 'type', 'text': 'literal input ' * 500}
+        module.last_action = lambda: deepcopy(original)
+        with pytest.raises(ValueError, match='exact current-action verification references'):
+            module.verification_action(max_bytes=4000)
+        assert module.last_action()['executed_tool_input']['parameters'] == original['executed_tool_input']['parameters']
+        with pytest.raises(ValueError, match='exact current-action verification references'):
+            module.verification_action(max_bytes=1)
+    finally:
+        log.close()
+        memory.close()
+
+
 @pytest.mark.parametrize('candidate', [
     {'action': 'click', 'coordinate': [674, 253]},
     {'action_check': {'frame_id': 'frame'}, 'last_action': {}, 'frame': {},

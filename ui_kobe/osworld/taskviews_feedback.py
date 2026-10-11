@@ -46,6 +46,8 @@ changed, use unknown/not_observed; never rename keys or invent a change.
 executed_tool_input contains the original parameters and their original frame
 contract, not suggested new pointer coordinates. Re-ground the intended control
 in the current screenshot; never interpret those screen pixels as app mathematics.
+Its source_frame_evidence_ref may be {record_ref:'#/before_image'}: that exact
+same-packet reference resolves to last_action.before_image, not another frame.
 text checks also require focus, and submission checks also require object/result.
 When last_action.actor_intent is supplied, include exactly one additional check
 {kind:'intent',assessment,quotes:[literal visible text],state_keys:[ui_state field keys]}.
