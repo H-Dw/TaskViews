@@ -482,7 +482,8 @@ def build_feedback_views(owner, deadline):
     if projection_budget < 512:
         raise ValueError('Actor input cannot retain current-action warning and original references before dispatch')
     protected['role_evidence'] = {'execution_modules': modules.packet(max_bytes=projection_budget,
-                                                                    include_modules=False),
+                                                                    include_modules=False,
+                                                                    share_duplicate_refs=True),
                                  'strategy_review': feedback['strategy_review']}
     executor = _admit(protected, optional, limit)
     owner.view_trace = {'protocol': 'taskviews-feedback-v10', 'frame': owner.frame.metadata,

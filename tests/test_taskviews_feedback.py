@@ -1171,3 +1171,61 @@ def test_perception_wrong_role_and_echo_repair_complete_full_fixture_with_origin
     assert result['terminal'] and not result['paused'] and result['fixture_score'] == 1.0
     assert result['official_score'] is None and not result['model_ability_measured']
     assert result['compiler_checks'] == 7 and result['roles']['perception'] == 9
+
+
+def duplicated_local_reference_module():
+    from types import SimpleNamespace
+    module = ExecutionModules.__new__(ExecutionModules)
+    module.memory = SimpleNamespace(snapshot=SimpleNamespace(revision='current'))
+    module.modules = {'stable': {'id': 'stable'}}
+    module.active, module.previous_revision = 'stable', 'previous'
+    module.new_events, module.gaps = [], []
+    prefix = '/saved-original/' + 'p' * 280
+    record = {'transition_id': 'edge', 'source': 'before', 'target': 'after',
+              'raw_ref': prefix + '/events.sqlite#edge', 'module_id': 'stable',
+              'controller_receipt_ref': prefix + '/events.sqlite#edge', 'receipt_count': 1,
+              'before_image': {'ref': prefix + '/before.png', 'sha256': 'a' * 64},
+              'after_image': {'ref': prefix + '/after.png', 'sha256': 'b' * 64},
+              'effect_status': 'unknown'}
+    module.recent = [{**record, 'expected_change': {'kind': 'state'}}]
+    module.unresolved = [{**record, 'error': 'Original unresolved failure'}]
+    module.transition_packet = lambda record: deepcopy(record)
+    module.last_action = lambda: deepcopy(module.recent[-1])
+    return module
+
+
+def test_local_failure_shared_refs_reconstruct_exact_fields_without_copying_optional_differences():
+    module = duplicated_local_reference_module()
+    original = deepcopy([module.recent, module.unresolved])
+    full = module.packet(max_bytes=20000, include_modules=False)
+    budget = len(dumps(full).encode()) - 400
+    with pytest.raises(ValueError, match='latest action and unresolved failure'):
+        module.packet(max_bytes=budget, include_modules=False)
+    packet = module.packet(max_bytes=budget, include_modules=False, share_duplicate_refs=True)
+    assert len(dumps(packet).encode()) <= budget
+    alias = packet['unresolved_failures'][0]
+    assert alias['record_ref'] == '#/recent_transitions/0' and alias['transition_id'] == 'edge'
+    shared = packet['recent_transitions'][0]
+    resolved = {key: deepcopy(shared[key]) for key in alias['shared_fields']}
+    resolved.update({key: value for key, value in alias.items() if key not in {'record_ref', 'shared_fields'}})
+    assert resolved == full['unresolved_failures'][0]
+    assert 'expected_change' not in resolved and resolved['error'] == 'Original unresolved failure'
+    assert packet['projection_omissions']['shared_duplicate_reference_fields'] == 1
+    assert [module.recent, module.unresolved] == original
+    assert module.packet(max_bytes=20000, include_modules=False) == full
+    with pytest.raises(ValueError, match='latest action and unresolved failure'):
+        module.packet(max_bytes=1, include_modules=False, share_duplicate_refs=True)
+
+
+@pytest.mark.parametrize('mismatch', ['transition_id', 'controller_receipt_ref', 'before_image'])
+def test_local_reference_sharing_rejects_different_identity_image_or_receipt(mismatch):
+    module = duplicated_local_reference_module()
+    if mismatch == 'before_image':
+        module.unresolved[0][mismatch] = {**module.unresolved[0][mismatch], 'sha256': 'different'}
+    else:
+        module.unresolved[0][mismatch] = 'different-original-value'
+    original = deepcopy([module.recent, module.unresolved])
+    full = module.packet(max_bytes=20000, include_modules=False)
+    with pytest.raises(ValueError, match='latest action and unresolved failure'):
+        module.packet(max_bytes=len(dumps(full).encode()) - 400, include_modules=False, share_duplicate_refs=True)
+    assert [module.recent, module.unresolved] == original

@@ -584,7 +584,7 @@ class ExecutionModules:
             raise ValueError('Cannot bound protected current-action warning')
         return value
 
-    def packet(self, max_bytes=6000, *, include_modules=True):
+    def packet(self, max_bytes=6000, *, include_modules=True, share_duplicate_refs=False):
         modules = plain(list(self.modules.values())[-8:])
         if self.active and not any(m['id'] == self.active for m in modules):
             modules = (modules + [plain(self.modules[self.active])])[-8:]
@@ -658,6 +658,36 @@ class ExecutionModules:
                         derived = next((r for r in records if 'action_fingerprint' in r
                                         or 'error' in r and r['error'] is None), None)
                         if derived is None:
+                            # A failed latest operation also belongs to unresolved.
+                            # Share only fields that match its exact recent record;
+                            # retain each differing/absent field without inference.
+                            shared = False
+                            if share_duplicate_refs:
+                                identity_fields = ('transition_id', 'source', 'target', 'raw_ref',
+                                    'controller_receipt_ref', 'receipt_count', 'before_image', 'after_image',
+                                    'effect_status')
+                                for index, unresolved in enumerate(packet['unresolved_failures']):
+                                    if 'shared_fields' in unresolved:
+                                        continue
+                                    for recent_index, recent_record in enumerate(packet['recent_transitions']):
+                                        if not all(key in unresolved and key in recent_record
+                                                   and unresolved[key] == recent_record[key]
+                                                   for key in identity_fields):
+                                            continue
+                                        keys = sorted(key for key in unresolved
+                                            if key not in {'transition_id', 'raw_ref'} and key in recent_record
+                                            and unresolved[key] == recent_record[key])
+                                        packet['unresolved_failures'][index] = {
+                                            **{key: value for key, value in unresolved.items() if key not in keys},
+                                            'record_ref': '#/recent_transitions/' + str(recent_index),
+                                            'shared_fields': keys}
+                                        omitted('shared_duplicate_reference_fields')
+                                        shared = True
+                                        break
+                                    if shared:
+                                        break
+                            if shared:
+                                continue
                             raise ValueError('Budget cannot hold the latest action and unresolved failure references')
                         # Repetition is already in protected actor_feedback.
                         # Its derived fingerprint and an absent error need no
