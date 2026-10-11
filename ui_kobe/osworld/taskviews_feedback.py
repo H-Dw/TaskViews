@@ -195,7 +195,9 @@ Preserve every original requirement; do not claim an unobserved preparation work
 Keep any prose before the tool call concise, describing this operation's intended
 effect within 1200 UTF-8 bytes. The original tool arguments remain unchanged.
 Longer prose is retained in history but wholly omitted from bounded verification;
-that omission prevents the next reader from confirming your intended effect."""
+that omission prevents the next reader from confirming your intended effect.
+In execution_modules, {value_ref:'#/...'} resolves an identical receipt/image
+value within that execution_modules object; distinct operation IDs remain distinct."""
 
 
 def feedback_analysis_triggers(modules, raw, feedback, pointer_recovery):
@@ -516,7 +518,8 @@ def build_feedback_views(owner, deadline):
         raise ValueError('Actor input cannot retain current-action warning and original references before dispatch')
     protected['role_evidence'] = {'execution_modules': modules.packet(max_bytes=projection_budget,
                                                                     include_modules=False,
-                                                                    share_duplicate_refs=True),
+                                                                    share_duplicate_refs=True,
+                                                                    share_exact_refs=True),
                                  'strategy_review': feedback['strategy_review']}
     executor = _admit(protected, optional, limit)
     if feedback.get('state_review') and 'planner' in advisers:

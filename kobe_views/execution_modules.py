@@ -768,7 +768,40 @@ class ExecutionModules:
             raise ValueError('Cannot bound protected current-action warning')
         return value
 
-    def packet(self, max_bytes=6000, *, include_modules=True, share_duplicate_refs=False):
+    @staticmethod
+    def _share_packet_reference(packet):
+        """Intern one identical receipt/image value, retaining separate edges.
+
+        References point only to earlier concrete values in this projection;
+        neither different transition IDs nor different image values are merged.
+        Persistent records and executable parameters are never changed.
+        """
+        images = []
+        for collection in ('recent_transitions', 'unresolved_failures'):
+            for index, record in enumerate(packet[collection]):
+                prefix = '#/' + collection + '/' + str(index) + '/'
+                receipt = record.get('controller_receipt_ref')
+                if isinstance(receipt, str) and receipt == record.get('raw_ref'):
+                    reference = {'value_ref': prefix + 'raw_ref'}
+                    if len(dumps(reference).encode()) < len(dumps(receipt).encode()):
+                        record['controller_receipt_ref'] = reference
+                        return True
+                for key in ('before_image', 'after_image'):
+                    image = record.get(key)
+                    if not isinstance(image, dict) or set(image) == {'value_ref'}:
+                        continue
+                    if not isinstance(image.get('ref'), str) or not isinstance(image.get('sha256'), str):
+                        continue
+                    for path, previous in images:
+                        reference = {'value_ref': path}
+                        if image == previous and len(dumps(reference).encode()) < len(dumps(image).encode()):
+                            record[key] = reference
+                            return True
+                    images.append((prefix + key, image))
+        return False
+
+    def packet(self, max_bytes=6000, *, include_modules=True, share_duplicate_refs=False,
+               share_exact_refs=False):
         modules = plain(list(self.modules.values())[-8:])
         if self.active and not any(m['id'] == self.active for m in modules):
             modules = (modules + [plain(self.modules[self.active])])[-8:]
@@ -871,6 +904,9 @@ class ExecutionModules:
                                     if shared:
                                         break
                             if shared:
+                                continue
+                            if share_exact_refs and self._share_packet_reference(packet):
+                                omitted('shared_exact_reference_values')
                                 continue
                             raise ValueError('Budget cannot hold the latest action and unresolved failure references')
                         # Repetition is already in protected actor_feedback.

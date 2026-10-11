@@ -1557,6 +1557,83 @@ def duplicated_local_reference_module():
     return module
 
 
+def resolve_projection_value(packet, value):
+    if isinstance(value, dict) and set(value) == {'value_ref'}:
+        target = packet
+        for key in value['value_ref'].removeprefix('#/').split('/'):
+            target = target[int(key)] if isinstance(target, list) else target[key]
+        # References must terminate at an original concrete value, never a loop.
+        assert not isinstance(target, dict) or set(target) != {'value_ref'}
+        return deepcopy(target)
+    if isinstance(value, dict):
+        return {key: resolve_projection_value(packet, item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [resolve_projection_value(packet, item) for item in value]
+    return deepcopy(value)
+
+
+def test_exact_value_refs_keep_distinct_latest_and_failure_edges_under_budget():
+    module = duplicated_local_reference_module()
+    failure = module.unresolved[0]
+    failure.update(transition_id='older-failure', source='earlier', target='earlier-post',
+                   raw_ref=failure['raw_ref'] + '-older',
+                   controller_receipt_ref=failure['raw_ref'] + '-older')
+    failure['after_image'] = deepcopy(module.recent[0]['before_image'])
+    original = deepcopy([module.recent, module.unresolved])
+    full = module.packet(max_bytes=20000, include_modules=False)
+    budget = len(dumps(full).encode()) - 500
+    with pytest.raises(ValueError, match='latest action and unresolved failure'):
+        module.packet(max_bytes=budget, include_modules=False, share_duplicate_refs=True)
+    packet = module.packet(max_bytes=budget, include_modules=False,
+                           share_duplicate_refs=True, share_exact_refs=True)
+    assert len(dumps(packet).encode()) <= budget
+    decoded = resolve_projection_value(packet, packet)
+    for collection in ('recent_transitions', 'unresolved_failures'):
+        for actual, expected in zip(decoded[collection], full[collection], strict=True):
+            for key in ('transition_id', 'source', 'target', 'raw_ref', 'controller_receipt_ref',
+                        'receipt_count', 'before_image', 'after_image', 'effect_status'):
+                assert actual[key] == expected[key]
+    assert decoded['unresolved_failures'][0]['error'] == 'Original unresolved failure'
+    assert decoded['recent_transitions'][0]['transition_id'] != decoded['unresolved_failures'][0]['transition_id']
+    assert packet['projection_omissions']['shared_exact_reference_values'] >= 2
+    assert [module.recent, module.unresolved] == original
+    with pytest.raises(ValueError, match='latest action and unresolved failure'):
+        module.packet(max_bytes=1, include_modules=False, share_duplicate_refs=True, share_exact_refs=True)
+    assert [module.recent, module.unresolved] == original
+
+
+def test_exact_value_sharing_keeps_wide_and_legacy_packets_unchanged():
+    module = duplicated_local_reference_module()
+    original = module.packet(max_bytes=20000, include_modules=False)
+    assert module.packet(max_bytes=20000, include_modules=False,
+                         share_duplicate_refs=True, share_exact_refs=True) == original
+    assert 'value_ref' not in dumps(original)
+
+
+@pytest.mark.parametrize('different', ['ref', 'sha256', 'bytes'])
+def test_exact_image_sharing_never_merges_nonidentical_evidence(different):
+    before = {'ref': '/original/' + 'p' * 200, 'sha256': 'a' * 64, 'bytes': 100}
+    after = deepcopy(before)
+    after[different] = 101 if different == 'bytes' else after[different] + '-different'
+    packet = {'recent_transitions': [{'transition_id': 'one', 'before_image': before}],
+              'unresolved_failures': [{'transition_id': 'two', 'after_image': after}]}
+    original = deepcopy(packet)
+    assert not ExecutionModules._share_packet_reference(packet)
+    assert packet == original
+
+
+def test_shared_image_resolves_to_concrete_value_without_changing_either_edge():
+    image = {'ref': '/original/' + 'p' * 200, 'sha256': 'a' * 64}
+    packet = {'recent_transitions': [{'transition_id': 'one', 'before_image': deepcopy(image)}],
+              'unresolved_failures': [{'transition_id': 'two', 'after_image': deepcopy(image)}]}
+    original = deepcopy(packet)
+    assert ExecutionModules._share_packet_reference(packet)
+    assert packet['unresolved_failures'][0]['after_image'] == {
+        'value_ref': '#/recent_transitions/0/before_image'}
+    assert resolve_projection_value(packet, packet) == original
+    assert not ExecutionModules._share_packet_reference(packet)
+
+
 def test_local_failure_shared_refs_reconstruct_exact_fields_without_copying_optional_differences():
     module = duplicated_local_reference_module()
     original = deepcopy([module.recent, module.unresolved])
