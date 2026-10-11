@@ -49,3 +49,16 @@ The next original operations87–94 retained shared state field names with no es
 Opt-in feedback now requests a fresh controller/planner strategy after three unconfirmed operations in the same active subgoal with compatible comparison fields, including varying native parameters. An established state change, observed effect or subgoal boundary clears the window; delay/capture do not count. A successfully delivered bounded planner review persists its original last-operation marker, requiring three new operations before another such review. Exact-parameter execution guards, native action validation, original assessments and budgets are unchanged. The actor receives the new uncertainty count and one protected recovery advice, not generated coordinates or a claim of task progress. Legacy projection behavior remains unchanged when this feature is disabled.
 
 Tests cover varying coordinates without merging exact guards, comparable-schema and goal boundaries, clock-only/unknown evidence, recovery review cooldown, capture exclusion and checkpoint marker roundtrip. Full workflow fixtures remain mock-provider results, not official Task059 scores. Real evidence must still establish focus, input, image import, application objects, saved artifact and original native termination/evaluation.
+# 2026-10-12：为局部规划保留先前应用拒绝
+
+原第97步的输入命令被应用明确拒绝，屏幕显示 `Unknown command : Image`。
+第100步回车关闭对话框后，第101步planner的真实输入只保留最新Return的对象未出现反馈；
+其图检索也未提供先前错误实例，建议再次检查焦点并重试同一命令。
+这份建议忽略了已显示过的拒绝，不能把清除错误弹窗视为命令已变得可用。
+
+本次仅在feedback的控制器/规划输入中加入有界、同子目标的先前动作检查：
+原拒绝的完整literal quotes、原frame/target/transition引用和原短意图，标为历史模型提议。
+较早的应用响应优先于后续恢复尝试，省略整条记录时保留数量；
+不改assessment、不把旧文字当当前数学依据、不自动过滤命令或操作GUI。
+原完整历史、官方compiler/controller/evaluator与所有模型输出/时间预算保持。
+actor收到一次原生操作及其预期效果的简短prose提示，超过原1200-byte验证容量时仍整值省略。

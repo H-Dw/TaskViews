@@ -543,6 +543,48 @@ class ExecutionModules:
             group['assessments'].append(effect['assessment'])
         return [value for value in groups.values() if len(value['transition_ids']) >= 2]
 
+    def prior_action_evidence(self, max_bytes=1600):
+        """Carry literal earlier failure proposals to a stateless local planner.
+
+        Closing a dialog does not erase the earlier application's response.
+        Preserve whole quotes, immutable operation refs and original short prose;
+        do not reinterpret a native Return as another command submission. These
+        are historical, fallible model checks, not current-frame math or success.
+        """
+        candidates = []
+        for record in self.recent[-8:]:
+            if record.get('module_id') != self.active:
+                continue
+            effect = self.effects.get(record['transition_id'], {})
+            checks = [{k: plain(check[k]) for k in ('kind', 'assessment', 'quotes')}
+                      for check in effect.get('checks', [])
+                      if check.get('assessment') == 'not_observed' and check.get('quotes')]
+            if not checks:
+                continue
+            intent = self.verification_intent(record)
+            text = (intent or {}).get('text')
+            row = {'transition_id': record['transition_id'], 'raw_transition_ref': record['raw_ref'],
+                   'frame_id': effect['frame_id'], 'target_observation_id': effect['target_observation_id'],
+                   'checks': checks, 'original_feedback_sha256': digest(effect),
+                   'original_intent': {'text': text if text and len(text.encode()) <= 400 else None,
+                       'source_sha256': (intent or {}).get('original_text_sha256'),
+                       'source_bytes': (intent or {}).get('original_text_bytes'),
+                       'whole_text_omitted': not text or len(text.encode()) > 400}}
+            # Prefer earlier application responses over later recovery attempts.
+            # Check kinds alone cannot distinguish Return submission from dialog
+            # dismissal. No error phrase or application name is hardcoded.
+            candidates.append(row)
+        result = {'records': [], 'omitted_records': len(candidates), 'grade': 'model_proposal',
+                  'scope': 'historical_operation_checks_not_current_visible_evidence'}
+        if len(dumps(result).encode()) > max_bytes:
+            raise ValueError('Prior action evidence cannot hold its omission metadata')
+        for row in candidates:
+            proposed = {**result, 'records': result['records'] + [row],
+                        'omitted_records': result['omitted_records'] - 1}
+            if len(dumps(proposed).encode()) <= max_bytes:
+                result = proposed
+        return result
+
     def unconfirmed_state_review(self):
         """Request observation/planning across varying inputs, never infer failure.
 

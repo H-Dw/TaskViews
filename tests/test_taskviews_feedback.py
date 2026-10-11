@@ -15,6 +15,76 @@ from ui_kobe.osworld.transitions import TransitionJournal
 from ui_kobe.osworld.advisory_concurrency import AdvisoryJob, run_advisory_jobs
 
 
+def prior_failure_module():
+    module = ExecutionModules.__new__(ExecutionModules)
+    module.active = 'import'
+    module.recent = [{'transition_id': name, 'module_id': 'import', 'raw_ref': '/immutable/events#'+name}
+                     for name in ('submit', 'dismiss', 'menu')]
+    module.effects = {
+        'submit': {'transition_id': 'submit', 'frame_id': 'error-frame', 'target_observation_id': 'error-post',
+                   'assessment': 'not_observed', 'checks': [{'kind': 'submission', 'assessment': 'not_observed',
+                                                            'quotes': ['Unsupported operation: ExampleCommand']}]},
+        'dismiss': {'transition_id': 'dismiss', 'frame_id': 'closed-frame', 'target_observation_id': 'closed-post',
+                    'assessment': 'not_observed', 'checks': [{'kind': 'object', 'assessment': 'not_observed',
+                                                             'quotes': ['Empty Algebra']}]},
+        'menu': {'assessment': 'observed', 'checks': [{'kind': 'state', 'assessment': 'observed',
+                                                     'quotes': ['File']}]}}
+    module.verification_intent = lambda row: {'text': 'Dismiss the error dialog' if row['transition_id'] == 'dismiss'
+                                              else 'Submit ExampleCommand',
+        'original_text_sha256': row['transition_id']+'-original-prose-sha', 'original_text_bytes': 24}
+    return module
+
+
+def test_prior_application_rejection_survives_dialog_dismissal_and_reaches_stateless_planner():
+    from ui_kobe.osworld.taskviews_feedback import _planner_input
+    module = prior_failure_module()
+    original = deepcopy([module.recent, module.effects])
+    prior = module.prior_action_evidence()
+    feedback = {'last_action': {'checks': [{'quotes': ['Empty Algebra']}]}, 'prior_action_evidence': prior}
+    packet = _planner_input({}, feedback, {'id': 'import'}, 'Import image', ['Error dialog now gone'], {}, 6000)
+    rows = packet['action_feedback']['prior_action_evidence']['records']
+    assert rows[0]['checks'][0]['quotes'] == ['Unsupported operation: ExampleCommand']
+    assert rows[0]['frame_id'] == 'error-frame' and rows[0]['target_observation_id'] == 'error-post'
+    assert rows[1]['original_intent']['text'] == 'Dismiss the error dialog'
+    assert packet['visible_text'] == ['Error dialog now gone'] and prior['grade'] == 'model_proposal'
+    assert [module.recent, module.effects] == original
+
+
+@pytest.mark.parametrize('mode', ['other-subgoal', 'unknown', 'no-quote'])
+def test_prior_failure_cannot_invent_rejected_evidence_or_cross_subgoals(mode):
+    module = prior_failure_module()
+    module.effects.pop('dismiss')
+    if mode == 'other-subgoal':
+        module.recent[0]['module_id'] = 'save'
+    elif mode == 'unknown':
+        module.effects['submit']['checks'][0]['assessment'] = 'unknown'
+    else:
+        module.effects['submit']['checks'][0]['quotes'] = []
+    assert module.prior_action_evidence()['records'] == []
+
+
+def test_prior_action_evidence_bounds_whole_quotes_refs_and_omission_counts():
+    module = prior_failure_module()
+    full = module.prior_action_evidence()
+    limit = len(dumps(full).encode()) - 20
+    bounded = module.prior_action_evidence(limit)
+    assert len(dumps(bounded).encode()) <= limit and bounded['omitted_records'] == 1
+    assert bounded['records'] == full['records'][:1]
+    assert bounded['records'][0]['raw_transition_ref'] == '/immutable/events#submit'
+    with pytest.raises(ValueError, match='omission metadata'):
+        module.prior_action_evidence(1)
+
+
+def test_long_prior_prose_is_wholly_omitted_without_truncating_literal_failure_evidence():
+    module = prior_failure_module()
+    module.verification_intent = lambda row: {'text': '长' * 200, 'original_text_sha256': 'original-sha',
+                                              'original_text_bytes': 600}
+    row = module.prior_action_evidence()['records'][0]
+    assert row['original_intent'] == {'text': None, 'source_sha256': 'original-sha',
+                                     'source_bytes': 600, 'whole_text_omitted': True}
+    assert row['checks'][0]['quotes'] == ['Unsupported operation: ExampleCommand']
+
+
 def test_planner_separates_explicit_goal_targets_from_visible_math_hypotheses():
     from ui_kobe.osworld.taskviews_feedback import validate_planner_report
     args = {'visible_texts': ['Empty Algebra panel', 'Input:'],

@@ -155,7 +155,16 @@ When state_review is supplied, its shared field names describe comparable state
 schemas, not known unchanged values. Several operations remain unconfirmed in the
 same subgoal despite varying parameters. Re-observe the actual control and focus;
 choose one different ordinary route with visible verification. Do not claim the
-uncertainty proves failure or keep slightly offsetting a stale pointer guess."""
+uncertainty proves failure or keep slightly offsetting a stale pointer guess.
+prior_action_evidence contains literal checks from earlier frames in this same
+subgoal, with immutable refs and fallible original intent. Keep an application's
+earlier rejection in mind after its dialog disappears. Closing that dialog does
+not make the rejected operation valid. Do not retry the same rejected route
+unless new visible evidence addresses its cause; choose another ordinary route.
+The native-key expected_change is generic: Return can dismiss a dialog rather
+than submit text. Interpret original intent and before/current state together;
+an absent object alone does not prove a failed dialog dismissal. Historical
+quotes are not current visible math sources or verified facts."""
 
 RECOVERY_PLAN = """Keep advice within 900 UTF-8 bytes. Give one next recovery
 operation and its visible verification, without re-telling the whole task.
@@ -179,7 +188,11 @@ Verify uncertain focus/state changes before dependent operations. The original
 native actor alone decides actions and termination. Do not let optional window
 preparation become a prerequisite forever: after failed preparation, consider a
 direct ordinary route to the requested deliverable in the accessible current UI.
-Preserve every original requirement; do not claim an unobserved preparation worked."""
+Preserve every original requirement; do not claim an unobserved preparation worked.
+Keep any prose before the tool call concise, describing this operation's intended
+effect within 1200 UTF-8 bytes. The original tool arguments remain unchanged.
+Longer prose is retained in history but wholly omitted from bounded verification;
+that omission prevents the next reader from confirming your intended effect."""
 
 
 def feedback_analysis_triggers(modules, raw, feedback, pointer_recovery):
@@ -419,6 +432,7 @@ def build_feedback_views(owner, deadline):
             'repetition_count': feedback['repetition_count'], 'strategy_review': feedback['strategy_review'],
             'pointer_recovery_required': pointer_recovery,
             'failed_keyboard_actions': failed_keys,
+            'prior_action_evidence': modules.prior_action_evidence(),
             'state_review': feedback.get('state_review'),
             'guidance': feedback.get('guidance')}
         controller_input = {'mandatory_core': core,
