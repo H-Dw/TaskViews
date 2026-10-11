@@ -140,6 +140,11 @@ Establish application focus before a dependent shortcut. A visible window alone
 does not prove focus. Use the visible guest desktop's keyboard conventions.
 If failed_keyboard_actions is present, do not repeat those exact keys; plan a
 different ordinary application recovery and verify its effect first.
+failed_pointer_actions are original parameters, not new target locations.
+A failed_intent_after_return_to_source_page warning retains failed destination
+operations even when a window recovery was observed. Returning to the source
+application does not make that earlier menu/control click valid. Re-ground a
+different ordinary route and verify its intended result, not just a window change.
 When a folder click has no visible effect, consider normal dialog keyboard
 location/full-requested-path navigation. Verify the resulting folder and filename
 before confirmation; do not substitute a guessed pointer coordinate.
@@ -192,6 +197,8 @@ Keep view classification and long graph reasoning outside this action loop.
 Hover/tooltip text alone does not establish foreground focus or an overlapping
 window. Distinguish application controls from the desktop launcher in the current
 image; a window switch is not evidence that the intended menu opened.
+An observed return to the source window does not validate an earlier failed
+destination click; retained same-page failed-intent warnings still apply.
 Verify uncertain focus/state changes before dependent operations. The original
 native actor alone decides actions and termination. Do not let optional window
 preparation become a prerequisite forever: after failed preparation, consider a
@@ -405,6 +412,7 @@ def build_feedback_views(owner, deadline):
         modules.compare_state_v10 = True
         modules.intent_verification_v12 = True
         modules.subgoal_state_review_v12 = True
+        modules.returned_page_intent_v12 = True
     core, inventory = control._core(), control.inventory()
     frame = owner.frame.metadata['frame_id']
     last = modules.verification_action() if modules else None
@@ -503,6 +511,7 @@ def build_feedback_views(owner, deadline):
             'repetition_count': feedback['repetition_count'], 'strategy_review': feedback['strategy_review'],
             'pointer_recovery_required': pointer_recovery,
             'failed_keyboard_actions': failed_keys,
+            'failed_pointer_actions': modules.stalled_pointer_actions(),
             'prior_action_evidence': modules.prior_action_evidence(),
             'state_review': feedback.get('state_review'),
             'guidance': feedback.get('guidance')}

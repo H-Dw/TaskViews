@@ -582,10 +582,82 @@ class ExecutionModules:
         return digest(parameters) if parameters is not None else record.get('action_fingerprint')
 
     def stalled_pointer_actions(self):
-        return self._stalled_actions({'left_click', 'right_click', 'double_click'})
+        return self._with_returned_page_failures({'left_click', 'right_click', 'double_click'})
 
     def stalled_keyboard_actions(self):
-        return self._stalled_actions({'key'})
+        return self._with_returned_page_failures({'key'})
+
+    def _with_returned_page_failures(self, actions):
+        existing = self._stalled_actions(actions)
+        returned = self._returned_page_intent_failures(actions)
+        return existing + [row for row in returned
+                           if not any(row['parameters'] == old['parameters'] for old in existing)]
+
+    def _observation_annotation(self, identity):
+        row = self.journal.db.execute("SELECT payload FROM events WHERE "
+            "json_extract(payload,'$.kind')='observation_annotation' AND "
+            "json_extract(payload,'$.observation_id')=? ORDER BY seq DESC LIMIT 1", (identity,)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def _returned_page_intent_failures(self, actions):
+        """An observed recovery does not validate a failed destination operation.
+
+        Require two exact parameters, accepted failed intent, original single
+        command prose, the same source page/frame geometry and known intent
+        state values matching the current observation. This is bounded proposal
+        evidence, not a locator or a certified unchanged application layout.
+        Other pages, unknown states, changed geometry and a later successful
+        intention do not inherit this warning. Legacy arms remain unchanged.
+        """
+        if not getattr(self, 'returned_page_intent_v12', False):
+            return []
+        journal = self.journal
+        current = journal.current if not journal.closed else None
+        annotation = self._observation_annotation(current['id']) if current else None
+        if not annotation or not annotation.get('logical_page'):
+            return []
+        frame = self.event(current['id'])['frame']
+        fields = annotation['state_schema']
+        groups, cleared = {}, set()
+        for record in reversed(self.recent[-8:]):
+            if record.get('module_id') != self.active:
+                continue
+            parameters = self.original_parameters(record)
+            if not isinstance(parameters, dict) or parameters.get('action') not in actions:
+                continue
+            edge = self.event(record['transition_id'])
+            before = self._observation_annotation(edge['source']) if edge and edge.get('source') else None
+            source = self.event(edge['source']) if before else None
+            if (not before or before['logical_page'] != annotation['logical_page'] or not source
+                    or any(source['frame'][key] != frame[key] for key in ('model_size', 'coordinate_type'))):
+                continue
+            effect = self.effects.get(record['transition_id'], {})
+            intent = next((item for item in effect.get('checks', []) if item['kind'] == 'intent'), None)
+            prose = self.verification_intent(record)
+            if not intent or not prose or prose['text_omitted'] or prose['command_count'] != 1:
+                continue
+            identity = digest(parameters)
+            if identity in cleared:
+                continue
+            if intent['assessment'] == 'observed':
+                groups.pop(identity, None)
+                cleared.add(identity)
+                continue
+            keys = [key for key in intent['state_keys'] if key.casefold() not in {'clock', 'time', 'timestamp'}
+                    and before['state_schema'].get(key) is not None and fields.get(key) is not None]
+            if (effect.get('assessment') != 'not_observed' or intent['assessment'] != 'not_observed'
+                    or not intent['quotes'] or not keys
+                    or any(dumps(before['state_schema'][key]) != dumps(fields[key]) for key in keys)):
+                continue
+            group = groups.setdefault(identity, {'parameters': parameters, 'transition_ids': [],
+                'assessments': [], 'grade': 'model_proposal',
+                'reason': 'failed_intent_after_return_to_source_page',
+                'source_page': annotation['logical_page'], 'matched_intent_state_keys': keys})
+            group['transition_ids'].append(record['transition_id'])
+            group['assessments'].append(effect['assessment'])
+            group['matched_intent_state_keys'] = sorted(set(group['matched_intent_state_keys']) & set(keys))
+        return [row for row in groups.values()
+                if len(row['transition_ids']) >= 2 and row['matched_intent_state_keys']]
 
     def _stalled_actions(self, actions):
         """Exact repeated operations with action-bound unchanged state proposals.

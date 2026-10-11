@@ -271,6 +271,107 @@ def pointer_history(parameters, assessments=None):
     return module
 
 
+def destination_cycle(tmp_path, *, first_prose='Open the requested menu', batch=False):
+    memory = TaskMemory('task', tmp_path / 'memory')
+    memory.initialize('Open the requested menu')
+    journal = TransitionJournal(tmp_path / 'events', task_id='task', run_id='run',
+        contract=CUAContract(model_screen_width=64, model_screen_height=48))
+    module = ExecutionModules(memory, journal)
+    module.compare_state_v10 = module.intent_verification_v12 = module.returned_page_intent_v12 = True
+    click = {'action': 'left_click', 'coordinate': [3, 4]}
+    recovery = {'action': 'key', 'keys': ['alt', 'tab']}
+    failed = []
+    for step, parameters in enumerate([click, recovery, click, recovery], 1):
+        is_click = parameters == click
+        before = 'Editor' if is_click else 'Other application'
+        after = 'Other application' if is_click else 'Editor'
+        journal.begin('Open the requested menu', image(), step=step)
+        journal.annotate(journal.current['id'], logical_page='editor' if is_click else 'other',
+            state_schema={'active_window': before, 'menu': 'closed'}, evidence_ref=f'before-{step}.png')
+        commands = ['operation', 'capture'] if batch and step == 1 else ['operation']
+        journal.decide(first_prose if step == 1 else 'Open menu' if is_click else 'Return to the editor',
+            commands, step=step, tools=[{'id': f'tool-{step}', 'arguments': parameters, 'command_indices': [0]}])
+        edge = journal.result('operation', step=step, observation=image(), receipts=[{'returncode': 0}])
+        module.sync()
+        assessment = 'not_observed' if is_click else 'observed'
+        check = {'transition_id': edge['id'], 'target_observation_id': edge['target'], 'frame_id': str(step),
+            'assessment': assessment, 'checks': [
+                {'kind': 'focus' if is_click else 'state', 'assessment': assessment, 'quotes': [after]},
+                {'kind': 'intent', 'assessment': assessment, 'quotes': [after], 'state_keys': ['active_window']}]}
+        state = {'page_id': 'other' if is_click else 'editor', 'fields': {'active_window': after, 'menu': 'closed'}}
+        module.validate_action_check(check, frame=str(step), visible_texts=[after], current_state=state)
+        module.record_action_check(check, frame=str(step), current_state=state)
+        journal.annotate(journal.current['id'], logical_page=state['page_id'], state_schema=state['fields'],
+            evidence_ref=f'after-{step}.png')
+        module.sync()
+        if is_click:
+            failed.append(edge['id'])
+    return memory, journal, module, click, failed
+
+
+def test_return_to_source_page_preserves_failed_intention_without_coordinate_rewrite(tmp_path):
+    memory, journal, module, click, failed = destination_cycle(tmp_path)
+    try:
+        original = deepcopy([module.recent, module.effects])
+        assert module._stalled_actions({'left_click'}) == []  # The old recovery boundary loses both failures.
+        rows = module.stalled_pointer_actions()
+        assert rows[0]['parameters'] == click and set(rows[0]['transition_ids']) == set(failed)
+        assert rows[0]['reason'] == 'failed_intent_after_return_to_source_page'
+        assert rows[0]['matched_intent_state_keys'] == ['active_window']
+        assert module.stalled_keyboard_actions() == []
+        assert [module.recent, module.effects] == original
+        # A checkpoint reload preserves the original evidence, with explicit opt-in at the caller.
+        restored = ExecutionModules(memory, journal)
+        restored.intent_verification_v12 = restored.returned_page_intent_v12 = True
+        assert restored.stalled_pointer_actions() == rows
+        restored.returned_page_intent_v12 = False
+        assert restored.stalled_pointer_actions() == []
+    finally:
+        journal.close()
+        memory.close()
+
+
+@pytest.mark.parametrize('mode', ['other-page', 'unknown-state', 'changed-state', 'changed-geometry',
+                                'unknown-intent', 'missing-quote', 'other-subgoal', 'later-success',
+                                'incomparable-intent-fields'])
+def test_destination_cycle_warning_requires_matching_evidence_and_releases_after_success(tmp_path, mode):
+    memory, journal, module, _, failed = destination_cycle(tmp_path)
+    try:
+        if mode in {'other-page', 'unknown-state', 'changed-state', 'changed-geometry'}:
+            if mode == 'changed-geometry':
+                journal.contract = CUAContract(model_screen_width=128, model_screen_height=48)
+            journal.begin('Open the requested menu', image(), step=5)
+            journal.annotate(journal.current['id'], logical_page='other' if mode == 'other-page' else 'editor',
+                state_schema={'active_window': None if mode == 'unknown-state' else
+                              'Different editor' if mode == 'changed-state' else 'Editor'}, evidence_ref='current.png')
+        elif mode == 'other-subgoal':
+            module.recent[-2]['module_id'] = 'other-goal'
+        else:
+            intent = module.effects[failed[-1]]['checks'][-1]
+            if mode == 'unknown-intent':
+                intent['assessment'] = 'unknown'
+            elif mode == 'missing-quote':
+                intent['quotes'] = []
+            elif mode == 'incomparable-intent-fields':
+                intent['state_keys'] = ['menu']
+            else:
+                intent['assessment'] = 'observed'
+        assert module.stalled_pointer_actions() == []
+    finally:
+        journal.close()
+        memory.close()
+
+
+@pytest.mark.parametrize('prose,batch', [('x' * 1201, False), ('Open the requested menu', True)])
+def test_destination_cycle_does_not_attribute_omitted_or_batch_prose_to_one_command(tmp_path, prose, batch):
+    memory, journal, module, _, _ = destination_cycle(tmp_path, first_prose=prose, batch=batch)
+    try:
+        assert module.stalled_pointer_actions() == []
+    finally:
+        journal.close()
+        memory.close()
+
+
 def test_alternating_positions_count_exact_original_parameters_and_retain_both_failures():
     a = {'action': 'left_click', 'coordinate': [239, 228]}
     b = {'action': 'left_click', 'coordinate': [891, 45]}
