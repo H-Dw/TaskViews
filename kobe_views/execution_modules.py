@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import hashlib
 import re
+from collections.abc import Mapping
 
 from .model import digest, dumps, plain, View
 from .task_views import task_view_delta
@@ -30,6 +31,7 @@ class ExecutionModules:
         self.views, self.previous_revision = {}, None
         self.new_events, self.gaps = [], []
         self.subgoals, self.effects, self.unresolved = {}, {}, []
+        self.effect_order = []
         self.selected_needs, self.page_id = [], None
         self.uncertainty_reviews = {}
         if self.path.exists():
@@ -41,15 +43,54 @@ class ExecutionModules:
             self.gaps = saved.get('gaps', [])
             self.subgoals = saved.get('subgoals', {})
             self.effects = saved.get('effects', {})
+            self.effect_order = saved.get('effect_order', [])
             self.unresolved = saved.get('unresolved', [])
             self.selected_needs, self.page_id = saved.get('selected_needs', []), saved.get('page_id')
             self.uncertainty_reviews = saved.get('uncertainty_reviews', {})
+            if (len(self.effect_order) != len(self.effects)
+                    or len(set(self.effect_order)) != len(self.effect_order)
+                    or set(self.effect_order) != set(self.effects)):
+                self._restore_effect_order()
+
+    def _restore_effect_order(self):
+        """Migrate sorted-key caches from accepted immutable reports, not IDs.
+
+        Canonical JSON sorts dictionaries. Their insertion order after a reload
+        cannot identify the oldest operation. Historical accepted reports remain
+        in this memory graph; only exact transition-bound values are recovered.
+        """
+        candidates = dict(self.effects)
+        for claim in self.memory.snapshot.claims.values():
+            if claim['predicate'] != 'module_report.record':
+                continue
+            value = claim['value']
+            if not isinstance(value, Mapping):
+                continue
+            report = value.get('report')
+            if (value.get('grade') != 'model_proposal' or not isinstance(report, Mapping)
+                    or not report or report.get('grade') != 'model_proposal'
+                    or not report.get('transition_id') or not report.get('checks')):
+                continue
+            identity = report['transition_id']
+            edge = self.event(identity)
+            if (edge and edge.get('kind') == 'transition'
+                    and edge['target'] == report.get('target_observation_id')
+                    and report.get('raw_transition_ref', '').endswith('#' + identity)):
+                candidates[identity] = plain(report)
+        ordered = []
+        for identity in candidates:
+            row = self.journal.db.execute('SELECT seq FROM events WHERE id=?', (identity,)).fetchone()
+            if row:
+                ordered.append((row[0], identity))
+        self.effect_order = [identity for _, identity in sorted(ordered)][-64:]
+        self.effects = {identity: candidates[identity] for identity in self.effect_order}
 
     def save(self):
         self.memory._atomic_json(self.path, {'episode_id': self.journal.episode_id, 'cursor': self.cursor,
                                              'active': self.active, 'modules': self.modules, 'recent': self.recent,
                                              'gaps': self.gaps[-64:], 'subgoals': self.subgoals,
                                              'effects': self.effects, 'unresolved': self.unresolved,
+                                             'effect_order': self.effect_order,
                                              'selected_needs': self.selected_needs, 'page_id': self.page_id,
                                              **({'uncertainty_reviews': self.uncertainty_reviews}
                                                 if getattr(self, 'uncertainty_reviews', {}) else {})})
@@ -414,9 +455,20 @@ class ExecutionModules:
                 if item['assessment'] == 'observed':
                     comparison = self.state_comparison(current_state)
                     if intent['text_omitted'] or not keys or not set(keys) <= set(comparison['changed_field_keys']):
+                        before = (last.get('before_state') or {}).get('fields', {})
+                        current = (current_state or {}).get('fields', {})
+                        detail = {'provided_state_keys': keys, 'changed_field_keys': comparison['changed_field_keys'],
+                                  'unknown_or_missing_state_keys': [key for key in keys
+                                      if before.get(key) is None or current.get(key) is None],
+                                  'actor_prose_omitted': intent['text_omitted'],
+                                  'repair': 'null is unknown, not visible absence. If the current image establishes '
+                                            'that a control/result is absent, report {status:absent} for that same '
+                                            'field and describe the absence in the current summary. Do not copy '
+                                            'actor prose as a visible quote. If evidence is insufficient, keep '
+                                            'intent unknown/not_observed and reduce the aggregate accordingly.'}
                         raise ValueError('Observed intent requires its exact admitted actor prose and changed '
                             'before/current ui_state keys for that intended effect; an unrelated menu/focus '
-                            'change is insufficient. Use unknown/not_observed when it is not established.')
+                            'change is insufficient. Use unknown/not_observed when it is not established: ' + dumps(detail))
             missing = [quote for quote in item['quotes'] if not any(quote in text for text in visible_texts)]
             if missing:
                 # Preserve the candidate and strict guard. A generic rejection
@@ -478,7 +530,10 @@ class ExecutionModules:
         if getattr(self, 'compare_state_v10', False):
             value['state_comparison'] = self.state_comparison(current_state)
         self.effects[last['transition_id']] = value
-        self.effects = dict(list(self.effects.items())[-64:])
+        order = getattr(self, 'effect_order', list(self.effects))
+        self.effect_order = ([identity for identity in order if identity != last['transition_id']]
+                             + [last['transition_id']])[-64:]
+        self.effects = {identity: self.effects[identity] for identity in self.effect_order}
         self.unresolved = [r for r in self.unresolved if r['transition_id'] != last['transition_id']]
         if check['assessment'] == 'not_observed' or last['error']:
             self.unresolved = (self.unresolved + [self.transition_packet(last)])[-8:]
@@ -552,14 +607,20 @@ class ExecutionModules:
         are historical, fallible model checks, not current-frame math or success.
         """
         candidates = []
-        for record in self.recent[-8:]:
+        recent = {record['transition_id']: record for record in self.recent[-8:]}
+        order = getattr(self, 'effect_order', list(self.effects))
+        for identity in order:
+            effect = self.effects[identity]
+            record = recent.get(identity) or {'transition_id': identity,
+                'module_id': effect.get('module_id'), 'raw_ref': effect.get('raw_transition_ref')}
             if record.get('module_id') != self.active:
                 continue
-            effect = self.effects.get(record['transition_id'], {})
             checks = [{k: plain(check[k]) for k in ('kind', 'assessment', 'quotes')}
                       for check in effect.get('checks', [])
                       if check.get('assessment') == 'not_observed' and check.get('quotes')]
             if not checks:
+                continue
+            if identity not in recent and not any(check['kind'] in {'submission', 'object'} for check in checks):
                 continue
             intent = self.verification_intent(record)
             text = (intent or {}).get('text')
@@ -574,6 +635,7 @@ class ExecutionModules:
             # Check kinds alone cannot distinguish Return submission from dialog
             # dismissal. No error phrase or application name is hardcoded.
             candidates.append(row)
+        candidates.sort(key=lambda row: not any(check['kind'] in {'submission', 'object'} for check in row['checks']))
         result = {'records': [], 'omitted_records': len(candidates), 'grade': 'model_proposal',
                   'scope': 'historical_operation_checks_not_current_visible_evidence'}
         if len(dumps(result).encode()) > max_bytes:

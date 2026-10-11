@@ -38,7 +38,10 @@ elements/summary is not a usable quote. Use unknown for a visually unclear effec
 never invent a label or report a receipt as proof. Include the supplied expected_change.kind;
 Also return ui_state={page_id,fields} with concise current control/focus, input,
 location, selected item, visible result and document title when visible; unknown
-values are null. Copy supplied before_state field keys when still relevant.
+values are null. Visible absence is different from unknown: when this current
+image establishes that a menu/dialog/object is absent, use {status:'absent'} as
+that field's whole value and describe the absence in summary. Do not convert
+uncertainty to absence. Copy supplied before_state field keys when still relevant.
 For a click/key/submission to be observed, at least one known field must actually
 change from before_state. An already selected filename or static label is not
 evidence this click worked. When no source state exists or nothing demonstrably

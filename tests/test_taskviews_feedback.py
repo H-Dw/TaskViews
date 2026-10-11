@@ -87,6 +87,71 @@ def test_long_prior_prose_is_wholly_omitted_without_truncating_literal_failure_e
     assert row['checks'][0]['quotes'] == ['Unsupported operation: ExampleCommand']
 
 
+def test_submission_failure_outlives_recent_window_without_mutating_history():
+    module = prior_failure_module()
+    module.effects['submit'].update(module_id='import', raw_transition_ref='/immutable/events#submit')
+    module.recent = module.recent[1:]
+    before = deepcopy(module.effects)
+    records = module.prior_action_evidence()['records']
+    assert records[0]['transition_id'] == 'submit'
+    assert records[0]['checks'][0]['quotes'] == ['Unsupported operation: ExampleCommand']
+    assert module.effects == before
+    module.effects['submit']['module_id'] = 'other-subgoal'
+    assert all(row['transition_id'] != 'submit' for row in module.prior_action_evidence()['records'])
+
+
+def test_old_focus_failure_does_not_displace_durable_application_rejection():
+    module = prior_failure_module()
+    module.effects['old-focus'] = {**deepcopy(module.effects['submit']), 'module_id': 'import',
+        'raw_transition_ref': '/immutable/events#old-focus',
+        'checks': [{'kind': 'focus', 'assessment': 'not_observed', 'quotes': ['Control']}]}
+    module.effect_order = ['old-focus', 'submit', 'dismiss', 'menu']
+    assert [row['transition_id'] for row in module.prior_action_evidence()['records']] == ['submit', 'dismiss']
+
+
+def test_canonical_reload_recovers_accepted_reports_and_retains_chronological_effects(tmp_path):
+    import sqlite3
+    from types import SimpleNamespace
+    path = tmp_path/'execution-modules.json'
+    journal = SimpleNamespace(episode_id='episode', closed=False, db=sqlite3.connect(':memory:'))
+    journal.db.execute('CREATE TABLE events (seq INTEGER, id TEXT, payload TEXT)')
+    effects, claims = {}, {}
+    identities = [f'{65-i:03}' for i in range(66)]
+    for seq, identity in enumerate(identities):
+        edge = {'id': identity, 'kind': 'transition', 'target': identity+'-post'}
+        journal.db.execute('INSERT INTO events VALUES(?,?,?)', (seq, identity, dumps(edge)))
+        effect = {'transition_id': identity, 'target_observation_id': edge['target'], 'frame_id': str(seq),
+            'grade': 'model_proposal', 'module_id': 'import', 'assessment': 'not_observed',
+            'checks': [{'kind': 'submission', 'assessment': 'not_observed', 'quotes': ['Rejected']}],
+            'raw_transition_ref': '/immutable/events#'+identity}
+        effects[identity] = effect
+        claims[identity] = {'predicate': 'module_report.record', 'value': {'grade': 'model_proposal', 'report': effect}}
+    # The old sorted-key cache dropped recent low IDs instead of old operations.
+    path.write_text(dumps({'episode_id': 'episode', 'cursor': 0, 'active': 'import', 'modules': {},
+                          'recent': [], 'effects': dict(list(effects.items())[:64])}))
+    memory = SimpleNamespace(directory=tmp_path, snapshot=SimpleNamespace(claims=claims),
+                             _atomic_json=TaskMemory._atomic_json)
+    module = ExecutionModules(memory, journal)
+    try:
+        assert module.effect_order == identities[-64:]
+        assert module.effects == {key: effects[key] for key in identities[-64:]}
+        module.save()
+        saved = json.loads(path.read_text())
+        assert list(saved['effects']) == sorted(saved['effects'])
+        assert saved['effect_order'] == identities[-64:]
+        reopened = ExecutionModules(memory, journal)
+        assert reopened.effect_order == module.effect_order and reopened.effects == module.effects
+        # Rechecking an existing operation moves only that assessment to the end.
+        row = {'transition_id': identities[2], 'raw_ref': effects[identities[2]]['raw_transition_ref'], 'module_id': 'import', 'error': None}
+        reopened.last_effect_record = lambda: row
+        reopened.report = lambda *args, **kwargs: None
+        reopened.record_action_check({**effects[identities[2]], 'assessment': 'unknown'}, frame='latest')
+        assert reopened.effect_order == identities[3:] + [identities[2]]
+        assert len(reopened.effects) == 64
+    finally:
+        journal.db.close()
+
+
 def test_planner_separates_explicit_goal_targets_from_visible_math_hypotheses():
     from ui_kobe.osworld.taskviews_feedback import validate_planner_report
     args = {'visible_texts': ['Empty Algebra panel', 'Input:'],
@@ -1220,6 +1285,52 @@ def test_intent_prevents_menu_change_from_certifying_requested_maximization(tmp_
         assert warning['checks'][1]['state_keys'] == ['window_state']
         assert module.event(row['decision_id'])['response'] == prose
         assert module.event(row['id'])['tool']['arguments']['coordinate'] == [3, 4]
+    finally:
+        log.close()
+        memory.close()
+
+
+@pytest.mark.parametrize('current_menu', [None, {'status': 'absent'}])
+def test_visible_absence_is_known_but_null_remains_unknown_with_exact_repair_feedback(tmp_path, current_menu):
+    memory, log, module, row = intent_operation(tmp_path, 'Close the menu by pressing Escape.')
+    before = module.last_action()
+    before['before_state']['fields']['open_menu'] = 'File'
+    before['before_state']['fields']['focus'] = 'editor'
+    module.last_action = lambda: deepcopy(before)
+    state = {'fields': {'focus': 'editor', 'open_menu': current_menu}}
+    check = intent_check(module, row, 'observed', key='open_menu', quote='No menu is open')
+    try:
+        original = deepcopy(state)
+        if current_menu is None:
+            with pytest.raises(ValueError, match='changed before/current') as error:
+                module.validate_action_check(check, frame='2', visible_texts=['Focus: editor', 'No menu is open'], current_state=state)
+            detail = json.loads(str(error.value).split('established: ', 1)[1])
+            assert detail['unknown_or_missing_state_keys'] == ['open_menu']
+            assert detail['provided_state_keys'] == ['open_menu'] and detail['changed_field_keys'] == []
+            assert not detail['actor_prose_omitted'] and 'Do not copy actor prose' in detail['repair']
+        else:
+            module.validate_action_check(check, frame='2', visible_texts=['Focus: editor', 'No menu is open'], current_state=state)
+            assert module.state_comparison(state)['changed_field_keys'] == ['open_menu']
+        assert state == original
+        before['before_state']['fields']['open_menu'] = None
+        with pytest.raises(ValueError, match='changed before/current'):
+            module.validate_action_check(check, frame='2', visible_texts=['Focus: editor', 'No menu is open'], current_state=state)
+    finally:
+        log.close()
+        memory.close()
+
+
+def test_absence_claim_does_not_allow_actor_prose_as_visible_evidence(tmp_path):
+    prose = 'Close the menu by pressing Escape.'
+    memory, log, module, row = intent_operation(tmp_path, prose)
+    before = module.last_action()
+    before['before_state']['fields']['open_menu'] = 'File'
+    module.last_action = lambda: deepcopy(before)
+    try:
+        check = intent_check(module, row, 'observed', key='open_menu', quote=prose)
+        with pytest.raises(ValueError, match='missing_visible_quotes'):
+            module.validate_action_check(check, frame='2', visible_texts=['Focus: editor', 'No menu is open'],
+                current_state={'fields': {'open_menu': {'status': 'absent'}}})
     finally:
         log.close()
         memory.close()
