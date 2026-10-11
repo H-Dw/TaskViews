@@ -278,6 +278,92 @@ def test_identity_preflight_does_not_publish_or_rename_task(tmp_path):
         memory.close()
 
 
+def test_claim_identity_feedback_lists_all_original_conflicts_without_mutation(tmp_path):
+    from kobe_views.model import dumps, plain
+    memory = TaskMemory('claim-conflicts', tmp_path)
+    try:
+        memory.initialize('Import input.csv and save output.csv')
+        claims = [plain(c) for c in list(memory.read().claims.values())[:2]]
+        assert len(claims) == 2
+        before = memory.read().revision
+        original_db = (memory.directory/'task.sqlite').read_bytes()
+        proposals = [{k: c[k] for k in ('id', 'subject', 'predicate', 'value', 'objects', 'basis')}
+                     for c in claims]
+        for c in proposals:
+            c.update(locator='Current frame', value='New visible observation')
+        with pytest.raises(ValueError, match='new claim id') as error:
+            memory.validate_proposal_identity({'entities': [], 'claims': proposals})
+        packet = json.loads(str(error.value).split('Conflicting original claims: ', 1)[1].split('. Omit unchanged', 1)[0])
+        assert {r['id'] for r in packet['conflicting_claim_records']} == {c['id'] for c in claims}
+        assert len(dumps(packet).encode()) <= 6000
+        for record, original in zip(packet['conflicting_claim_records'], claims):
+            assert record['changed_identity_fields'] == ['value']
+            assert record['original_identity'] == {k: original[k] for k in ('id', 'subject', 'predicate', 'value', 'objects', 'basis')}
+        assert memory.read().revision == before and (memory.directory/'task.sqlite').read_bytes() == original_db
+        same = [{**{k: c[k] for k in ('id', 'subject', 'predicate', 'value', 'objects', 'basis')},
+                 'locator': 'Current frame'} for c in claims]
+        memory.validate_proposal_identity({'entities': [], 'claims': same})
+    finally:
+        memory.close()
+
+
+def test_claim_identity_feedback_whole_omission_exact_digest_and_no_candidate_echo(tmp_path):
+    from types import SimpleNamespace
+    import hashlib
+    from kobe_views.model import dumps
+    original = {'id': 'claim', 'subject': 'task', 'predicate': 'report', 'value': '原'*7000,
+                'objects': [], 'basis': []}
+    memory = TaskMemory.__new__(TaskMemory)
+    memory.graph = SimpleNamespace(read=lambda: SimpleNamespace(claims={'claim': original},
+                                                               entities={}, statuses={'claim': 'active'}))
+    proposed = {**original, 'value': 'password=sk-unsafe-candidate-value', 'locator': 'visible'}
+    with pytest.raises(ValueError) as error:
+        memory.validate_proposal_identity({'entities': [], 'claims': [proposed]})
+    packet = json.loads(str(error.value).split('Conflicting original claims: ', 1)[1].split('. Omit unchanged', 1)[0])
+    record = packet['conflicting_claim_records'][0]
+    assert len(dumps(packet).encode()) <= 6000 and record['original_identity_omitted']
+    assert 'original_identity' not in record and proposed['value'] not in str(error.value)
+    assert record['original_identity_sha256'] == hashlib.sha256(dumps(original).encode()).hexdigest()
+
+
+def test_identity_feedback_reports_entity_and_claim_conflicts_in_same_repair(tmp_path):
+    from kobe_views.model import dumps
+    memory = TaskMemory('combined-conflicts', tmp_path)
+    try:
+        memory.initialize('Import input.csv and save output.csv')
+        entity = dict(memory.read().entities['task'])
+        claim = next(iter(memory.read().claims.values()))
+        proposed = {k: claim[k] for k in ('id', 'subject', 'predicate', 'value')}
+        proposed.update(locator='Current frame', value='Changed observation')
+        before = memory.read().revision
+        with pytest.raises(ValueError) as error:
+            memory.validate_proposal_identity({'entities': [{**entity, 'label': 'Wrong label'}],
+                                               'claims': [proposed]})
+        packet = json.loads(str(error.value).split('Conflicting original identities: ', 1)[1].split('. Omit unchanged', 1)[0])
+        assert packet['conflicting_entity_records'] == [entity]
+        assert packet['conflicting_claim_records'][0]['id'] == claim['id']
+        assert len(dumps(packet).encode()) <= 6000 and memory.read().revision == before
+    finally:
+        memory.close()
+
+
+@pytest.mark.parametrize('status,supersedes', [('active', ['prior']), ('superseded', [])])
+def test_claim_identity_feedback_distinguishes_status_and_supersedes(status, supersedes):
+    from types import SimpleNamespace
+    original = {'id': 'claim', 'subject': 'task', 'predicate': 'visible', 'value': 'literal',
+                'objects': [], 'basis': []}
+    memory = TaskMemory.__new__(TaskMemory)
+    memory.graph = SimpleNamespace(read=lambda: SimpleNamespace(claims={'claim': original},
+                                                               entities={}, statuses={'claim': status}))
+    with pytest.raises(ValueError) as error:
+        memory.validate_proposal_identity({'entities': [], 'claims': [{**original, 'locator': 'frame',
+                                                                     'supersedes': supersedes}]})
+    packet = json.loads(str(error.value).split('Conflicting original claims: ', 1)[1].split('. Omit unchanged', 1)[0])
+    record = packet['conflicting_claim_records'][0]
+    assert record['changed_identity_fields'] == [] and record['original_status'] == status
+    assert record['supersedes_on_existing_id'] is bool(supersedes)
+
+
 class NativeTransport:
     last_timing = {}
     def __init__(self, invalid_read=False):

@@ -401,20 +401,59 @@ class TaskMemory:
                     conflicts.append(record)
                 else:
                     omitted += 1
-        if conflicts or omitted:
-            raise ValueError('Existing entity id/type/label are immutable; copy an exact original record '
-                'or omit redeclaration. Conflicting original identities: ' + dumps({
-                    'conflicting_entity_records': conflicts,
-                    'omitted_conflicting_entity_records': omitted}))
+        claim_conflicts = []
         for claim in proposals['claims']:
             old = snapshot.claims.get(claim['id'])
             if old is None:
                 continue
             fields = ('subject', 'predicate', 'value')
-            same = all(dumps(claim[k]) == dumps(old[k]) for k in fields)
-            same = same and all(dumps(claim.get(k, [])) == dumps(old[k]) for k in ('objects', 'basis'))
-            if not same or claim.get('supersedes') or snapshot.statuses[claim['id']] != 'active':
-                raise ValueError('Claim ids are immutable; new or revised evidence requires a new claim id')
+            changed = [k for k in fields if dumps(claim[k]) != dumps(old[k])]
+            changed += [k for k in ('objects', 'basis') if dumps(claim.get(k, [])) != dumps(old[k])]
+            status = snapshot.statuses[claim['id']]
+            if changed or claim.get('supersedes') or status != 'active':
+                identity = {k: plain(old[k]) for k in ('id', *fields, 'objects', 'basis')}
+                encoded = dumps(identity).encode()
+                entry = {'id': claim['id'], 'changed_identity_fields': changed, 'original_status': status,
+                         'supersedes_on_existing_id': bool(claim.get('supersedes')),
+                         'original_identity_sha256': hashlib.sha256(encoded).hexdigest(),
+                         'original_identity_bytes': len(encoded), 'original_identity': identity}
+                claim_conflicts.append(entry)
+        if claim_conflicts:
+            packet = {'conflicting_claim_records': [], 'omitted_conflicting_claim_records': len(claim_conflicts)}
+            if conflicts or omitted:
+                # One candidate can conflict in both namespaces. Report both
+                # before spending another model repair, within the same bound.
+                entities = []
+                for record in conflicts:
+                    if len(dumps(entities + [record]).encode()) <= 2500:
+                        entities.append(record)
+                packet.update(conflicting_entity_records=entities,
+                              omitted_conflicting_entity_records=omitted + len(conflicts) - len(entities))
+            for entry in claim_conflicts:
+                trial = {**packet, 'conflicting_claim_records': packet['conflicting_claim_records'] + [entry],
+                         'omitted_conflicting_claim_records': packet['omitted_conflicting_claim_records'] - 1}
+                if len(dumps(trial).encode()) > 6000:
+                    # Whole original values may be large reports. Keep the ID,
+                    # reason and exact digest; never truncate a value or echo a
+                    # potentially unsafe candidate value before content checks.
+                    entry = {k: v for k, v in entry.items() if k != 'original_identity'}
+                    entry['original_identity_omitted'] = True
+                    trial = {**trial, 'conflicting_claim_records': packet['conflicting_claim_records'] + [entry]}
+                if len(dumps(trial).encode()) <= 6000:
+                    packet = trial
+            prefix = ('Existing entity id/type/label are immutable. Claim ids are immutable; '
+                      'new or revised evidence requires a new claim id. Conflicting original identities: '
+                      if conflicts or omitted else
+                      'Claim ids are immutable; new or revised evidence requires a new claim id. '
+                      'Conflicting original claims: ')
+            raise ValueError(prefix + dumps(packet) + '. Omit unchanged redeclarations. '
+                'A genuinely new observation may use a new claim ID; do not rename an old fact to bypass '
+                'its identity or status. This preflight does not publish or rewrite a candidate.')
+        if conflicts or omitted:
+            raise ValueError('Existing entity id/type/label are immutable; copy an exact original record '
+                'or omit redeclaration. Conflicting original identities: ' + dumps({
+                    'conflicting_entity_records': conflicts,
+                    'omitted_conflicting_entity_records': omitted}))
 
     @staticmethod
     def _claim_content_rejection(claim, visible_texts=None):

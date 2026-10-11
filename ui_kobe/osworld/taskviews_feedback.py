@@ -462,7 +462,10 @@ def build_feedback_views(owner, deadline):
 
     prompt = (SEMANTIC_PERCEPTION + '\n' + FEEDBACK_RESPONSE + '\nFor this protocol action_check is required. '
         'Existing entity IDs/type/label and claim IDs are immutable. Inventories may omit older records; '
-        'repair conflicts using the original records or omit redeclaration. Keep <=8 entities/12 claims.\n'
+        'repair conflicts using the original records or omit redeclaration. A changed observation is new '
+        'evidence, not an edit to an old claim ID. Identity repair lists conflicting_claim_records and '
+        'changed_identity_fields; unchanged facts need not be redeclared. Never invent another identity '
+        'for an unchanged fact to bypass a conflict or status. Keep <=8 entities/12 claims.\n'
         + ACTION_READ + '\n' + owner.frame.instruction)
     raw = owner.role('perception', prompt, request, image, deadline, validate_read)
     evidence, normalization = bounded_visual_evidence({k: raw[k] for k in ('summary', 'elements')},
