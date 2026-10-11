@@ -131,18 +131,21 @@ def validate_planner_report(report, *, visible_texts, original_task, string_list
 
 
 def _admit(base, optional, limit):
-    """Admit whole optional values after protected evidence, recording omissions."""
+    """Reserve omission reports before admitting whole optional values."""
+    optional = list(optional)
     result = plain(base)
     result['context_gaps'] = []
     if len(dumps(result).encode()) > limit:
         raise ValueError('Protected current-action evidence exceeds its admitted input budget')
-    for key, value in optional:
-        if len(dumps({**result, key: value}).encode()) <= limit:
-            result[key] = plain(value)
-        else:
-            result['context_gaps'].append('budget_omitted:' + key)
+    result['context_gaps'] = ['budget_omitted:' + key for key, _ in optional]
     if len(dumps(result).encode()) > limit:
-        raise ValueError('Omission metadata exceeds its admitted input budget')
+        raise ValueError('Protected current-action evidence and omission metadata exceed its admitted input budget')
+    for key, value in optional:
+        gaps = list(result['context_gaps'])
+        gaps.remove('budget_omitted:' + key)
+        candidate = {**result, key: plain(value), 'context_gaps': gaps}
+        if len(dumps(candidate).encode()) <= limit:
+            result = candidate
     return result
 
 
@@ -321,16 +324,21 @@ def build_feedback_views(owner, deadline):
         'mandatory_core_ref': hashlib.sha256(dumps(core).encode()).hexdigest(),
         'last_action_feedback': modules.actor_feedback(),
         'frame_id': frame, 'grade': 'model_proposal'}
-    projection_budget = min(6000, limit - len(dumps(protected).encode()) - 160)
+    optional = [('active_subgoal', modules.subgoals[proposed['subgoal_id']]),
+        ('input_policy', feedback.get('guidance')),
+        ('current_visible_evidence', {'summary': raw['summary'], 'elements': raw['elements']}),
+        ('assigned_views', control.views.packet_for('executor')), ('advisers', advisers)]
+    envelope = {**protected,
+        'role_evidence': {'execution_modules': None, 'strategy_review': feedback['strategy_review']},
+        'context_gaps': ['budget_omitted:' + key for key, _ in optional]}
+    # Replace exactly the JSON null slot with the module projection. Account for
+    # its wrapper and every possible omission, rather than a guessed allowance.
+    projection_budget = min(6000, limit - len(dumps(envelope).encode()) + len('null'))
     if projection_budget < 512:
         raise ValueError('Actor input cannot retain current-action warning and original references before dispatch')
     protected['role_evidence'] = {'execution_modules': modules.packet(max_bytes=projection_budget),
                                  'strategy_review': feedback['strategy_review']}
-    executor = _admit(protected,
-        [('active_subgoal', modules.subgoals[proposed['subgoal_id']]),
-         ('input_policy', feedback.get('guidance')),
-         ('current_visible_evidence', {'summary': raw['summary'], 'elements': raw['elements']}),
-         ('assigned_views', control.views.packet_for('executor')), ('advisers', advisers)], limit)
+    executor = _admit(protected, optional, limit)
     owner.view_trace = {'protocol': 'taskviews-feedback-v10', 'frame': owner.frame.metadata,
         'stage': proposed['stage'], 'controller': proposed, 'anchor_resolutions': resolutions,
         'normalization': normalization, 'analysis_triggers': reasons,

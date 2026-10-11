@@ -112,6 +112,42 @@ def test_no_previous_dispatch_has_no_protected_action_warning():
     assert module.actor_feedback() is None
 
 
+def test_optional_field_cannot_consume_later_omission_report_reserve():
+    from ui_kobe.osworld.taskviews_feedback import _admit
+    base = {'last_action_feedback': {'transition_id': 'original-edge',
+        'assessment': 'not_observed', 'raw_transition_ref': '/immutable/edge'}}
+    optional = [('visible', 'v' * 200), ('advisers', 'a' * 4000)]
+    # The old loop admitted visible exactly at the boundary, then overflowed
+    # when it added the required advisers omission after rejecting that value.
+    limit = len(dumps({**base, 'context_gaps': [], 'visible': optional[0][1]}).encode())
+    packet = _admit(base, optional, limit)
+    assert packet['last_action_feedback'] == base['last_action_feedback']
+    assert packet['context_gaps'] == ['budget_omitted:visible', 'budget_omitted:advisers']
+    assert len(dumps(packet).encode()) <= limit
+    assert base.keys() == {'last_action_feedback'}
+
+
+def test_admission_reserves_utf8_gap_names_and_json_escaping():
+    from ui_kobe.osworld.taskviews_feedback import _admit
+    base = {'last_action_feedback': {'assessment': 'unknown', 'quote': '输入栏为空'}}
+    optional = [('中文字段', '\\"' * 500), ('advisers', 'x' * 5000)]
+    limit = len(dumps({**base, 'context_gaps': ['budget_omitted:' + k for k, _ in optional]}).encode())
+    packet = _admit(base, optional, limit)
+    assert len(dumps(packet).encode()) == limit
+    assert packet['last_action_feedback'] == base['last_action_feedback']
+    assert packet['context_gaps'] == ['budget_omitted:中文字段', 'budget_omitted:advisers']
+
+
+def test_omission_envelope_failure_never_deletes_protected_feedback():
+    from ui_kobe.osworld.taskviews_feedback import _admit
+    base = {'last_action_feedback': {'assessment': 'not_observed', 'transition_id': 'original'}}
+    original = deepcopy(base)
+    limit = len(dumps({**base, 'context_gaps': []}).encode())
+    with pytest.raises(ValueError, match='Protected current-action evidence and omission metadata'):
+        _admit(base, [('advisers', 'x' * 4000)], limit)
+    assert base == original
+
+
 def quote_check_module():
     module = ExecutionModules.__new__(ExecutionModules)
     module.last_action = lambda: {'transition_id': 'save-key', 'target': 'post-save-key',
