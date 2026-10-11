@@ -565,7 +565,7 @@ class ExecutionModules:
             text = (intent or {}).get('text')
             row = {'transition_id': record['transition_id'], 'raw_transition_ref': record['raw_ref'],
                    'frame_id': effect['frame_id'], 'target_observation_id': effect['target_observation_id'],
-                   'checks': checks, 'original_feedback_sha256': digest(effect),
+                   'checks': checks, 'original_feedback_sha256': hashlib.sha256(dumps(effect).encode()).hexdigest(),
                    'original_intent': {'text': text if text and len(text.encode()) <= 400 else None,
                        'source_sha256': (intent or {}).get('original_text_sha256'),
                        'source_bytes': (intent or {}).get('original_text_bytes'),

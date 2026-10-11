@@ -1,5 +1,6 @@
 from copy import deepcopy
 from io import BytesIO
+import hashlib
 import json
 
 from PIL import Image
@@ -45,6 +46,7 @@ def test_prior_application_rejection_survives_dialog_dismissal_and_reaches_state
     rows = packet['action_feedback']['prior_action_evidence']['records']
     assert rows[0]['checks'][0]['quotes'] == ['Unsupported operation: ExampleCommand']
     assert rows[0]['frame_id'] == 'error-frame' and rows[0]['target_observation_id'] == 'error-post'
+    assert rows[0]['original_feedback_sha256'] == hashlib.sha256(dumps(module.effects['submit']).encode()).hexdigest()
     assert rows[1]['original_intent']['text'] == 'Dismiss the error dialog'
     assert packet['visible_text'] == ['Error dialog now gone'] and prior['grade'] == 'model_proposal'
     assert [module.recent, module.effects] == original
