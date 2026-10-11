@@ -445,7 +445,14 @@ class ExecutionModules:
                 raise ValueError('Observed input/object must quote the exact previous request, not another object')
         expected = 'not_observed' if 'not_observed' in assessments else 'unknown' if 'unknown' in assessments else 'observed'
         if check['assessment'] != expected:
-            raise ValueError('Action assessment must agree with its individual checks')
+            detail = {'provided_assessment': check['assessment'], 'required_assessment': expected,
+                      'individual_checks': [{'kind': item['kind'], 'assessment': item['assessment']}
+                                            for item in check['checks']],
+                      'rule': 'Any not_observed => not_observed; otherwise any unknown => unknown; '
+                              'otherwise observed. Aggregate only this operation, not the whole task.',
+                      'repair': 'Regenerate the complete evidence response. Keep unestablished intent unknown; '
+                                'do not invent a state change or silently promote any check to observed.'}
+            raise ValueError('Action assessment must agree with its individual checks: ' + dumps(detail))
         if (getattr(self, 'compare_state_v10', False) and check['assessment'] == 'observed'
                 and last['expected_change']['kind'] in {'focus', 'state', 'submission'}):
             comparison = self.state_comparison(current_state)

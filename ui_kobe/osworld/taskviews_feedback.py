@@ -63,6 +63,9 @@ Use unknown when the original prose was wholly omitted, or the relevant before
 state/result is unavailable. not_observed requires actual evidence of failed effect.
 Other checks retain their original three fields. Aggregate intent with all checks:
 an observed focus with unconfirmed intent must not become overall observed.
+Compute action_check.assessment from ALL individual checks: any not_observed
+means not_observed; otherwise any unknown means unknown; otherwise observed.
+This is this operation's assessment, not whether the entire task is finished.
 Optional subgoal_review={subgoal_id,
 change_needed:bool,quotes:[visible text]} requests a fresh plan only when the
 current subgoal needs review; it does not certify task completion.

@@ -1195,6 +1195,38 @@ def test_shared_verification_frame_does_not_truncate_native_parameters_or_bypass
         memory.close()
 
 
+@pytest.mark.parametrize('intent_assessment,provided,required', [
+    ('unknown', 'observed', 'unknown'), ('not_observed', 'observed', 'not_observed'),
+    ('observed', 'unknown', 'observed')])
+def test_aggregate_repair_feedback_names_exact_marks_without_rewriting_them(
+        tmp_path, intent_assessment, provided, required):
+    memory, log, module, row = intent_operation(tmp_path, 'Maximize this window.')
+    try:
+        quote = 'Window: maximized' if intent_assessment == 'observed' else 'Window: normal'
+        state = {'fields': {'window_state': 'maximized' if intent_assessment == 'observed' else 'normal',
+                            'menu': 'closed', 'focus': 'editor'}}
+        candidate = intent_check(module, row, intent_assessment, quote=quote)
+        candidate['assessment'] = provided
+        original = deepcopy(candidate)
+        with pytest.raises(ValueError, match='agree with its individual checks: ') as error:
+            module.validate_action_check(candidate, frame='2', visible_texts=['Focus: editor', quote],
+                                         current_state=state)
+        detail = json.loads(str(error.value).split(': ', 1)[1])
+        assert detail['provided_assessment'] == provided and detail['required_assessment'] == required
+        assert detail['individual_checks'] == [{'kind': c['kind'], 'assessment': c['assessment']}
+                                               for c in candidate['checks']]
+        assert 'not the whole task' in detail['rule'] and len(str(error.value).encode()) < 1000
+        assert candidate == original and module.effects == {}
+        regenerated = deepcopy(candidate)
+        regenerated['assessment'] = required
+        module.validate_action_check(regenerated, frame='2', visible_texts=['Focus: editor', quote],
+                                     current_state=state)
+        assert candidate == original
+    finally:
+        log.close()
+        memory.close()
+
+
 @pytest.mark.parametrize('candidate', [
     {'action': 'click', 'coordinate': [674, 253]},
     {'action_check': {'frame_id': 'frame'}, 'last_action': {}, 'frame': {},
