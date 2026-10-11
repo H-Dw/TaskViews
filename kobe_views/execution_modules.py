@@ -536,7 +536,18 @@ class ExecutionModules:
                         or 'description' in r.get('expected_change', {})
                         or r.get('evidence_capture_refs') == [] and r.get('omitted_older_capture_refs') == 0), None)
                     if metadata is None:
-                        raise ValueError('Budget cannot hold the latest action and unresolved failure references')
+                        derived = next((r for r in records if 'action_fingerprint' in r
+                                        or 'error' in r and r['error'] is None), None)
+                        if derived is None:
+                            raise ValueError('Budget cannot hold the latest action and unresolved failure references')
+                        # Repetition is already in protected actor_feedback.
+                        # Its derived fingerprint and an absent error need no
+                        # second copy; real errors and exact refs stay intact.
+                        derived.pop('action_fingerprint', None)
+                        if derived.get('error') is None:
+                            derived.pop('error', None)
+                        omitted('derived_transition_metadata')
+                        continue
                     # Image lengths and generic advice are optional metadata.
                     # Keep exact image refs/SHA, operation/receipt identity and
                     # the unresolved failure; never relabel its outcome.

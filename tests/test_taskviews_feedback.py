@@ -748,3 +748,53 @@ def test_packet_optional_metadata_stays_with_room_and_impossible_budget_still_fa
     assert 'optional_transition_metadata' not in packet['projection_omissions']
     with pytest.raises(ValueError, match='latest action and unresolved failure references'):
         module.packet(max_bytes=1)
+
+
+@pytest.mark.parametrize('controller_error', [None, 'original controller failure'])
+def test_reference_floor_keeps_real_errors_and_ids_when_derived_metadata_no_longer_fits(controller_error):
+    module = bounded_reference_module()
+    for row in module.recent + module.unresolved:
+        row.update(action_fingerprint='f' * 24, error=controller_error,
+                   tool_call_id='original-tool-' + row['transition_id'], module_id='original-module')
+    original = deepcopy((module.recent, module.unresolved))
+    minimal = module.packet(max_bytes=20000)
+    minimal['recent_transitions'] = minimal['recent_transitions'][-1:]
+    for row in minimal['recent_transitions'] + minimal['unresolved_failures']:
+        row.pop('action_semantics')
+        row.pop('action_check')
+        row['before_image'].pop('bytes')
+        row['after_image'].pop('bytes')
+        row['expected_change'].pop('description')
+        row.pop('evidence_capture_refs')
+        row.pop('omitted_older_capture_refs')
+    minimal['projection_omissions'] = {'older_transition': 1, 'transition_details_at_raw_ref': 2,
+                                      'optional_transition_metadata': 2}
+    budget = len(dumps(minimal).encode()) - 1
+    packet = module.packet(max_bytes=budget)
+    assert len(dumps(packet).encode()) <= budget
+    assert packet['projection_omissions']['derived_transition_metadata'] >= 1
+    assert {r['transition_id'] for r in packet['recent_transitions']} == {'latest'}
+    assert {r['transition_id'] for r in packet['unresolved_failures']} == {'failed'}
+    for row in packet['recent_transitions'] + packet['unresolved_failures']:
+        source = next(r for r in original[0] if r['transition_id'] == row['transition_id'])
+        for key in ('source', 'target', 'raw_ref', 'controller_receipt_ref', 'effect_status',
+                    'tool_call_id', 'module_id', 'before_image', 'after_image'):
+            if key in ('before_image', 'after_image'):
+                assert row[key]['ref'] == source[key]['ref'] and row[key]['sha256'] == source[key]['sha256']
+            else:
+                assert row[key] == source[key]
+        if controller_error is not None:
+            assert row['error'] == controller_error
+    assert (module.recent, module.unresolved) == original
+
+
+def test_derived_metadata_remains_in_a_wide_packet_and_strict_reference_floor_still_fails():
+    module = bounded_reference_module()
+    for row in module.recent + module.unresolved:
+        row.update(action_fingerprint='original fingerprint', error=None)
+    packet = module.packet(max_bytes=20000)
+    assert all(row['action_fingerprint'] == 'original fingerprint' and row['error'] is None
+               for row in packet['recent_transitions'] + packet['unresolved_failures'])
+    assert 'derived_transition_metadata' not in packet['projection_omissions']
+    with pytest.raises(ValueError, match='latest action and unresolved failure references'):
+        module.packet(max_bytes=1)
