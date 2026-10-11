@@ -1002,3 +1002,134 @@ def test_local_actor_module_projection_preserves_operation_receipts_and_unresolv
     assert packet['recent_transitions'] == [recent] and packet['unresolved_failures'] == module.unresolved
     assert 'Never execute' not in dumps(packet)
     assert [module.modules, module.recent, module.unresolved] == original
+
+
+def intent_operation(tmp_path, response, *, capture=False):
+    memory = TaskMemory('task', tmp_path / 'memory')
+    memory.initialize('Perform the requested operation')
+    log = TransitionJournal(tmp_path / 'events', task_id='task', run_id='run',
+                            contract=CUAContract(model_screen_width=64, model_screen_height=48))
+    module = ExecutionModules(memory, log)
+    module.compare_state_v10 = module.intent_verification_v12 = True
+    log.begin('Perform the requested operation', image(), step=1)
+    log.annotate(log.current['id'], logical_page='editor',
+        state_schema={'window_state': 'normal', 'menu': 'open', 'focus': 'menu', 'clock': '1'}, evidence_ref='before.png')
+    tools = [{'id': 'original-click', 'arguments': {'action': 'left_click', 'coordinate': [3, 4]},
+              'command_indices': [0]}]
+    if capture:
+        tools.append({'id': 'original-capture', 'arguments': {'action': 'screenshot'}, 'command_indices': [1]})
+    log.decide(response, ['click'] + (['capture'] if capture else []), step=1, tools=tools)
+    row = log.result('click', step=1, observation=image(), receipts=[{'returncode': 0}])
+    if capture:
+        log.result('capture', step=1, observation=image(), receipts=[{'returncode': 0}])
+    module.sync()
+    return memory, log, module, row
+
+
+def intent_check(module, row, assessment, *, key='window_state', quote='Window: normal'):
+    return {'transition_id': row['id'], 'target_observation_id': row['target'], 'frame_id': '2',
+        'assessment': assessment, 'checks': [
+            {'kind': 'focus', 'assessment': 'observed', 'quotes': ['Focus: editor']},
+            {'kind': 'intent', 'assessment': assessment,
+             'quotes': [] if assessment == 'unknown' else [quote], 'state_keys': [key]}]}
+
+
+def test_intent_prevents_menu_change_from_certifying_requested_maximization(tmp_path):
+    prose = 'Click Maximize to maximize the editor window.'
+    memory, log, module, row = intent_operation(tmp_path, prose)
+    state = {'fields': {'window_state': 'normal', 'menu': 'closed', 'focus': 'editor', 'clock': '2'}}
+    visible = ['Focus: editor', 'Window: normal']
+    try:
+        intent = module.verification_action()['actor_intent']
+        assert intent['text'] == prose and intent['original_field'] == 'response'
+        assert intent['decision_ref'] == row['decision_ref'] and intent['command_index'] == 0
+        check = intent_check(module, row, 'observed')
+        with pytest.raises(ValueError, match='changed before/current'):
+            module.validate_action_check(check, frame='2', visible_texts=visible, current_state=state)
+        generic = deepcopy(check)
+        generic['checks'].pop()
+        with pytest.raises(ValueError, match='original actor intent separately'):
+            module.validate_action_check(generic, frame='2', visible_texts=visible, current_state=state)
+        failure = intent_check(module, row, 'not_observed')
+        module.validate_action_check(failure, frame='2', visible_texts=visible, current_state=state)
+        module.record_action_check(failure, frame='2', current_state=state)
+        warning = module.actor_feedback()
+        assert warning['assessment'] == 'not_observed' and warning['unconfirmed_repetition_count'] == 1
+        assert warning['checks'][1]['state_keys'] == ['window_state']
+        assert module.event(row['decision_id'])['response'] == prose
+        assert module.event(row['id'])['tool']['arguments']['coordinate'] == [3, 4]
+    finally:
+        log.close()
+        memory.close()
+
+
+def test_observed_intent_requires_relevant_known_state_change_not_clock_or_new_keys(tmp_path):
+    memory, log, module, row = intent_operation(tmp_path, 'Maximize this window.')
+    try:
+        state = {'fields': {'window_state': 'maximized', 'menu': 'closed', 'focus': 'editor', 'clock': '2'}}
+        check = intent_check(module, row, 'observed', quote='Window: maximized')
+        module.validate_action_check(check, frame='2', visible_texts=['Focus: editor', 'Window: maximized'], current_state=state)
+        for key in ('clock', 'renamed_window_state'):
+            bad = intent_check(module, row, 'observed', key=key, quote='Window: maximized')
+            with pytest.raises(ValueError, match='changed before/current'):
+                module.validate_action_check(bad, frame='2', visible_texts=['Focus: editor', 'Window: maximized'], current_state=state)
+        ambiguous = intent_check(module, row, 'unknown')
+        module.validate_action_check(ambiguous, frame='2', visible_texts=['Focus: editor'], current_state=state)
+        ambiguous['assessment'] = 'observed'
+        with pytest.raises(ValueError, match='agree with its individual checks'):
+            module.validate_action_check(ambiguous, frame='2', visible_texts=['Focus: editor'], current_state=state)
+    finally:
+        log.close()
+        memory.close()
+
+
+def test_intent_omits_whole_oversized_prose_without_inventing_success_or_mutating_history(tmp_path):
+    import hashlib
+    prose = '原始执行意图' * 100
+    memory, log, module, row = intent_operation(tmp_path, prose)
+    try:
+        value = module.verification_action(max_bytes=4000)
+        intent = value['actor_intent']
+        assert intent['text'] is None and intent['text_omitted']
+        assert intent['original_text_bytes'] == len(prose.encode())
+        assert intent['original_text_sha256'] == hashlib.sha256(prose.encode()).hexdigest()
+        assert len(dumps(value).encode()) <= 4000 and module.event(row['decision_id'])['response'] == prose
+        check = intent_check(module, row, 'observed', quote='Window: maximized')
+        state = {'fields': {'window_state': 'maximized', 'focus': 'editor'}}
+        with pytest.raises(ValueError, match='exact admitted actor prose'):
+            module.validate_action_check(check, frame='2', visible_texts=['Focus: editor', 'Window: maximized'], current_state=state)
+        module.validate_action_check(intent_check(module, row, 'unknown'), frame='2',
+            visible_texts=['Focus: editor'], current_state=state)
+    finally:
+        log.close()
+        memory.close()
+
+
+def test_batch_intent_remains_decision_scoped_and_capture_does_not_replace_operation(tmp_path):
+    prose = 'Click the control, then capture evidence of its effect.'
+    memory, log, module, row = intent_operation(tmp_path, prose, capture=True)
+    try:
+        value = module.verification_action()
+        assert value['transition_id'] == row['id'] and value['actor_intent']['command_count'] == 2
+        assert value['actor_intent']['command_index'] == 0
+        assert value['actor_intent']['scope'] == 'whole_decision_model_proposal_not_verified_effect'
+        assert value['actor_intent']['text'] == prose and value['latest_evidence_capture']['transition_id'] != row['id']
+    finally:
+        log.close()
+        memory.close()
+
+
+def test_serialized_native_message_without_prose_does_not_invent_intent(tmp_path):
+    response = dumps({'role': 'assistant', 'content': None, 'tool_calls': [{'id': 'original-click'}]})
+    memory, log, module, row = intent_operation(tmp_path, response)
+    try:
+        assert 'actor_intent' not in module.verification_action()
+        check = intent_check(module, row, 'unknown')
+        check['checks'].pop()
+        check['assessment'] = 'observed'
+        module.validate_action_check(check, frame='2', visible_texts=['Focus: editor'],
+            current_state={'fields': {'window_state': 'normal', 'focus': 'editor'}})
+        assert module.event(row['decision_id'])['response'] == response
+    finally:
+        log.close()
+        memory.close()

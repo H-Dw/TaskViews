@@ -122,6 +122,9 @@ def run_fixture(directory, *, bad_action_binding=False, null_subgoal_review=Fals
         if payload.get('tools'):
             roles['executor'] += 1
             args = script[native_index]
+            message['content'] = ('Focus the input control', 'Focus the input control',
+                'Focus the input control', 'Type the requested text', 'Submit the requested object',
+                'Save the requested result', 'Finish after the saved result is visible')[native_index]
             native_index += 1
             body['choices'][0]['finish_reason'] = 'tool_calls'
             message['tool_calls'] = [{'id': 'fixture-native-' + str(native_index), 'type': 'function',
@@ -157,6 +160,11 @@ def run_fixture(directory, *, bad_action_binding=False, null_subgoal_review=Fals
                         check['checks'].append({'kind': 'focus', 'assessment': 'observed', 'quotes': [ui.visible()[0]]})
                     elif kind == 'submission':
                         check['checks'].append({'kind': 'object', 'assessment': assessment, 'quotes': [ui.visible()[2]]})
+                    if last.get('actor_intent'):
+                        key = 'saved' if ui.saved else {'focus': 'focus', 'text': 'input',
+                            'submission': 'objects', 'state': 'saved'}[kind]
+                        check['checks'].append({'kind': 'intent', 'assessment': assessment,
+                            'quotes': check['checks'][0]['quotes'], 'state_keys': [key]})
                 value = {'summary': 'Fixture visible fields only',
                     'elements': [{'text': text, 'role': 'text', 'bbox': [60, 60 + i * 50, 1000, 100 + i * 50]}
                                  for i, text in enumerate(ui.visible())],

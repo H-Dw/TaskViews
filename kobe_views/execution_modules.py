@@ -6,6 +6,7 @@ feed these records back to its Agent. Receipt, model assessment and score differ
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 
 from .model import digest, dumps, plain, View
@@ -293,6 +294,36 @@ class ExecutionModules:
                 'source_evidence_ref': before['evidence_ref'] if before else None,
                 'shared_field_keys': shared, 'changed_field_keys': changed, 'grade': 'model_proposal'}
 
+    def verification_intent(self, last):
+        """Read original actor prose, not a planner's replacement of its intent."""
+        if not getattr(self, 'intent_verification_v12', False):
+            return None
+        edge = self.event(last['transition_id'])
+        decision = self.event(edge.get('decision_id')) if edge else None
+        if not decision:
+            return None
+        text, field = decision.get('local_instruction'), 'local_instruction'
+        if not isinstance(text, str) or not text.strip():
+            text, field = decision.get('response'), 'response'
+            if isinstance(text, str):
+                try:
+                    message = json.loads(text)
+                except ValueError:
+                    message = None
+                # Native completions without prose use serialized tool messages.
+                # Those arguments are dispatch input, not an invented intention.
+                if isinstance(message, dict):
+                    text, field = message.get('content'), 'response.content'
+        if not isinstance(text, str) or not text.strip():
+            return None
+        encoded = text.encode()
+        return {'text': text if len(encoded) <= 1200 else None,
+                'text_omitted': len(encoded) > 1200, 'original_text_bytes': len(encoded),
+                'original_text_sha256': hashlib.sha256(encoded).hexdigest(),
+                'original_field': field, 'decision_ref': edge['decision_ref'],
+                'scope': 'whole_decision_model_proposal_not_verified_effect',
+                'command_index': edge['command_index'], 'command_count': len(decision['commands'])}
+
     def verification_action(self, max_bytes=4000):
         """Bound adviser evidence without altering the original action/state."""
         last = self.last_action()
@@ -308,6 +339,9 @@ class ExecutionModules:
         value['omitted_before_state_keys'] = []
         value['previous_assessment'] = (last.get('action_check') or {}).get('assessment', 'unknown')
         value['complete_model_feedback_ref'] = str(self.path) + '#effects/' + last['transition_id']
+        intent = self.verification_intent(last)
+        if intent is not None:
+            value['actor_intent'] = intent
         if last.get('evidence_capture_refs'):
             value['latest_evidence_capture'] = plain(last['evidence_capture_refs'][-1])
         # Keep whole known field values. Omitted fields remain at the exact
@@ -348,14 +382,29 @@ class ExecutionModules:
             raise ValueError('Action verification must bind the last transition/post observation/current frame. '
                 'Copy action_check_binding exactly: ' + dumps(self.verification_binding(frame))
                 + '. A later screenshot target is evidence only; do not replace the operation target.')
+        intent = self.verification_intent(last)
         for item in check['checks']:
-            if (not isinstance(item, dict) or set(item) != {'kind', 'assessment', 'quotes'}
-                    or item['kind'] not in {'focus', 'text', 'submission', 'object', 'state'}
+            intent_check = isinstance(item, dict) and item.get('kind') == 'intent'
+            fields = {'kind', 'assessment', 'quotes'} | ({'state_keys'} if intent_check else set())
+            if (not isinstance(item, dict) or set(item) != fields
+                    or item['kind'] not in {'focus', 'text', 'submission', 'object', 'state', 'intent'}
                     or item['assessment'] not in {'observed', 'not_observed', 'unknown'}
                     or not isinstance(item['quotes'], list) or len(item['quotes']) > 4
                     or any(not isinstance(q, str) or not q or len(q) > 256 for q in item['quotes'])
                     or item['assessment'] != 'unknown' and not item['quotes']):
                 raise ValueError('Action checks require bounded visible quotes, not a global goal verdict')
+            if intent_check:
+                keys = item['state_keys']
+                if (not intent or not isinstance(keys, list) or len(keys) > 4
+                        or any(not isinstance(key, str) or not key or len(key) > 64 for key in keys)
+                        or len(keys) != len(set(keys))):
+                    raise ValueError('Intent check requires supplied actor intent and <=4 unique state_keys')
+                if item['assessment'] == 'observed':
+                    comparison = self.state_comparison(current_state)
+                    if intent['text_omitted'] or not keys or not set(keys) <= set(comparison['changed_field_keys']):
+                        raise ValueError('Observed intent requires its exact admitted actor prose and changed '
+                            'before/current ui_state keys for that intended effect; an unrelated menu/focus '
+                            'change is insufficient. Use unknown/not_observed when it is not established.')
             missing = [quote for quote in item['quotes'] if not any(quote in text for text in visible_texts)]
             if missing:
                 # Preserve the candidate and strict guard. A generic rejection
@@ -369,6 +418,9 @@ class ExecutionModules:
                 raise ValueError('Action checks require bounded visible quotes, not a global goal verdict: ' + dumps(detail))
         assessments = {c['assessment'] for c in check['checks']}
         kinds = {c['kind'] for c in check['checks']}
+        if intent and sum(c['kind'] == 'intent' for c in check['checks']) != 1:
+            raise ValueError('Verify the original actor intent separately with one intent check and state_keys; '
+                             'generic focus/state success does not prove the intended effect')
         if last['expected_change']['kind'] not in kinds:
             raise ValueError('Check the expected change of this specific action')
         if last['expected_change']['kind'] == 'text' and 'focus' not in kinds:
@@ -506,7 +558,8 @@ class ExecutionModules:
         checks = []
         for item in check.get('checks', []):
             checks.append({'kind': item['kind'], 'assessment': item['assessment'],
-                           'quotes': item['quotes'][:1]})
+                           'quotes': item['quotes'][:1],
+                           **({'state_keys': item['state_keys']} if item['kind'] == 'intent' else {})})
         value = {'transition_id': last['transition_id'], 'target_observation_id': last['target'],
                  'raw_transition_ref': last['raw_ref'], 'tool_call_id': original.get('tool_call_id'),
                  'original_parameters': original.get('parameters'),

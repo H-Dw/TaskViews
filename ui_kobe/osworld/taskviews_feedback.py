@@ -47,6 +47,20 @@ executed_tool_input contains the original parameters and their original frame
 contract, not suggested new pointer coordinates. Re-ground the intended control
 in the current screenshot; never interpret those screen pixels as app mathematics.
 text checks also require focus, and submission checks also require object/result.
+When last_action.actor_intent is supplied, include exactly one additional check
+{kind:'intent',assessment,quotes:[literal visible text],state_keys:[ui_state field keys]}.
+Read the original actor prose as a decision-level proposal, not a verified effect.
+Identify the intended result attributable to this specific command. A batch's
+whole intention is not a per-command promise; use unknown if attribution is unclear.
+Check that result separately from focus/menu changes. For example, closing a menu
+does not establish that the intended window state changed. Observed intent must
+name 1..4 keys whose known values changed from supplied before_state to current
+ui_state, specifically measuring the intended result, not an unrelated change.
+Copy existing keys; do not fabricate or rename a key to manufacture success.
+Use unknown when the original prose was wholly omitted, or the relevant before
+state/result is unavailable. not_observed requires actual evidence of failed effect.
+Other checks retain their original three fields. Aggregate intent with all checks:
+an observed focus with unconfirmed intent must not become overall observed.
 Optional subgoal_review={subgoal_id,
 change_needed:bool,quotes:[visible text]} requests a fresh plan only when the
 current subgoal needs review; it does not certify task completion.
@@ -117,7 +131,10 @@ Use the original task, current image, and the latest actual operation/effect
 evidence to choose the next operation. Re-ground all parameters yourself.
 Keep view classification and long graph reasoning outside this action loop.
 Verify uncertain focus/state changes before dependent operations. The original
-native actor alone decides actions and termination."""
+native actor alone decides actions and termination. Do not let optional window
+preparation become a prerequisite forever: after failed preparation, consider a
+direct ordinary route to the requested deliverable in the accessible current UI.
+Preserve every original requirement; do not claim an unobserved preparation worked."""
 
 
 def feedback_analysis_triggers(modules, raw, feedback, pointer_recovery):
@@ -255,6 +272,7 @@ def build_feedback_views(owner, deadline):
     modules = getattr(owner, 'modules', None)
     if modules:
         modules.compare_state_v10 = True
+        modules.intent_verification_v12 = True
     core, inventory = control._core(), control.inventory()
     frame = owner.frame.metadata['frame_id']
     last = modules.verification_action() if modules else None
