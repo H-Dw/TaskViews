@@ -687,3 +687,64 @@ def test_planner_large_visible_text_is_optional_after_actual_action_feedback():
     assert result['action_feedback'] == warning and result['original_task'] == 'Original task'
     assert 'visible_text' not in result and 'budget_omitted:visible_text' in result['context_gaps']
     assert result['mandatory_core'] == core
+
+def bounded_reference_module():
+    from types import SimpleNamespace
+    module = ExecutionModules.__new__(ExecutionModules)
+    def record(identity):
+        return {'transition_id': identity, 'source': 'before-' + identity, 'target': 'after-' + identity,
+                'raw_ref': '/immutable/' + identity + '/' + 'p' * 200,
+                'controller_receipt_ref': '/immutable/' + identity + '/' + 'p' * 200,
+                'action_semantics': {'action': 'left_click', 'advice': 'a' * 1500},
+                'action_check': {'assessment': 'not_observed'}, 'effect_status': 'unknown',
+                'before_image': {'ref': '/image/pre-' + identity, 'sha256': '1' * 64, 'bytes': 123456},
+                'after_image': {'ref': '/image/post-' + identity, 'sha256': '2' * 64, 'bytes': 123456},
+                'expected_change': {'kind': 'focus', 'description': 'Confirm this exact effect ' * 8},
+                'evidence_capture_refs': [], 'omitted_older_capture_refs': 0}
+    module.recent = [record('failed'), record('latest')]
+    module.unresolved = [deepcopy(module.recent[0])]
+    module.modules = {}
+    module.active = None
+    module.previous_revision = None
+    module.new_events = []
+    module.gaps = []
+    module.memory = SimpleNamespace(snapshot=SimpleNamespace(revision='original'))
+    module.transition_packet = lambda row: deepcopy(row)
+    module.last_action = lambda: deepcopy(module.recent[-1])
+    return module
+
+
+def test_packet_preserves_two_distinct_edges_when_optional_reference_metadata_exceeds_budget():
+    module = bounded_reference_module()
+    original = deepcopy((module.recent, module.unresolved))
+    minimal = module.packet(max_bytes=20000)
+    minimal['recent_transitions'] = minimal['recent_transitions'][-1:]
+    for row in minimal['recent_transitions'] + minimal['unresolved_failures']:
+        row.pop('action_semantics')
+        row.pop('action_check')
+    minimal['projection_omissions'] = {'older_transition': 1, 'transition_details_at_raw_ref': 2}
+    budget = len(dumps(minimal).encode()) - 1
+    packet = module.packet(max_bytes=budget)
+    assert len(dumps(packet).encode()) <= budget
+    assert packet['projection_omissions']['optional_transition_metadata'] >= 1
+    assert {r['transition_id'] for r in packet['recent_transitions']} == {'latest'}
+    assert {r['transition_id'] for r in packet['unresolved_failures']} == {'failed'}
+    for row in packet['recent_transitions'] + packet['unresolved_failures']:
+        source = next(r for r in original[0] if r['transition_id'] == row['transition_id'])
+        assert row['raw_ref'] == row['controller_receipt_ref'] == source['raw_ref']
+        assert (row['source'], row['target'], row['effect_status']) == (source['source'], source['target'], 'unknown')
+        for key in ('before_image', 'after_image'):
+            assert row[key]['ref'] == source[key]['ref'] and row[key]['sha256'] == source[key]['sha256']
+        assert row['expected_change']['kind'] == 'focus'
+    assert (module.recent, module.unresolved) == original
+
+
+def test_packet_optional_metadata_stays_with_room_and_impossible_budget_still_fails():
+    module = bounded_reference_module()
+    packet = module.packet(max_bytes=20000)
+    latest = packet['recent_transitions'][-1]
+    assert latest['expected_change']['description'] == module.recent[-1]['expected_change']['description']
+    assert latest['before_image']['bytes'] == 123456
+    assert 'optional_transition_metadata' not in packet['projection_omissions']
+    with pytest.raises(ValueError, match='latest action and unresolved failure references'):
+        module.packet(max_bytes=1)

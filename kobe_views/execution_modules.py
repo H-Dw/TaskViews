@@ -531,7 +531,24 @@ class ExecutionModules:
                 records = packet['recent_transitions'] + packet['unresolved_failures']
                 detailed = next((r for r in records if 'action_semantics' in r), None)
                 if detailed is None:
-                    raise ValueError('Budget cannot hold the latest action and unresolved failure references')
+                    metadata = next((r for r in records if
+                        any('bytes' in (r.get(k) or {}) for k in ('before_image', 'after_image'))
+                        or 'description' in r.get('expected_change', {})
+                        or r.get('evidence_capture_refs') == [] and r.get('omitted_older_capture_refs') == 0), None)
+                    if metadata is None:
+                        raise ValueError('Budget cannot hold the latest action and unresolved failure references')
+                    # Image lengths and generic advice are optional metadata.
+                    # Keep exact image refs/SHA, operation/receipt identity and
+                    # the unresolved failure; never relabel its outcome.
+                    for key in ('before_image', 'after_image'):
+                        if isinstance(metadata.get(key), dict):
+                            metadata[key].pop('bytes', None)
+                    metadata.get('expected_change', {}).pop('description', None)
+                    if metadata.get('evidence_capture_refs') == [] and metadata.get('omitted_older_capture_refs') == 0:
+                        metadata.pop('evidence_capture_refs')
+                        metadata.pop('omitted_older_capture_refs')
+                    omitted('optional_transition_metadata')
+                    continue
                 for key in ('action_semantics', 'action_check', 'instruction_ref', 'decision_ref', 'gaps',
                             'executed_tool_input', 'before_state'):
                     detailed.pop(key, None)
