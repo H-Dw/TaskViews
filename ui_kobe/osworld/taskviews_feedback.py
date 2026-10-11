@@ -187,6 +187,9 @@ descriptions are model proposals, not pointer targets or executable plans.
 Use the original task, current image, and the latest actual operation/effect
 evidence to choose the next operation. Re-ground all parameters yourself.
 Keep view classification and long graph reasoning outside this action loop.
+Hover/tooltip text alone does not establish foreground focus or an overlapping
+window. Distinguish application controls from the desktop launcher in the current
+image; a window switch is not evidence that the intended menu opened.
 Verify uncertain focus/state changes before dependent operations. The original
 native actor alone decides actions and termination. Do not let optional window
 preparation become a prerequisite forever: after failed preparation, consider a
@@ -305,6 +308,56 @@ def _admit(base, optional, limit):
 
 def _visible(raw):
     return [raw['summary'], *(e['text'] for e in raw['elements'])]
+
+
+def _admit_execution_feedback(protected, optional, modules, limit, *, strategy_review):
+    """Reserve execution identity before supplementary current-frame labels.
+
+    The current screenshot remains the pointer source. Only whole literal
+    labels/summary can yield to the already reduced operation/receipt/image
+    floor; mandatory warnings, subgoal and fresh strategy stay unchanged.
+    """
+    from kobe_views.execution_modules import ExecutionPacketBudgetError
+
+    optional = list(optional)
+    gaps = ['budget_omitted:' + key for key, _ in optional]
+
+    def envelope(projection):
+        return {**protected, 'role_evidence': {'execution_modules': projection,
+                'strategy_review': strategy_review}, 'context_gaps': gaps}
+
+    budget = min(6000, limit - len(dumps(envelope(None)).encode()) + len('null'))
+    try:
+        projection = modules.packet(max_bytes=max(0, budget), include_modules=False,
+                                    share_duplicate_refs=True, share_exact_refs=True)
+    except ExecutionPacketBudgetError as exc:
+        # No new capacity: redistribute the same admitted actor packet. This
+        # projection is exposed only after all older/optional module detail and
+        # exact duplicate values have already yielded to protected references.
+        projection = exc.projection
+        if len(dumps(projection).encode()) > 6000:
+            raise
+        fixed = {**envelope(projection), 'current_visible_evidence': None}
+        visible_budget = limit - len(dumps(fixed).encode()) + len('null')
+        original = protected['current_visible_evidence']
+        visible = {key: plain(value) for key, value in original.items()
+                   if key not in {'elements', 'summary'}}
+        visible.update(elements=[], omitted_elements=original['omitted_elements'] + len(original['elements']),
+                       summary_omitted=True)
+        if len(dumps(visible).encode()) > visible_budget:
+            raise
+        for label in original['elements']:
+            candidate = {**visible, 'elements': [*visible['elements'], plain(label)],
+                         'omitted_elements': visible['omitted_elements'] - 1}
+            if len(dumps(candidate).encode()) <= visible_budget:
+                visible = candidate
+        if 'summary' in original:
+            candidate = {**visible, 'summary': original['summary'], 'summary_omitted': False}
+            if len(dumps(candidate).encode()) <= visible_budget:
+                visible = candidate
+        protected = {**protected, 'current_visible_evidence': visible}
+    return _admit({**protected, 'role_evidence': {'execution_modules': projection,
+                  'strategy_review': strategy_review}}, optional, limit)
 
 
 def _planner_input(core, feedback, subgoal, instruction, visible, assigned, limit):
@@ -508,20 +561,8 @@ def build_feedback_views(owner, deadline):
     # The actor receives a local brief plus real execution references. Auxiliary
     # bbox/graph locators and duplicate long adviser reports are not action input.
     optional = [('input_policy', feedback.get('guidance'))]
-    envelope = {**protected,
-        'role_evidence': {'execution_modules': None, 'strategy_review': feedback['strategy_review']},
-        'context_gaps': ['budget_omitted:' + key for key, _ in optional]}
-    # Replace exactly the JSON null slot with the module projection. Account for
-    # its wrapper and every possible omission, rather than a guessed allowance.
-    projection_budget = min(6000, limit - len(dumps(envelope).encode()) + len('null'))
-    if projection_budget < 512:
-        raise ValueError('Actor input cannot retain current-action warning and original references before dispatch')
-    protected['role_evidence'] = {'execution_modules': modules.packet(max_bytes=projection_budget,
-                                                                    include_modules=False,
-                                                                    share_duplicate_refs=True,
-                                                                    share_exact_refs=True),
-                                 'strategy_review': feedback['strategy_review']}
-    executor = _admit(protected, optional, limit)
+    executor = _admit_execution_feedback(protected, optional, modules, limit,
+                                        strategy_review=feedback['strategy_review'])
     if feedback.get('state_review') and 'planner' in advisers:
         modules.record_uncertainty_review(feedback['state_review'])
     owner.view_trace = {'protocol': 'taskviews-feedback-v10', 'frame': owner.frame.metadata,

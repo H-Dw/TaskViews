@@ -23,6 +23,14 @@ def semantics(value):
     return value
 
 
+class ExecutionPacketBudgetError(ValueError):
+    """The remaining projection contains only protected execution references."""
+
+    def __init__(self, projection):
+        super().__init__('Budget cannot hold the latest action and unresolved failure references')
+        self.projection = plain(projection)
+
+
 class ExecutionModules:
     def __init__(self, memory, journal):
         self.memory, self.journal = memory, journal
@@ -908,7 +916,7 @@ class ExecutionModules:
                             if share_exact_refs and self._share_packet_reference(packet):
                                 omitted('shared_exact_reference_values')
                                 continue
-                            raise ValueError('Budget cannot hold the latest action and unresolved failure references')
+                            raise ExecutionPacketBudgetError(packet)
                         # Repetition is already in protected actor_feedback.
                         # Its derived fingerprint and an absent error need no
                         # second copy; real errors and exact refs stay intact.

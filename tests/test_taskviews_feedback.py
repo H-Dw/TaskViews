@@ -1572,6 +1572,97 @@ def resolve_projection_value(packet, value):
     return deepcopy(value)
 
 
+def local_feedback_base():
+    return {'protocol': 'taskviews-feedback-v10', 'frame_id': 'current-frame',
+            'last_action_feedback': {'transition_id': 'edge', 'assessment': 'unknown'},
+            'active_subgoal': {'id': 'stable', 'label': 'Create the requested object'},
+            'next_strategy': {'advice': 'Locate the current control and verify its effect.'},
+            'current_visible_evidence': {'elements': [{'text': 'Menu', 'role': 'button'}],
+                'summary': 'Visible editor', 'omitted_elements': 0, 'summary_omitted': False,
+                'grade': 'model_proposal', 'pointer_source': 'current_original_screenshot'}}
+
+
+def test_reference_floor_error_exposes_exact_reduced_projection_without_mutating_history():
+    from kobe_views.execution_modules import ExecutionPacketBudgetError
+    module = duplicated_local_reference_module()
+    original = deepcopy([module.recent, module.unresolved])
+    with pytest.raises(ExecutionPacketBudgetError, match='latest action and unresolved failure') as raised:
+        module.packet(max_bytes=1, include_modules=False, share_duplicate_refs=True, share_exact_refs=True)
+    projection = raised.value.projection
+    assert projection['recent_transitions'][0]['transition_id'] == original[0][0]['transition_id']
+    assert projection['unresolved_failures'][0]['error'] == original[1][0]['error']
+    assert [module.recent, module.unresolved] == original
+
+
+@pytest.mark.parametrize('label,summary', [('Label ' * 50, 'Summary ' * 100),
+                                         ('可见控件' * 60, '原始观察' * 150),
+                                         ('Menu', 'Original summary ' * 120)])
+def test_execution_identity_outlives_large_whole_labels_and_summary(label, summary):
+    from kobe_views.execution_modules import ExecutionPacketBudgetError
+    from ui_kobe.osworld.taskviews_feedback import _admit_execution_feedback
+    module = duplicated_local_reference_module()
+    failure = module.unresolved[0]
+    failure.update(transition_id='different-failure', raw_ref=failure['raw_ref'] + '-failure',
+                   controller_receipt_ref=failure['raw_ref'] + '-failure')
+    base = local_feedback_base()
+    base['current_visible_evidence'].update(elements=[{'text': label, 'role': 'button'},
+                                                     {'text': 'Current input', 'role': 'textbox'}],
+                                           summary=summary, omitted_elements=3)
+    original = deepcopy([base, module.recent, module.unresolved])
+    with pytest.raises(ExecutionPacketBudgetError) as raised:
+        module.packet(max_bytes=1, include_modules=False, share_duplicate_refs=True, share_exact_refs=True)
+    floor = raised.value.projection
+    fixed = {**base, 'current_visible_evidence': None,
+             'role_evidence': {'execution_modules': floor, 'strategy_review': True},
+             'context_gaps': ['budget_omitted:input_policy']}
+    limit = len(dumps(fixed).encode()) - len('null') + 300
+    packet = _admit_execution_feedback(base, [('input_policy', 'Optional advice ' * 80)],
+                                       module, limit, strategy_review=True)
+    assert len(dumps(packet).encode()) <= limit
+    projected = packet['role_evidence']['execution_modules']
+    assert projected == floor
+    decoded = resolve_projection_value(projected, projected)
+    for collection, expected in zip(('recent_transitions', 'unresolved_failures'), original[1:], strict=True):
+        row = decoded[collection][0]
+        assert row['transition_id'] == expected[0]['transition_id']
+        for key in ('raw_ref', 'controller_receipt_ref', 'before_image', 'after_image', 'effect_status'):
+            assert row[key] == expected[0][key]
+    assert decoded['unresolved_failures'][0]['error'] == 'Original unresolved failure'
+    assert packet['last_action_feedback'] == base['last_action_feedback']
+    assert packet['next_strategy'] == base['next_strategy'] and packet['active_subgoal'] == base['active_subgoal']
+    visible = packet['current_visible_evidence']
+    assert visible['summary_omitted'] and 'summary' not in visible
+    assert all(item in base['current_visible_evidence']['elements'] for item in visible['elements'])
+    assert visible['omitted_elements'] + len(visible['elements']) == 5
+    assert visible['pointer_source'] == 'current_original_screenshot'
+    assert [base, module.recent, module.unresolved] == original
+
+
+def test_execution_admission_keeps_wide_packet_identical_and_real_floor_strict():
+    from ui_kobe.osworld.taskviews_feedback import _admit, _admit_execution_feedback
+    module, base = duplicated_local_reference_module(), local_feedback_base()
+    optional = [('input_policy', 'Optional advice')]
+    expected = _admit({**base, 'role_evidence': {'execution_modules': module.packet(
+        max_bytes=6000, include_modules=False, share_duplicate_refs=True, share_exact_refs=True),
+        'strategy_review': False}}, optional, 20000)
+    assert _admit_execution_feedback(base, optional, module, 20000, strategy_review=False) == expected
+    with pytest.raises(ValueError, match='latest action and unresolved failure'):
+        _admit_execution_feedback(base, optional, module, 700, strategy_review=False)
+    base['last_action_feedback']['must_keep'] = 'Original mandatory warning' * 300
+    with pytest.raises(ValueError, match='latest action and unresolved failure'):
+        _admit_execution_feedback(base, optional, module, 2000, strategy_review=False)
+
+
+def test_execution_admission_does_not_convert_unrelated_module_errors_to_label_omission():
+    from types import SimpleNamespace
+    from ui_kobe.osworld.taskviews_feedback import _admit_execution_feedback
+    def broken(**kwargs):
+        raise ValueError('Original missing execution identity')
+    with pytest.raises(ValueError, match='Original missing execution identity'):
+        _admit_execution_feedback(local_feedback_base(), [], SimpleNamespace(packet=broken),
+                                  8000, strategy_review=False)
+
+
 def test_exact_value_refs_keep_distinct_latest_and_failure_edges_under_budget():
     module = duplicated_local_reference_module()
     failure = module.unresolved[0]
