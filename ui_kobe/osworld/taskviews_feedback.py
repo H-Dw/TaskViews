@@ -74,6 +74,9 @@ focus and input contents before another blind attempt. Give no pointer coordinat
 without the current image.
 When pointer grounding remains uncertain, consider the application's normal
 keyboard navigation/shortcuts from its visible state, rather than another guess.
+When pointer_recovery_required is true, plan one normal keyboard recovery
+operation and its visible verification; further pointer guesses are rejected
+until an observed state change clears the earlier cycle. Do not guess a shortcut.
 When a folder click has no visible effect, consider normal dialog keyboard
 location/full-requested-path navigation. Verify the resulting folder and filename
 before confirmation; do not substitute a guessed pointer coordinate.
@@ -258,12 +261,15 @@ def build_feedback_views(owner, deadline):
         reasons.append('initial_plan')
     if modules and page is not None and modules.page_id is not None and page != modules.page_id:
         reasons.append('page_change')
-    if raw.get('subgoal_review', {}).get('change_needed'):
+    if (raw.get('subgoal_review') or {}).get('change_needed'):
         reasons.append('subgoal_review')
     if raw['action_check'] and raw['action_check']['assessment'] == 'not_observed':
         reasons.append('last_action_not_observed')
     if feedback['strategy_review']:
         reasons.append('repeated_unconfirmed_strategy')
+    pointer_recovery = len(modules.stalled_pointer_actions()) >= 2
+    if pointer_recovery:
+        reasons.append('persistent_pointer_uncertainty')
     if modules and page is not None:
         modules.page_id = page
         modules.save()
@@ -288,6 +294,7 @@ def build_feedback_views(owner, deadline):
     if reasons:
         short_feedback = {'last_action': modules.actor_feedback(),
             'repetition_count': feedback['repetition_count'], 'strategy_review': feedback['strategy_review'],
+            'pointer_recovery_required': pointer_recovery,
             'guidance': feedback.get('guidance')}
         controller_input = {'mandatory_core': core,
             'consumer_allowed_anchors': control.views.allowed_anchor_inventory(snapshot, limit=16),
@@ -343,6 +350,12 @@ def build_feedback_views(owner, deadline):
     stalls = modules.stalled_pointer_actions()
     if stalls:
         protected['stalled_pointer_actions'] = stalls
+    if pointer_recovery:
+        protected['pointer_recovery'] = {
+            'required': True, 'grade': 'model_proposal', 'guidance':
+                'Multiple distinct pointer locations repeatedly produced no established state change. '
+                'Choose one normal application keyboard recovery operation, then inspect its effect. '
+                'Do not try another pointer location or dependent text until a known state change clears this warning.'}
     optional = [('active_subgoal', modules.subgoals[proposed['subgoal_id']]),
         ('input_policy', feedback.get('guidance')),
         ('current_visible_evidence', {'summary': raw['summary'], 'elements': raw['elements']}),

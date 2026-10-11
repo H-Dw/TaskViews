@@ -102,6 +102,12 @@ def test_confirmed_intervening_change_clears_older_pointer_cycle():
     assert module.stalled_pointer_actions() == []
 
 
+def test_nullable_optional_review_completes_full_offline_flow_without_local_read_exception(tmp_path):
+    result = run_fixture(tmp_path / 'nullable-review', null_subgoal_review=True)
+    assert result['terminal'] and not result['paused'] and result['fixture_score'] == 1
+    assert result['official_score'] is None and result['all_actor_packets_delivered']
+
+
 def test_current_recovery_advice_precedes_optional_graph_and_is_not_promoted_to_command():
     from ui_kobe.osworld.taskviews_feedback import _admit
     module, _ = repeated_warning_module()

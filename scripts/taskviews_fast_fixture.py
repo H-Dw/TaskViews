@@ -78,7 +78,7 @@ class FixtureSnapshots:
         return {'status': 'paused' if command == 'stop' else 'running'}
 
 
-def run_fixture(directory, *, bad_action_binding=False):
+def run_fixture(directory, *, bad_action_binding=False, null_subgoal_review=False):
     import httpx
     from ui_kobe.api.qwen_native import MODEL, BASE_URL, QwenNativeClient
     from ui_kobe.osworld.qwen_taskviews_native import QwenTaskViewsNativeAgent
@@ -163,6 +163,8 @@ def run_fixture(directory, *, bad_action_binding=False):
                     'semantics': {'entities': [], 'claims': []}, 'action_check': check,
                     'ui_state': {'page_id': 'fixture-editor', 'fields': {'focus': ui.focus, 'input': ui.text,
                         'objects': ','.join(ui.objects), 'saved': ui.saved}}}
+                if null_subgoal_review:
+                    value['subgoal_review'] = None
             elif 'task controller' in system:
                 roles['view_controller'] += 1
                 value = {'stage': 'work', 'subgoal_id': 'create-save',

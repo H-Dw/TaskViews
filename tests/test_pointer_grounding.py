@@ -176,6 +176,47 @@ def test_stalled_pointer_exhaustion_produces_no_decision_or_history_promotion(mo
         actor.close()
 
 
+@pytest.mark.parametrize('candidate', [
+    {'action': 'left_click', 'coordinate': [1711, 49]},
+    {'action': 'double_click', 'coordinate': [319, 720]},
+    {'action': 'type', 'text': 'unconfirmed dependent input'}])
+def test_distinct_failed_pointer_cycle_requires_keyboard_recovery_without_selecting_shortcut(candidate):
+    from ui_kobe.osworld.pointer_grounding import validate_pointer_strategy
+    from ui_kobe.api.kimi_stream import StreamProtocolError
+    stalled = [{'parameters': {'action': 'left_click', 'coordinate': point},
+                'transition_ids': [f'{i}-first', f'{i}-second'], 'assessments': ['not_observed', 'unknown']}
+               for i, point in enumerate(([239, 228], [891, 45]))]
+    original = deepcopy(candidate)
+    with pytest.raises(StreamProtocolError) as failure:
+        validate_pointer_strategy([candidate], stalled, frame_id='current', keyboard_recovery=True)
+    assert failure.value.code == 'pointer_keyboard_recovery' and candidate == original
+    for operation in ({'action': 'key', 'keys': ['alt', 'f']}, {'action': 'screenshot'},
+                      {'action': 'wait'}, {'action': 'terminate', 'status': 'failure'}):
+        validate_pointer_strategy([operation], stalled, frame_id='current', keyboard_recovery=True)
+    validate_pointer_strategy([candidate], [], frame_id='current', keyboard_recovery=True)
+
+
+def test_real_actor_changes_pointer_method_via_bounded_repair_and_keeps_original_candidate(monkeypatch, tmp_path):
+    proposed = {'action': 'left_click', 'coordinate': [1711, 49]}
+    keyboard = {'action': 'key', 'keys': ['alt', 'f']}
+    actor, obs, sent, _ = qwen_actor(monkeypatch, tmp_path, [proposed, keyboard])
+    stalled = [{'parameters': {'action': 'left_click', 'coordinate': point},
+                'transition_ids': [f'{i}-first', f'{i}-second'], 'assessments': ['unknown', 'not_observed']}
+               for i, point in enumerate(([239, 228], [891, 45]))]
+    actor.modules = SimpleNamespace(stalled_pointer_actions=lambda: stalled)
+    try:
+        _, commands = actor.predict('Original exact task', obs)
+        assert commands == official_compile([keyboard], actor.frame).commands and len(sent) == 2
+        rejected = next(m for m in sent[1]['messages'] if m['role'] == 'assistant')
+        assert json.loads(rejected['tool_calls'][0]['function']['arguments']) == proposed
+        feedback = next(m for m in sent[1]['messages'] if m['role'] == 'tool')
+        assert feedback['tool_call_id'] == 'tool-1' and set(json.loads(feedback['content'])) == {'error'}
+        assert actor.step_ledger.snapshot()['repair_counts']['executor'] == 1
+        assert actor.step_ledger.snapshot()['known_usage']['total_tokens'] == 60
+    finally:
+        actor.close()
+
+
 def test_actual_predict_delivers_current_contract_before_analysis_each_turn(monkeypatch,tmp_path):
     actor,obs,sent,reads=qwen_actor(monkeypatch,tmp_path,[{'action':'left_click','coordinate':[1711,49]}])
     try:

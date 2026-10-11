@@ -18,7 +18,7 @@ confirmation, verifying each visible effect. Never use terminal or scripting.
 This contract belongs to the current image; older frame contracts are history."""
 
 
-def validate_pointer_strategy(arguments, stalled, *, frame_id):
+def validate_pointer_strategy(arguments, stalled, *, frame_id, keyboard_recovery=False):
     """Reject an exact failed pointer cycle before dispatch; never move a point.
 
     The shared native compiler validates first. The original repair loop owns
@@ -30,6 +30,17 @@ def validate_pointer_strategy(arguments, stalled, *, frame_id):
     from kobe_views.model import dumps
     from ui_kobe.api.kimi_stream import StreamProtocolError
     for action in arguments:
+        if keyboard_recovery and len(stalled) >= 2 and action.get('action') not in {
+                'key', 'wait', 'screenshot', 'terminate', 'user_question'}:
+            detail = {'frame_id': frame_id, 'rejected_parameters': action,
+                'failed_transition_ids': [identity for row in stalled for identity in row['transition_ids']],
+                'grade': 'model_proposal', 'repair':
+                    'Multiple distinct pointer locations repeatedly failed to establish a state change. '
+                    'Choose one normal application keyboard recovery operation and inspect its effect. '
+                    'Another pointer guess or dependent typing cannot resolve this uncertainty. '
+                    'Do not scale/clamp coordinates, open a terminal, or write a script.'}
+            raise StreamProtocolError('Keyboard recovery required: ' + dumps(detail),
+                code='pointer_keyboard_recovery', retryable=True)
         match = next((row for row in stalled if row['parameters'] == action), None)
         if match:
             detail = {'frame_id': frame_id, 'rejected_parameters': action,

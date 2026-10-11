@@ -81,7 +81,7 @@ class KimiTaskViewsNativeAgent(TaskViewsContextMixin, KimiNativeAgent):
         if getattr(self, 'feedback_v10', False) and getattr(self, 'modules', None):
             from .pointer_grounding import validate_pointer_strategy
             validate_pointer_strategy(result[0], self.modules.stalled_pointer_actions(),
-                                      frame_id=self.frame.metadata['frame_id'])
+                                      frame_id=self.frame.metadata['frame_id'], keyboard_recovery=True)
         return result
 
     def close(self):
