@@ -38,13 +38,16 @@ def main():
     repo = Path.home() / "osworld2/OSWorld-V2"
     sys.path[:0] = [str(project), str(repo), str(repo / "scripts/python")]
     os.chdir(repo)
-    from scripts.osworld_native_experiment import frozen_check, host_status, check_interface
+    from scripts.osworld_native_experiment import frozen_check, host_status, check_interface, taskviews_workflow
     frozen_check(Path(manifest["plan_root"]))
     from ui_kobe.osworld.official_base import verify_official_base
     official_base = verify_official_base(repo)
     from ui_kobe.osworld.cua_contract import CUAContract
     plan = json.loads((Path(manifest["plan_root"]) / "plan.json").read_text())
     check_interface(plan)
+    if manifest.get('taskviews_feedback', False) != plan.get('taskviews_feedback', False):
+        raise RuntimeError('Manifest feedback workflow differs from frozen plan')
+    os.environ.update(taskviews_workflow(plan))
     if (manifest.get('agent_interface') != plan['agent_interface']
             or manifest.get('agent_protocol') != plan['protocols'][plan['arms'].index(manifest['arm'])]):
         raise RuntimeError('Manifest Agent interface differs from the frozen three-arm plan')

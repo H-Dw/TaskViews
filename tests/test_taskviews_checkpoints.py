@@ -300,6 +300,18 @@ def test_preflight_covers_writable_firmware_before_task_reset(tmp_path, monkeypa
     assert record['before_task_reset'] and record['container'] == 'original-vm'
 
 
+def test_checkpoint_entrypoint_refuses_second_boot_before_destructive_entry(tmp_path):
+    import subprocess
+    from ui_kobe.osworld.checkpoints import SNAPSHOT_FIRMWARE_BOOT
+    prefix = SNAPSHOT_FIRMWARE_BOOT.split('flash=')[0].replace('/storage/', str(tmp_path)+'/')
+    script = prefix + "printf '%s' 'would-enter-original-image'"
+    first = subprocess.run(['bash', '-c', script], capture_output=True, text=True)
+    assert first.returncode == 0 and first.stdout == 'would-enter-original-image'
+    second = subprocess.run(['bash', '-c', script], capture_output=True, text=True)
+    assert second.returncode == 78 and not second.stdout
+    assert 'recreates boot disk' in second.stderr
+
+
 def test_execution_history_does_not_displace_original_task_contract(tmp_path):
     memory = TaskMemory('t',tmp_path)
     memory.initialize('Original goal')

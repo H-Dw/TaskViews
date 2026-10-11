@@ -137,6 +137,12 @@ def require_running_checkpoint_container(container, vm, path_to_vm, owner):
 
 CHECKPOINT_CPU_FLAGS = 'migratable=on,-invtsc'
 SNAPSHOT_FIRMWARE_BOOT = '''set -eu
+marker=/storage/taskviews-entry-started
+if [ -e "$marker" ]; then
+    echo 'Refusing checkpoint guest restart: original entrypoint recreates boot disk' >&2
+    exit 78
+fi
+printf '%s\\n' 'initialized' > "$marker"
 flash=/storage/taskviews-uefi.qcow2
 if [ ! -s "$flash" ]; then
     qemu-img convert -f raw -O qcow2 /usr/share/OVMF/edk2-x86_64-code.fd "$flash"

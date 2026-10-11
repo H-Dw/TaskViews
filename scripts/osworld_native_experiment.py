@@ -155,8 +155,26 @@ def trial_max_steps(purpose, max_steps=None):
     return 500
 
 
+def taskviews_workflow(plan):
+    enabled = plan.get('taskviews_feedback', False)
+    if type(enabled) is not bool:
+        raise ValueError('TaskViews feedback opt-in must be a boolean')
+    if enabled and (plan.get('agent_interface') != 'qwen-native' or plan.get('arms') != ['taskviews']
+                    or not plan.get('checkpoint_policy', {}).get('enabled')):
+        raise ValueError('Feedback workflow requires isolated Qwen TaskViews checkpoints')
+    return {'UI_KOBE_TASKVIEWS_FEEDBACK_V10': '1' if enabled else '0'}
+
+
+def committed_source():
+    status = subprocess.check_output(['git', '-C', str(PROJECT), 'status', '--porcelain'], text=True)
+    if status.strip():
+        raise RuntimeError('Commit the validated TaskViews iteration before preparing or resuming')
+    return subprocess.check_output(['git', '-C', str(PROJECT), 'rev-parse', 'HEAD'], text=True).strip()
+
+
 def prepare(root, task, validation, purpose="evaluation", admission=None, profile_name="low-16k", cua_config=None,
-            agent_interface='official-xml', compatibility=None, max_steps=None, checkpoints=False):
+            agent_interface='official-xml', compatibility=None, max_steps=None, checkpoints=False,
+            taskviews_feedback=False):
     from examples.osworld2_eval import official_identity
     from ui_kobe.osworld.task_examples import task_example
     from ui_kobe.osworld.runner import source_snapshot
@@ -268,6 +286,14 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         if qwen:
             plan['user_authorization'] += '; explicitly requested qwen3.8-max Task059 TaskViews execution and real-time debugging'
             plan['comparison_limit'] = 'New Qwen native-tools, non-stream, thinking-disabled protocol; not the original Qwen XML agent or the completed Kimi comparison conditions'
+    plan['taskviews_feedback'] = taskviews_feedback
+    taskviews_workflow(plan)
+    if taskviews_feedback:
+        plan['taskviews_variant'] = 'action-bound feedback, stable subgoals, pointer frame contract, event-triggered analysis'
+        plan['advisory_concurrency'] = 1
+        plan['source_commit'] = committed_source()
+        plan['iteration_commit_required'] = True
+        plan['user_authorization'] = '2026-10-11: user authorized current TaskViews Task059 test, autonomous diagnosis/repair and a commit after each validated iteration; official evaluation source unchanged'
     if purpose == 'cua_smoke':
         plan['benchmark_comparable'] = False
         plan['user_authorization'] = 'The predeclared short official decision limit is a compatibility smoke trial, not a benchmark rerun. Preparation does not authorize a new evaluation episode'
@@ -369,6 +395,8 @@ def launch(root, arm):
         'purpose': plan.get('purpose', 'evaluation'), 'max_steps': decisions,
         'benchmark_comparable': plan.get('benchmark_comparable', True),
         "runtime_paths": [], "created_utc": now()}
+    manifest['taskviews_feedback'] = plan.get('taskviews_feedback', False)
+    manifest['source_commit'] = plan.get('source_commit')
     if plan.get('checkpoint_policy', {}).get('enabled'):
         if arm != 'taskviews':
             raise ValueError('Checkpoint-enabled recovery run is TaskViews only')
@@ -737,12 +765,13 @@ def main():
     parser.add_argument('--agent-interface', choices=('official-xml', 'k3-native', 'qwen-native'), default='official-xml')
     parser.add_argument('--k3-compatibility', '--provider-compatibility', type=Path)
     parser.add_argument('--checkpoints', action='store_true')
+    parser.add_argument('--taskviews-feedback', action='store_true', help='Freeze the validated action feedback/pointer workflow for Qwen TaskViews')
     args = parser.parse_args()
     require_scope(2 * GIB if args.action == "supervise" else 128 * 1024**2)
     root = args.root.resolve()
     if args.action == "prepare":
         prepare(root, args.task, args.validation, args.purpose, args.admission, args.profile, args.cua_config,
-                args.agent_interface, args.k3_compatibility, args.max_steps, args.checkpoints)
+                args.agent_interface, args.k3_compatibility, args.max_steps, args.checkpoints, args.taskviews_feedback)
     elif args.action == "launch":
         lock = Path.home() / ".cache/ui-kobe-osworld-experiment.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)

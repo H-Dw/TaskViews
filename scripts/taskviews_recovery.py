@@ -100,6 +100,10 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False):
     # Official files and assets are still frozen. A repair gets a new source
     # revision; original plans/manifests/failed branch data remain intact.
     old_plan = load(old/'plan.json')
+    repair_commit = None
+    if old_plan.get('iteration_commit_required'):
+        from scripts.osworld_native_experiment import committed_source
+        repair_commit = committed_source()
     from ui_kobe.osworld.runner import source_snapshot
     from scripts.osworld_native_experiment import REPO
     if source_snapshot(REPO) != load(old/'osworld-source-planned.json'):
@@ -118,6 +122,8 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False):
     revision.mkdir(parents=True)
     plan = {**old_plan, 'repair': {'reason':reason, 'parent_plan':str(old),
                                  'checkpoint':saved['tag'], 'time':time.time()}}
+    if repair_commit:
+        plan['source_commit'] = repair_commit
     write(revision/'plan.json', plan)
     write(revision/'project-source-planned.json', project_snapshot())
     write(revision/'osworld-source-planned.json', source_snapshot(REPO))
@@ -126,6 +132,8 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False):
     write(revision/'previous-manifest.json', manifest)
     continuation_output(manifest, revision.name)
     manifest['plan_root'] = str(revision)
+    if repair_commit:
+        manifest['source_commit'] = repair_commit
     write(stage/'manifest.json', manifest)
     frozen_check(revision)
     request = {'checkpoint':saved['tag'], 'reason':reason, 'validation':str(validation),

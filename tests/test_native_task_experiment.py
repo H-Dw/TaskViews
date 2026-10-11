@@ -12,6 +12,39 @@ from scripts.osworld_native_experiment import official_arguments
 from scripts import osworld_native_experiment as experiment
 
 
+def test_feedback_workflow_is_explicit_and_legacy_environment_is_cleared():
+    assert experiment.taskviews_workflow({}) == {'UI_KOBE_TASKVIEWS_FEEDBACK_V10': '0'}
+    plan = {'taskviews_feedback': True, 'agent_interface': 'qwen-native',
+            'arms': ['taskviews'], 'checkpoint_policy': {'enabled': True}}
+    assert experiment.taskviews_workflow(plan) == {'UI_KOBE_TASKVIEWS_FEEDBACK_V10': '1'}
+
+
+def test_committed_iteration_rejects_dirty_source_before_reading_head(monkeypatch):
+    calls = []
+    def output(args, **kwargs):
+        calls.append(args)
+        return '?? new_runtime.py\n'
+    monkeypatch.setattr(experiment.subprocess, 'check_output', output)
+    with pytest.raises(RuntimeError, match='Commit the validated'):
+        experiment.committed_source()
+    assert len(calls) == 1 and calls[0][-2:] == ['status', '--porcelain']
+
+
+def test_committed_iteration_records_clean_head(monkeypatch):
+    monkeypatch.setattr(experiment.subprocess, 'check_output',
+                        lambda args, **kwargs: '' if args[-1] == '--porcelain' else 'current-commit\n')
+    assert experiment.committed_source() == 'current-commit'
+
+
+@pytest.mark.parametrize('change', [{'taskviews_feedback': '1'}, {'arms': ['baseline', 'taskviews']},
+                                   {'agent_interface': 'k3-native'}, {'checkpoint_policy': {}}])
+def test_feedback_workflow_rejects_undeclared_protocol(change):
+    plan = {'taskviews_feedback': True, 'agent_interface': 'qwen-native',
+            'arms': ['taskviews'], 'checkpoint_policy': {'enabled': True}}
+    with pytest.raises(ValueError):
+        experiment.taskviews_workflow({**plan, **change})
+
+
 @pytest.fixture
 def launch_sandbox(tmp_path, monkeypatch):
     root = tmp_path / "new-plan"
