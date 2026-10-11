@@ -118,7 +118,9 @@ existing subgoal_id. Role/anchor changes do not create another subgoal. Do not
 mark a goal complete from a receipt or a model proposal. Prefer one executor
 need; request planner only at initial planning, a stage change, or an unresolved
 action/focus failure. Last-action verification is already part of perception;
-do not request another global verifier on each step."""
+do not request another global verifier on each step. When analysis_triggers includes
+consecutive_unconfirmed_state, assign a planner need for one fresh strategy and
+visible verification; varying native parameters alone do not establish progress."""
 
 PLANNING = """Plan a short next strategy for this stable subgoal and its most recent
 action checks. Repeated unconfirmed input/clicks require re-observing the control,
@@ -148,7 +150,12 @@ instruction to bypass missing evidence. An explicitly requested future point or
 formula is NOT a visible hypothesis. Keep such original task requirements in
 goal_targets:[{quote:literal substring of original_task,status:'requested'}].
 Use math_hypotheses=[] for a GUI input/save plan with no mathematical inference.
-Do not claim a requested goal is already visible or mathematically verified."""
+Do not claim a requested goal is already visible or mathematically verified.
+When state_review is supplied, its shared field names describe comparable state
+schemas, not known unchanged values. Several operations remain unconfirmed in the
+same subgoal despite varying parameters. Re-observe the actual control and focus;
+choose one different ordinary route with visible verification. Do not claim the
+uncertainty proves failure or keep slightly offsetting a stale pointer guess."""
 
 RECOVERY_PLAN = """Keep advice within 900 UTF-8 bytes. Give one next recovery
 operation and its visible verification, without re-telling the whole task.
@@ -190,7 +197,9 @@ def feedback_analysis_triggers(modules, raw, feedback, pointer_recovery):
         reasons.append('page_change')
     if (raw.get('subgoal_review') or {}).get('change_needed'):
         reasons.append('subgoal_review')
-    if feedback['strategy_review']:
+    if feedback.get('state_review'):
+        reasons.append('consecutive_unconfirmed_state')
+    elif feedback['strategy_review']:
         reasons.append('repeated_unconfirmed_strategy')
     if pointer_recovery:
         reasons.append('persistent_pointer_uncertainty')
@@ -311,6 +320,7 @@ def build_feedback_views(owner, deadline):
     if modules:
         modules.compare_state_v10 = True
         modules.intent_verification_v12 = True
+        modules.subgoal_state_review_v12 = True
     core, inventory = control._core(), control.inventory()
     frame = owner.frame.metadata['frame_id']
     last = modules.verification_action() if modules else None
@@ -402,13 +412,14 @@ def build_feedback_views(owner, deadline):
         control.views.validate_needs(snapshot, needs)
         if not any(n['consumer'] == 'executor' for n in needs):
             raise ValueError('Assign the executor')
-        validate_recovery_consumers(needs, required=pointer_recovery)
+        validate_recovery_consumers(needs, required=pointer_recovery or bool(feedback.get('state_review')))
 
     if reasons:
         short_feedback = {'last_action': modules.actor_feedback(),
             'repetition_count': feedback['repetition_count'], 'strategy_review': feedback['strategy_review'],
             'pointer_recovery_required': pointer_recovery,
             'failed_keyboard_actions': failed_keys,
+            'state_review': feedback.get('state_review'),
             'guidance': feedback.get('guidance')}
         controller_input = {'mandatory_core': core,
             'consumer_allowed_anchors': control.views.allowed_anchor_inventory(snapshot, limit=16),
@@ -491,12 +502,15 @@ def build_feedback_views(owner, deadline):
                                                                     share_duplicate_refs=True),
                                  'strategy_review': feedback['strategy_review']}
     executor = _admit(protected, optional, limit)
+    if feedback.get('state_review') and 'planner' in advisers:
+        modules.record_uncertainty_review(feedback['state_review'])
     owner.view_trace = {'protocol': 'taskviews-feedback-v10', 'frame': owner.frame.metadata,
         'stage': proposed['stage'], 'controller': proposed, 'anchor_resolutions': resolutions,
         'normalization': normalization, 'analysis_triggers': reasons,
         'dispatch': compiled, 'executor_context': executor, 'advisers': advisers,
         'action_check': raw['action_check'], 'module_id': module, 'view_changes': changes,
         'actor_projection': 'local_execution_labels_and_native_feedback_no_observer_boxes',
+        'state_review': feedback.get('state_review'),
         'available_actor_context_bytes': limit}
     telemetry.emit('taskviews_feedback_admission', packet_bytes=len(dumps(executor).encode()), available_bytes=limit,
                    analysis_triggers=reasons, merged_action_verification=True)

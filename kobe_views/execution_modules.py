@@ -31,6 +31,7 @@ class ExecutionModules:
         self.new_events, self.gaps = [], []
         self.subgoals, self.effects, self.unresolved = {}, {}, []
         self.selected_needs, self.page_id = [], None
+        self.uncertainty_reviews = {}
         if self.path.exists():
             saved = json.loads(self.path.read_text())
             if saved['episode_id'] != journal.episode_id:
@@ -42,13 +43,16 @@ class ExecutionModules:
             self.effects = saved.get('effects', {})
             self.unresolved = saved.get('unresolved', [])
             self.selected_needs, self.page_id = saved.get('selected_needs', []), saved.get('page_id')
+            self.uncertainty_reviews = saved.get('uncertainty_reviews', {})
 
     def save(self):
         self.memory._atomic_json(self.path, {'episode_id': self.journal.episode_id, 'cursor': self.cursor,
                                              'active': self.active, 'modules': self.modules, 'recent': self.recent,
                                              'gaps': self.gaps[-64:], 'subgoals': self.subgoals,
                                              'effects': self.effects, 'unresolved': self.unresolved,
-                                             'selected_needs': self.selected_needs, 'page_id': self.page_id})
+                                             'selected_needs': self.selected_needs, 'page_id': self.page_id,
+                                             **({'uncertainty_reviews': self.uncertainty_reviews}
+                                                if getattr(self, 'uncertainty_reviews', {}) else {})})
 
     def event(self, identity):
         """Read one immutable event, without exporting the entire trajectory."""
@@ -539,6 +543,56 @@ class ExecutionModules:
             group['assessments'].append(effect['assessment'])
         return [value for value in groups.values() if len(value['transition_ids']) >= 2]
 
+    def unconfirmed_state_review(self):
+        """Request observation/planning across varying inputs, never infer failure.
+
+        Field names shared by model state proposals can include unknown values.
+        They establish a comparable schema, not known unchanged GUI state. Three
+        unconfirmed operations in one active subgoal warrant a fresh strategy.
+        A recorded review, established change or subgoal boundary starts a new
+        window; captures/delays do not manufacture another failed operation.
+        """
+        if not getattr(self, 'subgoal_state_review_v12', False):
+            return None
+        reviewed = getattr(self, 'uncertainty_reviews', {}).get(self.active)
+        identities, fields = [], None
+        for record in reversed(self.recent[-8:]):
+            if record.get('module_id') != self.active or record['transition_id'] == reviewed:
+                break
+            parameters = self.original_parameters(record)
+            if not isinstance(parameters, dict):
+                break
+            if parameters.get('action') in {'wait', 'screenshot'}:
+                continue
+            if parameters.get('action') not in {'left_click', 'right_click', 'double_click', 'key', 'type', 'scroll', 'drag'}:
+                break
+            effect = self.effects.get(record['transition_id'], {})
+            comparison = effect.get('state_comparison', {})
+            if comparison.get('changed_field_keys') or effect.get('assessment') not in {'unknown', 'not_observed'}:
+                break
+            shared = set(comparison.get('shared_field_keys', [])) - {'clock', 'time', 'timestamp'}
+            if effect['assessment'] == 'unknown' and not shared:
+                break
+            if shared:
+                common = shared if fields is None else fields & shared
+                if not common:
+                    break
+                fields = common
+            identities.append(record['transition_id'])
+        if len(identities) < 3:
+            return None
+        return {'module_id': self.active, 'transition_ids': identities,
+                'unconfirmed_operation_count': len(identities),
+                'comparison_field_keys': sorted(fields or []), 'grade': 'model_proposal'}
+
+    def record_uncertainty_review(self, review):
+        """Persist only a completed planner review, not success or an action."""
+        if review:
+            self.uncertainty_reviews = getattr(self, 'uncertainty_reviews', {})
+            self.uncertainty_reviews[review['module_id']] = review['transition_ids'][0]
+            self.uncertainty_reviews = dict(list(self.uncertainty_reviews.items())[-8:])
+            self.save()
+
     def feedback(self):
         last = self.last_action()
         if not last:
@@ -555,10 +609,15 @@ class ExecutionModules:
             if effect.get('assessment') == 'observed' and not legacy_click:
                 break
             count += 1
-        return {'last_action': last, 'repetition_count': count, 'strategy_review': count >= 2,
+        result = {'last_action': last, 'repetition_count': count, 'strategy_review': count >= 2,
                 'guidance': 'Re-observe the intended control and focus; change the strategy after repeated unconfirmed effects. '
                             'Confirm text before submission and the requested object/result after submission. '
                             'Do not infer progress from receipts or whole-image hashes.'}
+        review = self.unconfirmed_state_review()
+        if review:
+            result['state_review'] = review
+            result['strategy_review'] = True
+        return result
 
     def actor_feedback(self):
         """A small protected warning, separate from optional module/view detail."""
@@ -589,6 +648,12 @@ class ExecutionModules:
                      'Confirm this specific effect in the current image; a returned command does not prove focus.')}
         if last.get('evidence_capture_refs'):
             value['latest_evidence_capture_ref'] = last['evidence_capture_refs'][-1]['raw_ref']
+        if feedback.get('state_review'):
+            value['unconfirmed_state_operation_count'] = feedback['state_review']['unconfirmed_operation_count']
+            value['decision_guidance'] = (
+                'Several operations in this subgoal have not established a state change, even with different parameters. '
+                'Unknown remains uncertainty, not a proved failure. Re-observe focus/input/current control and use the '
+                'fresh strategy; do not keep offsetting an old pointer guess or infer progress from receipts.')
         # No fabricated success or executable gate: a large check stays at its
         # immutable reference, while its exact assessment/count remain present.
         while len(dumps(value).encode()) > 1800 and value['checks']:

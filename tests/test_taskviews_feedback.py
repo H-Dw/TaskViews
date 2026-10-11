@@ -103,6 +103,95 @@ def test_confirmed_intervening_change_clears_older_pointer_cycle():
     assert module.stalled_pointer_actions() == []
 
 
+def varying_state_history():
+    parameters = [{'action': 'left_click', 'coordinate': [100 + i * 30, 80]} for i in range(6)]
+    module = pointer_history(parameters)
+    module.subgoal_state_review_v12 = True
+    module.uncertainty_reviews = {}
+    module.save = lambda: None
+    return module
+
+
+def test_varying_parameters_request_state_review_without_merging_exact_pointer_guard():
+    from ui_kobe.osworld.taskviews_feedback import feedback_analysis_triggers
+    module = varying_state_history()
+    module.subgoals, module.selected_needs, module.page_id = {'goal': {}}, [{'consumer': 'executor'}], 'editor'
+    original = deepcopy([module.recent, module.effects])
+    feedback = module.feedback()
+    assert feedback['repetition_count'] == 1 and feedback['strategy_review']
+    assert feedback['state_review']['unconfirmed_operation_count'] == 6
+    assert feedback['state_review']['comparison_field_keys'] == ['focus', 'input']
+    assert feedback['state_review']['transition_ids'] == [f'edge-{i}' for i in reversed(range(6))]
+    assert feedback['state_review']['grade'] == 'model_proposal'
+    assert module.stalled_pointer_actions() == []  # Exact-parameter execution guard is unchanged.
+    raw = {'ui_state': {'page_id': 'editor'}, 'subgoal_review': None}
+    assert feedback_analysis_triggers(module, raw, feedback, False) == ['consecutive_unconfirmed_state']
+    assert [module.recent, module.effects] == original
+    module.subgoal_state_review_v12 = False
+    assert not module.feedback()['strategy_review'] and 'state_review' not in module.feedback()
+    assert feedback['state_review']['module_id'] == module.active
+
+
+@pytest.mark.parametrize('boundary', ['changed', 'observed', 'uncomparable', 'clock', 'subgoal'])
+def test_state_review_requires_three_unconfirmed_operations_in_comparable_subgoal(boundary):
+    module = varying_state_history()
+    module.recent = module.recent[:3]
+    if boundary == 'changed':
+        module.effects['edge-1']['state_comparison']['changed_field_keys'] = ['input']
+    elif boundary == 'observed':
+        module.effects['edge-1']['assessment'] = 'observed'
+    elif boundary == 'uncomparable':
+        module.effects['edge-1']['state_comparison']['shared_field_keys'] = []
+    elif boundary == 'clock':
+        for effect in module.effects.values():
+            effect['state_comparison']['shared_field_keys'] = ['clock']
+    else:
+        module.recent[1]['module_id'] = 'other-subgoal'
+    assert module.unconfirmed_state_review() is None
+    assert not module.feedback()['strategy_review']
+
+
+def test_completed_state_review_cooldown_requires_three_new_operations_not_each_frame():
+    module = varying_state_history()
+    all_records = deepcopy(module.recent)
+    module.recent = all_records[:3]
+    review = module.unconfirmed_state_review()
+    module.record_uncertainty_review(review)
+    assert module.uncertainty_reviews == {module.active: 'edge-2'}
+    assert module.unconfirmed_state_review() is None
+    for count in (4, 5):
+        module.recent = all_records[:count]
+        assert module.unconfirmed_state_review() is None
+    module.recent = all_records
+    assert module.unconfirmed_state_review()['transition_ids'] == ['edge-5', 'edge-4', 'edge-3']
+
+
+def test_state_review_captures_do_not_count_as_failed_actions_or_replace_review_marker():
+    module = varying_state_history()
+    module.recent = module.recent[:2]
+    capture = {'transition_id': 'capture', 'module_id': module.active}
+    prior_event = module.event
+    module.event = lambda identity: ({'tool': {'arguments': {'action': 'screenshot'}}}
+                                     if identity == 'capture' else prior_event(identity))
+    module.recent.append(capture)
+    module.effects['capture'] = {'assessment': 'unknown',
+        'state_comparison': {'shared_field_keys': ['focus', 'input'], 'changed_field_keys': []}}
+    assert module.unconfirmed_state_review() is None
+    assert module.effects['capture']['assessment'] == 'unknown'
+
+
+def test_state_review_checkpoint_roundtrip_preserves_marker_and_legacy_missing_field(tmp_path):
+    memory, log, module, _ = intent_operation(tmp_path, 'Focus the editor')
+    try:
+        assert 'uncertainty_reviews' not in json.loads(module.path.read_text())
+        module.record_uncertainty_review({'module_id': 'stable', 'transition_ids': ['original-edge']})
+        restored = ExecutionModules(memory, log)
+        assert restored.uncertainty_reviews == {'stable': 'original-edge'}
+        assert json.loads(module.path.read_text())['uncertainty_reviews'] == restored.uncertainty_reviews
+    finally:
+        log.close()
+
+
 def test_nullable_optional_review_completes_full_offline_flow_without_local_read_exception(tmp_path):
     result = run_fixture(tmp_path / 'nullable-review', null_subgoal_review=True)
     assert result['terminal'] and not result['paused'] and result['fixture_score'] == 1
