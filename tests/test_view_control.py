@@ -230,6 +230,51 @@ def test_capacity_omissions_and_tiny_envelope_budget_are_explicit():
         controller.compile(graph.read(), [need()], 1)
 
 
+def test_opt_in_purpose_compaction_preserves_scope_and_original_proposal():
+    import hashlib
+    graph = semantic_graph()
+    controller = DynamicViewController([contract(), contract('planner'), contract('verifier')])
+    needs = [need(purpose='需要检查当前焦点和输入栏。' * 80),
+             need('planner-alice', consumer='planner', purpose='Plan from visible evidence. ' * 50)]
+    original = deepcopy(needs)
+    budget = 2500
+    with pytest.raises(BudgetTooSmall, match='envelope requires'):
+        controller.compile(graph.read(), needs, budget)
+    compiled = controller.compile(graph.read(), needs, budget, compact_purposes=True)
+    assert compiled['used_bytes'] == len(dumps(compiled).encode()) <= budget
+    assert needs == original and 'purpose_omitted' in compiled['gaps']
+    for scoped in compiled['packets']:
+        for item in scoped['needs']:
+            source = next(n for n in original if n['id'] == item['id'])
+            assert {k: item[k] for k in ('id', 'anchors', 'focus_predicates', 'max_hops')} == {
+                k: source[k] for k in ('id', 'anchors', 'focus_predicates', 'max_hops')}
+            if 'purpose_omission' in item:
+                assert 'purpose' not in item and 'purpose_omitted' in item['gaps']
+                assert item['purpose_omission'] == {'reason': 'byte_budget',
+                    'sha256': hashlib.sha256(source['purpose'].encode()).hexdigest()}
+    controller.dispatch(compiled)
+    tampered = deepcopy(compiled)
+    next(p for p in tampered['packets'] if p['needs'])['needs'][0]['purpose_omission']['reason'] = 'verified'
+    with pytest.raises(ValueError, match='latest controller compilation'):
+        controller.dispatch(tampered)
+
+
+def test_purpose_compaction_keeps_sufficient_and_legacy_packets_unchanged():
+    graph = semantic_graph()
+    controller = DynamicViewController([contract()])
+    needs = [need(purpose='完整原始建议 ' * 30)]
+    compiled = controller.compile(graph.read(), needs, 12000, compact_purposes=True)
+    assert packet(compiled)['needs'][0]['purpose'] == needs[0]['purpose']
+    assert 'purpose_omission' not in packet(compiled)['needs'][0]
+    assert 'purpose_omitted' not in compiled['gaps']
+    with pytest.raises(BudgetTooSmall, match='envelope requires'):
+        controller.compile(graph.read(), needs, 1, compact_purposes=True)
+    with pytest.raises(InvalidViewNeed, match='Unknown semantic anchor'):
+        controller.compile(graph.read(), [need(anchors=('invented',))], 12000, compact_purposes=True)
+    with pytest.raises(ValueError, match='boolean'):
+        controller.compile(graph.read(), needs, 12000, compact_purposes=1)
+
+
 def test_dispatch_acknowledges_only_current_matching_revision_and_copies_packets():
     graph = semantic_graph()
     controller = DynamicViewController([contract(), contract("verifier")])

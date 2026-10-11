@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from fnmatch import fnmatchcase
+import hashlib
 from threading import RLock
 
 from .model import Budget, digest, dumps
@@ -164,7 +165,7 @@ class DynamicViewController:
                               "anchors": anchors, "focus_predicates": focus, "max_hops": hops})
         return validated
 
-    def compile(self, snapshot: TaskSnapshot, needs, budget_bytes: int) -> dict:
+    def compile(self, snapshot: TaskSnapshot, needs, budget_bytes: int, *, compact_purposes=False) -> dict:
         """Return a JSON-serializable dispatch, with byte-bounded per-role packets.
 
         Every registered consumer receives a packet, including explicit gaps when
@@ -172,9 +173,13 @@ class DynamicViewController:
         the proposed needs expresses controller priority. Instance admission runs
         round-robin across needs so one large need cannot consume every early slot.
         Too little space for even the gap-report envelope raises BudgetTooSmall.
+        Opt-in purpose compaction omits whole advisory descriptions, with their
+        original SHA, before evidence. Selectors, identities and gaps stay intact.
         """
         if type(budget_bytes) is not int or budget_bytes < 1:
             raise ValueError("budget_bytes must be a positive integer")
+        if type(compact_purposes) is not bool:
+            raise ValueError("compact_purposes must be a boolean")
         validated = self.validate_needs(snapshot, needs)
         with self._lock:
             serial = self._serial + 1
@@ -243,6 +248,30 @@ class DynamicViewController:
                 return _measure(payload)
 
             required = reports()
+            if compact_purposes and required > budget_bytes:
+                # Purpose is controller advice, not a scope selector or fact.
+                # Its original full value remains in the caller's unchanged need
+                # proposal. Never truncate it into a different assertion.
+                for record in sorted(assigned.values(),
+                                     key=lambda item: len(dumps(item['purpose']).encode()), reverse=True):
+                    purpose = record['purpose']
+                    omission = {'reason': 'byte_budget',
+                                'sha256': hashlib.sha256(purpose.encode()).hexdigest()}
+                    candidate = {k: v for k, v in record.items() if k != 'purpose'}
+                    candidate['purpose_omission'] = omission
+                    candidate['gaps'] = sorted(set(record['gaps']) | {'purpose_omitted'})
+                    previous = deepcopy(record)
+                    record.clear()
+                    record.update(candidate)
+                    size = reports()
+                    if size >= required:
+                        record.clear()
+                        record.update(previous)
+                        reports()
+                        continue
+                    required = size
+                    if required <= budget_bytes:
+                        break
             if required > budget_bytes:
                 raise BudgetTooSmall(f"Dynamic view gap-report envelope requires {required} UTF-8 bytes; "
                                      f"residual budget is {budget_bytes}")

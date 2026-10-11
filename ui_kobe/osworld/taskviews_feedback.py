@@ -302,7 +302,7 @@ def build_feedback_views(owner, deadline):
                     'subgoal_id': modules.modules[module]['subgoal_id'], 'reused': True}
     # Reserve the protected feedback first, then materialize optional graph views.
     view_budget = max(512, min(8000, limit // 2))
-    compiled = control.views.compile(snapshot, needs, view_budget)
+    compiled = control.views.compile(snapshot, needs, view_budget, compact_purposes=True)
     control.views.dispatch(compiled)
     changes = modules.view_changes(compiled)
     advisers = {}
