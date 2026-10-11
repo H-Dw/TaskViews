@@ -531,7 +531,7 @@ class ExecutionModules:
             raise ValueError('Cannot bound protected current-action warning')
         return value
 
-    def packet(self, max_bytes=6000):
+    def packet(self, max_bytes=6000, *, include_modules=True):
         modules = plain(list(self.modules.values())[-8:])
         if self.active and not any(m['id'] == self.active for m in modules):
             modules = (modules + [plain(self.modules[self.active])])[-8:]
@@ -554,6 +554,13 @@ class ExecutionModules:
         # Action/post-frame/receipt references precede old modules and verbose
         # advice. Never delete the newest transition to keep a planner essay.
         omissions = packet['projection_omissions'] = {}
+        if not include_modules:
+            # Classification remains in persistent TaskViews memory. The local
+            # actor needs operation evidence, not accumulated graph/planner
+            # descriptions that can compete with its current screenshot.
+            packet['omitted_modules'] = len(self.modules)
+            packet['modules'] = modules = []
+            omissions['module_detail_at_source'] = len(self.modules)
         def omitted(key):
             omissions[key] = omissions.get(key, 0) + 1
         while len(dumps(packet).encode()) > max_bytes:

@@ -520,11 +520,11 @@ def test_complete_native_fixture_closes_focus_input_submit_save_and_grade(tmp_pa
     assert result['test_kind'].startswith('offline_fixture') and result['official_score'] is None
     assert result['terminal'] and not result['paused'] and result['fixture_score'] == 1
     assert result['controller_actions'] == 6 and result['native_decisions'] == result['compiler_checks'] == 7
-    assert result['module_count'] == 1 and result['all_actor_packets_delivered']
+    assert result['module_count'] == 1 and result['all_actor_packets_delivered'] and result['all_actor_packets_local']
     assert result['recent_feedback_packets'] == 6
     assert result['roles']['perception'] == result['roles']['executor'] == 7
-    assert result['roles']['view_controller'] == result['roles']['planner'] == 3
-    assert result['requests'] == 20  # Old always-five-call scheduling would use 35.
+    assert result['roles']['view_controller'] == result['roles']['planner'] == 2
+    assert result['requests'] == 18  # Single failed click stays local; repeated failure still replans.
     assert result['latest_checkpoint']['completed_steps'] == result['latest_checkpoint']['command_count'] == 6
     for pools in result['pool_checks']:
         assert pools['actor']['output_limit'] == pools['analysis']['output_limit'] == 32000
@@ -934,3 +934,71 @@ def test_recovery_requires_planner_assignment_but_ordinary_event_free_reuse_does
     validate_recovery_consumers(needs, required=False)
     validate_recovery_consumers(needs + [{'consumer': 'planner'}], required=True)
     assert needs == [{'consumer': 'executor'}]
+
+
+def test_local_execution_does_not_inherit_an_observers_wrong_pointer_geometry():
+    from ui_kobe.osworld.taskviews_feedback import local_visible_evidence
+    raw = {'summary': 'Input is empty', 'elements': [
+        {'text': 'Input:', 'role': 'textbox', 'bbox': [313, 766, 339, 784]}],
+        'semantics': {'claims': [{'value': 'historical graph locator'}]}}
+    original = deepcopy(raw)
+    packet = local_visible_evidence(raw)
+    assert packet['elements'] == [{'text': 'Input:', 'role': 'textbox'}]
+    assert packet['summary'] == raw['summary'] and not packet['summary_omitted']
+    assert packet['pointer_source'] == 'current_original_screenshot' and packet['grade'] == 'model_proposal'
+    assert 'bbox' not in dumps(packet) and 'claims' not in packet
+    assert raw == original  # The complete original evidence stays unchanged.
+
+
+def test_local_labels_stay_whole_under_utf8_budget_without_fabricated_locators():
+    from ui_kobe.osworld.taskviews_feedback import local_visible_evidence
+    raw = {'summary': '长观察' * 1000, 'elements': [
+        {'text': '文件名' * 400, 'role': 'textbox', 'bbox': [1, 2, 3, 4]},
+        {'text': '另存为', 'role': 'button', 'bbox': [5, 6, 7, 8]}]}
+    original = deepcopy(raw)
+    packet = local_visible_evidence(raw, max_bytes=300)
+    assert len(dumps(packet).encode()) <= 300
+    assert packet['elements'] == [{'text': '另存为', 'role': 'button'}]
+    assert packet['omitted_elements'] == 1 and packet['summary_omitted'] and 'summary' not in packet
+    assert raw == original
+    with pytest.raises(ValueError, match='envelope'):
+        local_visible_evidence(raw, max_bytes=1)
+
+
+def test_single_failed_attempt_keeps_local_feedback_without_another_global_plan():
+    from types import SimpleNamespace
+    from ui_kobe.osworld.taskviews_feedback import feedback_analysis_triggers
+    module = SimpleNamespace(subgoals={'goal': {}}, selected_needs=[{'consumer': 'executor'}], page_id='editor')
+    raw = {'ui_state': {'page_id': 'editor'}, 'action_check': {'assessment': 'not_observed'},
+           'subgoal_review': None}
+    original = deepcopy(raw)
+    assert feedback_analysis_triggers(module, raw, {'strategy_review': False}, False) == []
+    assert feedback_analysis_triggers(module, raw, {'strategy_review': True}, False) == ['repeated_unconfirmed_strategy']
+    assert feedback_analysis_triggers(module, raw, {'strategy_review': False}, True) == ['persistent_pointer_uncertainty']
+    assert raw == original
+    raw['ui_state']['page_id'] = 'save-dialog'
+    assert feedback_analysis_triggers(module, raw, {'strategy_review': False}, False) == ['page_change']
+    raw['subgoal_review'] = {'change_needed': True}
+    assert feedback_analysis_triggers(module, raw, {'strategy_review': False}, False) == ['page_change', 'subgoal_review']
+
+
+def test_local_actor_module_projection_preserves_operation_receipts_and_unresolved_failure(tmp_path):
+    from types import SimpleNamespace
+    module = ExecutionModules.__new__(ExecutionModules)
+    module.memory = SimpleNamespace(snapshot=SimpleNamespace(revision='current'))
+    module.modules = {'stable': {'id': 'stable', 'reports': {'planner': 'Never execute this old plan' * 100}}}
+    module.active, module.previous_revision = 'stable', 'previous'
+    module.new_events, module.gaps = [], []
+    recent = {'transition_id': 'actual-edge', 'raw_ref': '/raw.sqlite#actual-edge',
+              'controller_receipt_ref': '/raw.sqlite#actual-edge', 'receipt_count': 1,
+              'before_image': {'ref': '/before.png', 'sha256': 'before'},
+              'after_image': {'ref': '/after.png', 'sha256': 'after'}, 'effect_status': 'unknown'}
+    module.recent, module.unresolved = [recent], [{**recent, 'transition_id': 'failed-edge'}]
+    module.transition_packet = lambda record: deepcopy(record)
+    module.last_action = lambda: deepcopy(recent)
+    original = deepcopy([module.modules, module.recent, module.unresolved])
+    packet = module.packet(max_bytes=2000, include_modules=False)
+    assert packet['modules'] == [] and packet['omitted_modules'] == 1 and packet['active_module'] == 'stable'
+    assert packet['recent_transitions'] == [recent] and packet['unresolved_failures'] == module.unresolved
+    assert 'Never execute' not in dumps(packet)
+    assert [module.modules, module.recent, module.unresolved] == original

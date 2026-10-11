@@ -228,6 +228,12 @@ def run_fixture(directory, *, bad_action_binding=False, null_subgoal_review=Fals
                 "SELECT count(*) FROM events WHERE json_extract(payload,'$.kind')='transition'").fetchone()[0],
             'requests': len(requests), 'roles': dict(roles), 'compiler_checks': compiler_checks,
             'all_actor_packets_delivered': all(packet is not None for packet in actor_packets),
+            'all_actor_packets_local': all(packet and packet.get('execution_boundary')
+                and 'current_visible_evidence' in packet and 'active_subgoal' in packet
+                and 'assigned_views' not in packet and 'advisers' not in packet
+                and all('bbox' not in item for item in packet['current_visible_evidence']['elements'])
+                and packet['role_evidence']['execution_modules']['modules'] == []
+                for packet in actor_packets),
             'recent_feedback_packets': sum(bool(packet and packet['role_evidence']['execution_modules']['recent_transitions'])
                                            for packet in actor_packets),
             'module_count': len(actor.modules.modules) if actor.modules else 0,

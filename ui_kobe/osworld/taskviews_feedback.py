@@ -101,7 +101,67 @@ Do not claim a requested goal is already visible or mathematically verified."""
 RECOVERY_PLAN = """Keep advice within 900 UTF-8 bytes. Give one next recovery
 operation and its visible verification, without re-telling the whole task.
 This concise advice is protected in the actor packet; longer supporting
-evidence remains in the original report. Do not supply a guessed location."""
+evidence remains in the original report. Give only the immediate operation,
+not a chain of focus, typing, submission and saving in one instruction. The actor
+grounds its parameters in the current original screenshot; observer boxes and
+old graph locators do not supply pointer targets. After ineffective preparatory
+operations, consider a different ordinary route to the original task's next
+deliverable, without dropping any original requirement. Do not supply a guessed
+location or insist on repeating the failed preparation."""
+
+
+LOCAL_EXECUTION = """Local execution boundary: the current original screenshot
+is the source for locating controls. TaskViews classifications and observer
+descriptions are model proposals, not pointer targets or executable plans.
+Use the original task, current image, and the latest actual operation/effect
+evidence to choose the next operation. Re-ground all parameters yourself.
+Keep view classification and long graph reasoning outside this action loop.
+Verify uncertain focus/state changes before dependent operations. The original
+native actor alone decides actions and termination."""
+
+
+def feedback_analysis_triggers(modules, raw, feedback, pointer_recovery):
+    """A single unobserved action stays in the local actor/effect loop.
+
+    Classification/planning is refreshed for initial needs, actual proposed
+    page/subgoal changes, or repeated unconfirmed strategies. Last-action
+    feedback is always delivered independently of this expensive refresh.
+    """
+    reasons = []
+    if not modules or not modules.subgoals or not modules.selected_needs:
+        reasons.append('initial_plan')
+    page = raw.get('ui_state', {}).get('page_id')
+    if modules and page is not None and modules.page_id is not None and page != modules.page_id:
+        reasons.append('page_change')
+    if (raw.get('subgoal_review') or {}).get('change_needed'):
+        reasons.append('subgoal_review')
+    if feedback['strategy_review']:
+        reasons.append('repeated_unconfirmed_strategy')
+    if pointer_recovery:
+        reasons.append('persistent_pointer_uncertainty')
+    return reasons
+
+
+def local_visible_evidence(raw, *, max_bytes=1600):
+    """Project original labels as fallible evidence, never observer geometry.
+
+    Full response, boxes, semantics and classification remain in the original
+    telemetry/memory. Nothing here rescales or corrects a coordinate.
+    """
+    packet = {'elements': [], 'omitted_elements': len(raw['elements']), 'summary_omitted': True,
+              'grade': 'model_proposal', 'pointer_source': 'current_original_screenshot'}
+    for element in raw['elements']:
+        label = {k: element[k] for k in ('text', 'role')}
+        candidate = {**packet, 'elements': [*packet['elements'], label],
+                     'omitted_elements': packet['omitted_elements'] - 1}
+        if len(dumps(candidate).encode()) <= max_bytes:
+            packet = candidate
+    candidate = {**packet, 'summary': raw['summary'], 'summary_omitted': False}
+    if len(dumps(candidate).encode()) <= max_bytes:
+        packet = candidate
+    if len(dumps(packet).encode()) > max_bytes:
+        raise ValueError('Local visible-evidence envelope exceeds its budget')
+    return packet
 
 
 def validate_planner_report(report, *, visible_texts, original_task, string_list):
@@ -265,21 +325,9 @@ def build_feedback_views(owner, deadline):
     snapshot = control.memory.read()
     feedback = modules.feedback() if modules else {'strategy_review': False}
     page = raw.get('ui_state', {}).get('page_id')
-    reasons = []
-    if not modules or not modules.subgoals or not modules.selected_needs:
-        reasons.append('initial_plan')
-    if modules and page is not None and modules.page_id is not None and page != modules.page_id:
-        reasons.append('page_change')
-    if (raw.get('subgoal_review') or {}).get('change_needed'):
-        reasons.append('subgoal_review')
-    if raw['action_check'] and raw['action_check']['assessment'] == 'not_observed':
-        reasons.append('last_action_not_observed')
-    if feedback['strategy_review']:
-        reasons.append('repeated_unconfirmed_strategy')
     failed_keys = modules.stalled_keyboard_actions()
     pointer_recovery = len(modules.stalled_pointer_actions()) >= 2 or bool(failed_keys)
-    if pointer_recovery:
-        reasons.append('persistent_pointer_uncertainty')
+    reasons = feedback_analysis_triggers(modules, raw, feedback, pointer_recovery)
     if modules and page is not None:
         modules.page_id = page
         modules.save()
@@ -350,7 +398,9 @@ def build_feedback_views(owner, deadline):
     protected = {'protocol': 'taskviews-feedback-v10',
         'mandatory_core_ref': hashlib.sha256(dumps(core).encode()).hexdigest(),
         'last_action_feedback': modules.actor_feedback(),
-        'frame_id': frame, 'grade': 'model_proposal'}
+        'frame_id': frame, 'grade': 'model_proposal', 'execution_boundary': LOCAL_EXECUTION,
+        'active_subgoal': modules.subgoals[proposed['subgoal_id']],
+        'current_visible_evidence': local_visible_evidence(raw)}
     # Failed-strategy advice must reach the actor before bulky graph/module
     # detail. Keep whole original advice, exact goal identity and current frame;
     # this neither chooses an action nor promotes a hypothesis to an effect.
@@ -370,10 +420,10 @@ def build_feedback_views(owner, deadline):
                 'Multiple distinct pointer locations repeatedly produced no established state change. '
                 'Choose one normal application keyboard recovery operation, then inspect its effect. '
                 'Do not try another pointer location or dependent text until a known state change clears this warning.'}
-    optional = [('active_subgoal', modules.subgoals[proposed['subgoal_id']]),
-        ('input_policy', feedback.get('guidance')),
-        ('current_visible_evidence', {'summary': raw['summary'], 'elements': raw['elements']}),
-        ('assigned_views', control.views.packet_for('executor')), ('advisers', advisers)]
+    # Classified views still drive task/role selection and remain in the trace.
+    # The actor receives a local brief plus real execution references. Auxiliary
+    # bbox/graph locators and duplicate long adviser reports are not action input.
+    optional = [('input_policy', feedback.get('guidance'))]
     envelope = {**protected,
         'role_evidence': {'execution_modules': None, 'strategy_review': feedback['strategy_review']},
         'context_gaps': ['budget_omitted:' + key for key, _ in optional]}
@@ -382,7 +432,8 @@ def build_feedback_views(owner, deadline):
     projection_budget = min(6000, limit - len(dumps(envelope).encode()) + len('null'))
     if projection_budget < 512:
         raise ValueError('Actor input cannot retain current-action warning and original references before dispatch')
-    protected['role_evidence'] = {'execution_modules': modules.packet(max_bytes=projection_budget),
+    protected['role_evidence'] = {'execution_modules': modules.packet(max_bytes=projection_budget,
+                                                                    include_modules=False),
                                  'strategy_review': feedback['strategy_review']}
     executor = _admit(protected, optional, limit)
     owner.view_trace = {'protocol': 'taskviews-feedback-v10', 'frame': owner.frame.metadata,
@@ -390,6 +441,7 @@ def build_feedback_views(owner, deadline):
         'normalization': normalization, 'analysis_triggers': reasons,
         'dispatch': compiled, 'executor_context': executor, 'advisers': advisers,
         'action_check': raw['action_check'], 'module_id': module, 'view_changes': changes,
+        'actor_projection': 'local_execution_labels_and_native_feedback_no_observer_boxes',
         'available_actor_context_bytes': limit}
     telemetry.emit('taskviews_feedback_admission', packet_bytes=len(dumps(executor).encode()), available_bytes=limit,
                    analysis_triggers=reasons, merged_action_verification=True)
