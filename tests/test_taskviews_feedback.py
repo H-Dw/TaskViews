@@ -100,6 +100,71 @@ def test_submission_failure_outlives_recent_window_without_mutating_history():
     assert all(row['transition_id'] != 'submit' for row in module.prior_action_evidence()['records'])
 
 
+def test_actor_receives_retained_application_rejection_without_a_new_planner():
+    from ui_kobe.osworld.taskviews_feedback import _admit_execution_feedback
+    prior_module = prior_failure_module()
+    prior_module.effects['submit'].update(module_id='import', raw_transition_ref='/immutable/events#submit')
+    prior_module.recent = prior_module.recent[1:]
+    original = deepcopy(prior_module.effects)
+    evidence = prior_module.actor_prior_action_evidence()
+    assert evidence['records'][0]['transition_id'] == 'submit'
+    assert evidence['records'][0]['checks'][0]['quotes'] == ['Unsupported operation: ExampleCommand']
+    assert evidence['records'][0]['original_feedback_sha256'] == hashlib.sha256(dumps(original['submit']).encode()).hexdigest()
+    packet = _admit_execution_feedback(local_feedback_base(), [], duplicated_local_reference_module(),
+                                       8000, strategy_review=False, prior_evidence=evidence)
+    assert packet['prior_action_evidence'] == evidence and 'advisers' not in packet
+    assert packet['prior_action_evidence']['scope'] == 'past_application_feedback_not_current_state_or_math'
+    assert packet['current_visible_evidence']['summary'] == 'Visible editor'
+    assert prior_module.effects == original
+
+
+@pytest.mark.parametrize('mode', ['other-subgoal', 'unknown', 'observed', 'no-quote', 'focus'])
+def test_actor_history_never_promotes_unknown_or_other_goal_checks_to_application_failure(mode):
+    module = prior_failure_module()
+    module.effects.pop('dismiss')
+    if mode == 'other-subgoal':
+        module.recent[0]['module_id'] = 'save'
+    elif mode in {'unknown', 'observed'}:
+        module.effects['submit']['assessment'] = mode
+    elif mode == 'no-quote':
+        module.effects['submit']['checks'][0]['quotes'] = []
+    else:
+        module.effects['submit']['checks'][0]['kind'] = 'focus'
+    assert module.actor_prior_action_evidence()['records'] == []
+
+
+def test_actor_history_keeps_whole_checks_and_exact_omission_counts_under_its_cap():
+    module = prior_failure_module()
+    original = deepcopy([module.effects, module.recent])
+    full = module.actor_prior_action_evidence()
+    assert len(full['records']) == 2 and len(dumps(full).encode()) <= 900
+    limit = len(dumps(full).encode()) - 1
+    bounded = module.actor_prior_action_evidence(limit)
+    assert bounded['records'] == full['records'][:1] and bounded['omitted_records'] == 1
+    assert bounded['records'][0]['raw_transition_ref'] == '/immutable/events#submit'
+    assert [module.effects, module.recent] == original
+    with pytest.raises(ValueError, match='omission metadata'):
+        module.actor_prior_action_evidence(1)
+
+
+def test_latest_execution_floor_outranks_optional_older_application_failure():
+    from kobe_views.execution_modules import ExecutionPacketBudgetError
+    from ui_kobe.osworld.taskviews_feedback import _admit_execution_feedback
+    module, base = duplicated_local_reference_module(), local_feedback_base()
+    prior = prior_failure_module().actor_prior_action_evidence()
+    with pytest.raises(ExecutionPacketBudgetError) as raised:
+        module.packet(max_bytes=1, include_modules=False, share_duplicate_refs=True, share_exact_refs=True)
+    floor = raised.value.projection
+    fixed = {**base, 'role_evidence': {'execution_modules': floor, 'strategy_review': False},
+             'context_gaps': ['budget_omitted:prior_action_evidence']}
+    limit = len(dumps(fixed).encode())
+    packet = _admit_execution_feedback(base, [], module, limit, strategy_review=False, prior_evidence=prior)
+    assert 'prior_action_evidence' not in packet and packet['context_gaps'] == fixed['context_gaps']
+    assert packet['role_evidence']['execution_modules'] == floor
+    assert packet['last_action_feedback'] == base['last_action_feedback']
+    assert len(dumps(packet).encode()) <= limit
+
+
 def test_old_focus_failure_does_not_displace_durable_application_rejection():
     module = prior_failure_module()
     module.effects['old-focus'] = {**deepcopy(module.effects['submit']), 'module_id': 'import',
@@ -902,6 +967,34 @@ def test_modified_keys_are_not_falsely_classified_as_bare_submission(keys):
     module.transition_packet = lambda record: deepcopy(record)
     assert module.last_action()['expected_change']['kind'] == 'state'
     assert module.recent == [original]
+
+
+@pytest.mark.parametrize('malformed', [False, True])
+def test_submission_repairs_identify_separate_object_check_without_rewriting_candidate(malformed):
+    module = ExecutionModules.__new__(ExecutionModules)
+    module.last_action = lambda: {'transition_id': 'submit', 'target': 'post',
+                                  'expected_change': {'kind': 'submission'}}
+    check = {'transition_id': 'submit', 'target_observation_id': 'post', 'frame_id': 'current',
+             'assessment': 'not_observed', 'checks': [
+                 {'kind': 'submission', 'assessment': 'not_observed', 'quotes': ['Empty results']}]}
+    if malformed:
+        check['checks'][0].update(object='requested-object', result='not_created')
+    original = deepcopy(check)
+    with pytest.raises(ValueError) as error:
+        module.validate_action_check(check, frame='current', visible_texts=['Empty results'])
+    assert check == original and len(str(error.value).encode()) < 6000
+    if malformed:
+        detail = json.loads(str(error.value).split(': ', 1)[1])
+        assert detail['extra_fields'] == ['object', 'result']
+        assert detail['required_fields'] == ['assessment', 'kind', 'quotes']
+        assert detail['provided_check'] == original['checks'][0]
+    else:
+        assert 'separate kind:object' in str(error.value)
+    regenerated = {**original, 'checks': [
+        {'kind': 'submission', 'assessment': 'not_observed', 'quotes': ['Empty results']},
+        {'kind': 'object', 'assessment': 'unknown', 'quotes': []}]}
+    module.validate_action_check(regenerated, frame='current', visible_texts=['Empty results'])
+    assert regenerated['checks'][1]['assessment'] == 'unknown' and check == original
 
 
 @pytest.mark.parametrize('arguments,kind', [

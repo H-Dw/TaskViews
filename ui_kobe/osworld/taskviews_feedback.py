@@ -51,7 +51,9 @@ contract, not suggested new pointer coordinates. Re-ground the intended control
 in the current screenshot; never interpret those screen pixels as app mathematics.
 Its source_frame_evidence_ref may be {record_ref:'#/before_image'}: that exact
 same-packet reference resolves to last_action.before_image, not another frame.
-text checks also require focus, and submission checks also require object/result.
+text checks also require focus. For submission, include a separate kind:'object'
+check for the resulting object, with exactly kind, assessment, quotes. Do not add
+object/result fields to a kind:'submission' check; unknown object evidence stays unknown.
 When last_action.actor_intent is supplied, include exactly one additional check
 {kind:'intent',assessment,quotes:[literal visible text],state_keys:[ui_state field keys]}.
 Read the original actor prose as a decision-level proposal, not a verified effect.
@@ -200,7 +202,10 @@ effect within 1200 UTF-8 bytes. The original tool arguments remain unchanged.
 Longer prose is retained in history but wholly omitted from bounded verification;
 that omission prevents the next reader from confirming your intended effect.
 In execution_modules, {value_ref:'#/...'} resolves an identical receipt/image
-value within that execution_modules object; distinct operation IDs remain distinct."""
+value within that execution_modules object; distinct operation IDs remain distinct.
+prior_action_evidence is earlier application feedback, not the current screenshot.
+Dismissal or an empty current dialog does not validate the earlier rejected input;
+reassess that evidence before repeating a submission. It does not choose an action."""
 
 
 def feedback_analysis_triggers(modules, raw, feedback, pointer_recovery):
@@ -310,7 +315,7 @@ def _visible(raw):
     return [raw['summary'], *(e['text'] for e in raw['elements'])]
 
 
-def _admit_execution_feedback(protected, optional, modules, limit, *, strategy_review):
+def _admit_execution_feedback(protected, optional, modules, limit, *, strategy_review, prior_evidence=None):
     """Reserve execution identity before supplementary current-frame labels.
 
     The current screenshot remains the pointer source. Only whole literal
@@ -320,6 +325,14 @@ def _admit_execution_feedback(protected, optional, modules, limit, *, strategy_r
     from kobe_views.execution_modules import ExecutionPacketBudgetError
 
     optional = list(optional)
+    if prior_evidence and prior_evidence['records']:
+        try:
+            return _admit_execution_feedback({**protected, 'prior_action_evidence': prior_evidence},
+                optional, modules, limit, strategy_review=strategy_review)
+        except ExecutionPacketBudgetError:
+            # Latest action/receipt/images outrank even earlier application
+            # failures. Keep truthful whole-value omission when both cannot fit.
+            optional.insert(0, ('prior_action_evidence', prior_evidence))
     gaps = ['budget_omitted:' + key for key, _ in optional]
 
     def envelope(projection):
@@ -562,7 +575,8 @@ def build_feedback_views(owner, deadline):
     # bbox/graph locators and duplicate long adviser reports are not action input.
     optional = [('input_policy', feedback.get('guidance'))]
     executor = _admit_execution_feedback(protected, optional, modules, limit,
-                                        strategy_review=feedback['strategy_review'])
+                                        strategy_review=feedback['strategy_review'],
+                                        prior_evidence=modules.actor_prior_action_evidence())
     if feedback.get('state_review') and 'planner' in advisers:
         modules.record_uncertainty_review(feedback['state_review'])
     owner.view_trace = {'protocol': 'taskviews-feedback-v10', 'frame': owner.frame.metadata,

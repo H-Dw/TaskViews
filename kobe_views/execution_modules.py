@@ -453,7 +453,21 @@ class ExecutionModules:
                     or not isinstance(item['quotes'], list) or len(item['quotes']) > 4
                     or any(not isinstance(q, str) or not q or len(q) > 256 for q in item['quotes'])
                     or item['assessment'] != 'unknown' and not item['quotes']):
-                raise ValueError('Action checks require bounded visible quotes, not a global goal verdict')
+                bounded_quotes = (isinstance(item, dict) and isinstance(item.get('quotes'), list)
+                    and len(item['quotes']) <= 4
+                    and all(isinstance(q, str) and q and len(q) <= 256 for q in item['quotes']))
+                provided = (item if bounded_quotes else {
+                    'whole_malformed_check_omitted': True,
+                    'original_check_sha256': hashlib.sha256(dumps(item).encode()).hexdigest(),
+                    'original_check_bytes': len(dumps(item).encode())})
+                detail = {'check_index': check['checks'].index(item), 'provided_check': provided,
+                          'required_fields': sorted(fields),
+                          'extra_fields': sorted(set(item) - fields) if isinstance(item, dict) else [],
+                          'repair': 'Regenerate a separate check for each kind. An object check uses kind:object; '
+                                    'object/result are not fields of a submission check. Non-unknown marks need '
+                                    'literal quotes from this current summary/elements; otherwise keep unknown. '
+                                    'Only intent has state_keys. Do not auto-filter fields or invent an outcome.'}
+                raise ValueError('Action checks require bounded visible quotes, not a global goal verdict: ' + dumps(detail))
             if intent_check:
                 keys = item['state_keys']
                 if (not intent or not isinstance(keys, list) or len(keys) > 4
@@ -498,7 +512,10 @@ class ExecutionModules:
         if last['expected_change']['kind'] == 'text' and 'focus' not in kinds:
             raise ValueError('Verify focus as well as the typed text')
         if last['expected_change']['kind'] == 'submission' and 'object' not in kinds:
-            raise ValueError('Verify the submitted object/result as well as Return')
+            raise ValueError('Verify the submitted object/result as well as Return with a separate kind:object '
+                             'check. Its fields are exactly kind, assessment, quotes; do not add object/result '
+                             'fields to the kind:submission check. Keep the object unknown if current evidence '
+                             'cannot establish creation; no automatic promotion to observed.')
         literal = last['expected_change'].get('text')
         label = last['expected_change'].get('requested_object_label')
         for item in check['checks']:
@@ -696,6 +713,40 @@ class ExecutionModules:
         return {'module_id': self.active, 'transition_ids': identities,
                 'unconfirmed_operation_count': len(identities),
                 'comparison_field_keys': sorted(fields or []), 'grade': 'model_proposal'}
+
+    def actor_prior_action_evidence(self, max_bytes=900):
+        """Keep accepted application rejection proposals in the local loop.
+
+        This compact actor projection is independent of planner scheduling.
+        Whole earlier submission/object checks retain their exact provenance;
+        they do not become current-frame state or an executable prohibition.
+        """
+        candidates = []
+        recent = {record['transition_id']: record for record in self.recent[-8:]}
+        for identity in getattr(self, 'effect_order', list(self.effects)):
+            effect = self.effects[identity]
+            record = recent.get(identity) or {'module_id': effect.get('module_id'),
+                                            'raw_ref': effect.get('raw_transition_ref')}
+            if record.get('module_id') != self.active or effect.get('assessment') != 'not_observed':
+                continue
+            checks = [{key: plain(item[key]) for key in ('kind', 'assessment', 'quotes')}
+                      for item in effect.get('checks', []) if item.get('kind') in {'submission', 'object'}
+                      and item.get('assessment') == 'not_observed' and item.get('quotes')]
+            if checks:
+                candidates.append({'transition_id': identity, 'frame_id': effect['frame_id'],
+                    'target_observation_id': effect['target_observation_id'],
+                    'raw_transition_ref': record['raw_ref'], 'checks': checks,
+                    'original_feedback_sha256': hashlib.sha256(dumps(effect).encode()).hexdigest()})
+        result = {'records': [], 'omitted_records': len(candidates), 'grade': 'model_proposal',
+                  'scope': 'past_application_feedback_not_current_state_or_math'}
+        if len(dumps(result).encode()) > max_bytes:
+            raise ValueError('Actor prior evidence cannot hold its omission metadata')
+        for row in candidates:
+            candidate = {**result, 'records': result['records'] + [row],
+                         'omitted_records': result['omitted_records'] - 1}
+            if len(dumps(candidate).encode()) <= max_bytes:
+                result = candidate
+        return result
 
     def record_uncertainty_review(self, review):
         """Persist only a completed planner review, not success or an action."""
