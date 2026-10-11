@@ -116,15 +116,17 @@ assistant/tool history. No rejected call is submitted to env.step.
 def available_context_bytes(messages, *, label, contract):
     """Conservative pre-admission under the real actor input, not output tokens.
 
-    UTF-8 bytes also bound text characters; reserve JSON escaping overhead for
-    a supplemental string so Chinese/quoted packets cannot exceed the envelope.
+    UTF-8 bytes bound logical text characters. Only the serialized payload needs
+    escaping reserve; applying that reserve to logical text wastes its capacity.
+    A control character can occupy six JSON characters (\\u0000), so keep that
+    worst case separate. supplement still checks the complete actual envelope.
     """
     payload, chars = context_size(messages)
     overhead = len(json.dumps({'type': 'text', 'text': label + '\n'}, ensure_ascii=False)) + 8
-    remaining = min(contract.context_max_payload_chars - payload - overhead,
-                    contract.context_max_text_chars - chars - len(label) - 1,
+    payload_room = contract.context_max_payload_chars - payload - overhead
+    text_room = min(contract.context_max_text_chars - chars - len(label) - 1,
                     contract.context_rough_text_token_budget * 4 - chars - len(label) - 1)
-    return max(0, min(contract.taskviews_context_bytes, remaining // 2))
+    return max(0, min(contract.taskviews_context_bytes, text_room, payload_room // 6))
 
 
 def supplement(messages, text, *, label, contract):

@@ -406,6 +406,44 @@ def test_preallocation_admits_unicode_quoted_packet_without_changing_actor_histo
     assert 0 < budget < 6000
 
 
+def test_logical_text_capacity_is_not_halved_for_payload_escaping():
+    from ui_kobe.osworld.native_history import context_size
+    contract = CUAContract(context_max_text_chars=32000, context_max_payload_chars=2000000,
+                           context_rough_text_token_budget=12000, taskviews_context_bytes=8000)
+    messages = [{'role': 'user', 'content': [{'type': 'text', 'text': 'x' * 21716}]}]
+    original = deepcopy(messages)
+    budget = available_context_bytes(messages, label='TaskViews', contract=contract)
+    assert budget == 8000  # The packet cap remains fixed; 10273 logical characters are free.
+    packet = dumps({'raw_ref': '/original/receipt', 'effect_status': 'unknown', 'detail': 'x' * 7800})
+    prepared = supplement(messages, packet, label='TaskViews', contract=contract)
+    assert prepared is not messages and messages == original
+    payload, chars = context_size(prepared)
+    assert chars <= 32000 and payload <= 2000000 and (chars + 3) // 4 <= 12000
+    assert prepared[-1]['content'][-1]['text'] == 'TaskViews\n' + packet
+
+
+@pytest.mark.parametrize('character', ['\x00', '\n', '"', '\\', '中'])
+def test_payload_escaping_reserve_prevents_admitted_context_being_dropped(character):
+    from ui_kobe.osworld.native_history import context_size
+    contract = CUAContract(context_max_text_chars=32000, context_max_payload_chars=1600,
+                           context_rough_text_token_budget=12000, taskviews_context_bytes=8000)
+    messages = [{'role': 'user', 'content': [{'type': 'text', 'text': 'Original goal'}]}]
+    original = deepcopy(messages)
+    budget = available_context_bytes(messages, label='TaskViews', contract=contract)
+    text = character * (budget // len(character.encode('utf-8')))
+    prepared = supplement(messages, text, label='TaskViews', contract=contract)
+    assert prepared is not messages and messages == original
+    assert context_size(prepared)[0] <= 1600
+
+
+@pytest.mark.parametrize('text_cap,rough_cap,expected', [(100, 1000, 91), (1000, 25, 91), (8, 1000, 0)])
+def test_context_admission_keeps_logical_text_and_rough_token_limits(text_cap, rough_cap, expected):
+    contract = CUAContract(context_max_text_chars=text_cap, context_max_payload_chars=2000000,
+                           context_rough_text_token_budget=rough_cap, taskviews_context_bytes=8000)
+    messages = [{'role': 'user', 'content': [{'type': 'text', 'text': '12345'}]}]
+    assert available_context_bytes(messages, label='tag', contract=contract) == expected
+
+
 def test_complete_native_fixture_closes_focus_input_submit_save_and_grade(tmp_path):
     result = run_fixture(tmp_path / 'complete')
     assert result['test_kind'].startswith('offline_fixture') and result['official_score'] is None
