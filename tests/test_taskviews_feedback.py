@@ -907,3 +907,30 @@ def test_derived_metadata_remains_in_a_wide_packet_and_strict_reference_floor_st
     assert 'derived_transition_metadata' not in packet['projection_omissions']
     with pytest.raises(ValueError, match='latest action and unresolved failure references'):
         module.packet(max_bytes=1)
+
+
+@pytest.mark.parametrize('assessment,shared,changed,expected', [
+    ('unknown', [], [], 0), ('unknown', ['window_state'], [], 1),
+    ('not_observed', [], [], 1), ('observed', ['window_state'], [], 0),
+    ('unknown', ['window_state'], ['window_state'], 0)])
+def test_repeated_keys_need_action_bound_evidence_and_clear_on_actual_state_change(
+        assessment, shared, changed, expected):
+    keys = {'action': 'key', 'keys': ['command', 'up']}
+    module = pointer_history([keys, keys], [assessment, assessment])
+    original = deepcopy([module.recent, module.effects])
+    for effect in module.effects.values():
+        effect['state_comparison'] = {'shared_field_keys': shared, 'changed_field_keys': changed}
+    original = deepcopy([module.recent, module.effects])
+    assert len(module.stalled_keyboard_actions()) == expected
+    assert module.stalled_pointer_actions() == []
+    assert [module.recent, module.effects] == original
+
+
+def test_recovery_requires_planner_assignment_but_ordinary_event_free_reuse_does_not():
+    from ui_kobe.osworld.taskviews_feedback import validate_recovery_consumers
+    needs = [{'consumer': 'executor'}]
+    with pytest.raises(ValueError, match='Assign a planner view'):
+        validate_recovery_consumers(needs, required=True)
+    validate_recovery_consumers(needs, required=False)
+    validate_recovery_consumers(needs + [{'consumer': 'planner'}], required=True)
+    assert needs == [{'consumer': 'executor'}]

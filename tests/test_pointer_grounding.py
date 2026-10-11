@@ -136,7 +136,7 @@ def test_real_predict_repairs_exact_stalled_pointer_with_original_history_and_bu
         # this fixture's opt-in-only admission assertion must also be disabled.
         actor.optional_context = lambda goal, observation: None
         actor.view_trace = {}
-    actor.modules = SimpleNamespace(stalled_pointer_actions=lambda: [
+    actor.modules = SimpleNamespace(stalled_keyboard_actions=lambda: [], stalled_pointer_actions=lambda: [
         {'parameters': stale, 'transition_ids': ['original-1', 'original-3'],
          'assessments': ['unknown', 'not_observed']}])
     try:
@@ -163,7 +163,7 @@ def test_stalled_pointer_exhaustion_produces_no_decision_or_history_promotion(mo
     from ui_kobe.api.kimi_stream import StreamProtocolError
     stale = {'action': 'left_click', 'coordinate': [239, 228]}
     actor, obs, sent, _ = qwen_actor(monkeypatch, tmp_path, [stale])
-    actor.modules = SimpleNamespace(stalled_pointer_actions=lambda: [
+    actor.modules = SimpleNamespace(stalled_keyboard_actions=lambda: [], stalled_pointer_actions=lambda: [
         {'parameters': stale, 'transition_ids': ['original-1', 'original-3'],
          'assessments': ['unknown', 'not_observed']}])
     try:
@@ -203,7 +203,7 @@ def test_real_actor_changes_pointer_method_via_bounded_repair_and_keeps_original
     stalled = [{'parameters': {'action': 'left_click', 'coordinate': point},
                 'transition_ids': [f'{i}-first', f'{i}-second'], 'assessments': ['unknown', 'not_observed']}
                for i, point in enumerate(([239, 228], [891, 45]))]
-    actor.modules = SimpleNamespace(stalled_pointer_actions=lambda: stalled)
+    actor.modules = SimpleNamespace(stalled_keyboard_actions=lambda: [], stalled_pointer_actions=lambda: stalled)
     try:
         _, commands = actor.predict('Original exact task', obs)
         assert commands == official_compile([keyboard], actor.frame).commands and len(sent) == 2
@@ -445,3 +445,25 @@ def test_wait_tail_keeps_real_operation_warning_and_all_original_edges(tmp_path,
         assert len(module.recent) == 2 * len(commands)
     finally:
         journal.close()
+
+
+def test_real_actor_repairs_repeated_failed_keys_without_key_alias_conversion(monkeypatch, tmp_path):
+    stale = {'action': 'key', 'keys': ['command', 'up']}
+    different = {'action': 'key', 'keys': ['alt', 'tab']}
+    actor, obs, sent, _ = qwen_actor(monkeypatch, tmp_path, [stale, different])
+    actor.modules = SimpleNamespace(stalled_pointer_actions=lambda: [], stalled_keyboard_actions=lambda: [
+        {'parameters': stale, 'transition_ids': ['failed-key-1', 'failed-key-2'],
+         'assessments': ['not_observed', 'not_observed']}])
+    try:
+        _, commands = actor.predict('Original exact task', obs)
+        assert len(sent) == 2 and commands == official_compile([different], actor.frame).commands
+        rejected = next(m for m in sent[1]['messages'] if m['role'] == 'assistant')
+        assert json.loads(rejected['tool_calls'][0]['function']['arguments']) == stale
+        feedback = next(m for m in sent[1]['messages'] if m['role'] == 'tool')
+        assert feedback['tool_call_id'] == rejected['tool_calls'][0]['id']
+        error = json.loads(feedback['content'])
+        assert set(error) == {'error'} and 'failed-key-2' in error['error']
+        assert actor.step_ledger.snapshot()['repair_counts']['executor'] == 1
+        assert actor.step_ledger.snapshot()['known_usage']['total_tokens'] == 60
+    finally:
+        actor.close()

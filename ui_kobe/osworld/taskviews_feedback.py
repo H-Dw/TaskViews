@@ -77,6 +77,10 @@ keyboard navigation/shortcuts from its visible state, rather than another guess.
 When pointer_recovery_required is true, plan one normal keyboard recovery
 operation and its visible verification; further pointer guesses are rejected
 until an observed state change clears the earlier cycle. Do not guess a shortcut.
+Establish application focus before a dependent shortcut. A visible window alone
+does not prove focus. Use the visible guest desktop's keyboard conventions.
+If failed_keyboard_actions is present, do not repeat those exact keys; plan a
+different ordinary application recovery and verify its effect first.
 When a folder click has no visible effect, consider normal dialog keyboard
 location/full-requested-path navigation. Verify the resulting folder and filename
 before confirmation; do not substitute a guessed pointer coordinate.
@@ -165,6 +169,11 @@ def _planner_input(core, feedback, subgoal, instruction, visible, assigned, limi
     return _admit({'mandatory_core': core, 'action_feedback': feedback,
                    'subgoal': subgoal, 'original_task': instruction},
                   [('visible_text', visible), ('assigned_views', assigned)], limit)
+
+
+def validate_recovery_consumers(needs, *, required):
+    if required and not any(need['consumer'] == 'planner' for need in needs):
+        raise ValueError('Assign a planner view for stalled-operation recovery before another executor proposal')
 
 
 def build_feedback_views(owner, deadline):
@@ -267,7 +276,8 @@ def build_feedback_views(owner, deadline):
         reasons.append('last_action_not_observed')
     if feedback['strategy_review']:
         reasons.append('repeated_unconfirmed_strategy')
-    pointer_recovery = len(modules.stalled_pointer_actions()) >= 2
+    failed_keys = modules.stalled_keyboard_actions()
+    pointer_recovery = len(modules.stalled_pointer_actions()) >= 2 or bool(failed_keys)
     if pointer_recovery:
         reasons.append('persistent_pointer_uncertainty')
     if modules and page is not None:
@@ -290,11 +300,13 @@ def build_feedback_views(owner, deadline):
         control.views.validate_needs(snapshot, needs)
         if not any(n['consumer'] == 'executor' for n in needs):
             raise ValueError('Assign the executor')
+        validate_recovery_consumers(needs, required=pointer_recovery)
 
     if reasons:
         short_feedback = {'last_action': modules.actor_feedback(),
             'repetition_count': feedback['repetition_count'], 'strategy_review': feedback['strategy_review'],
             'pointer_recovery_required': pointer_recovery,
+            'failed_keyboard_actions': failed_keys,
             'guidance': feedback.get('guidance')}
         controller_input = {'mandatory_core': core,
             'consumer_allowed_anchors': control.views.allowed_anchor_inventory(snapshot, limit=16),
@@ -350,6 +362,8 @@ def build_feedback_views(owner, deadline):
     stalls = modules.stalled_pointer_actions()
     if stalls:
         protected['stalled_pointer_actions'] = stalls
+    if failed_keys:
+        protected['stalled_keyboard_actions'] = failed_keys
     if pointer_recovery:
         protected['pointer_recovery'] = {
             'required': True, 'grade': 'model_proposal', 'guidance':

@@ -431,7 +431,13 @@ class ExecutionModules:
         return digest(parameters) if parameters is not None else record.get('action_fingerprint')
 
     def stalled_pointer_actions(self):
-        """Exact repeated pointers with action-bound unchanged state proposals.
+        return self._stalled_actions({'left_click', 'right_click', 'double_click'})
+
+    def stalled_keyboard_actions(self):
+        return self._stalled_actions({'key'})
+
+    def _stalled_actions(self, actions):
+        """Exact repeated operations with action-bound unchanged state proposals.
 
         Only the current subgoal and eight recent edges participate. A known
         state change clears earlier failures; unknown without comparable state
@@ -447,8 +453,7 @@ class ExecutionModules:
             if comparison.get('changed_field_keys'):
                 break
             parameters = self.original_parameters(record)
-            if not isinstance(parameters, dict) or parameters.get('action') not in {
-                    'left_click', 'right_click', 'double_click'}:
+            if not isinstance(parameters, dict) or parameters.get('action') not in actions:
                 continue
             identity = digest(parameters)
             if identity in cleared:
