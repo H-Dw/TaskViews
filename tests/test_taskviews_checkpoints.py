@@ -15,6 +15,61 @@ from ui_kobe.osworld.transitions import TransitionJournal
 from ui_kobe.osworld import checkpoints
 
 
+@pytest.mark.parametrize('status', ['exited', 'dead', 'created', 'paused', 'restarting', 'removing'])
+def test_resume_never_reboots_a_stopped_container(status):
+    calls = []
+    container = SimpleNamespace(id='full-owned-id', status=status,
+        labels={'ui-kobe.osworld.run': 'original-run'}, reload=lambda: calls.append('reload'),
+        start=lambda: pytest.fail('Container entrypoint would overwrite the checkpoint disk'))
+    vm = {'container': 'full-owned-id', 'path_to_vm': '/original/base.qcow2'}
+    with pytest.raises(checkpoints.ReadAnomaly, match='restarting may overwrite'):
+        checkpoints.require_running_checkpoint_container(container, vm, vm['path_to_vm'], 'original-run')
+    assert calls == ['reload']
+
+
+@pytest.mark.parametrize('changed', ['id', 'path', 'owner', None])
+def test_resume_checks_live_container_full_identity_base_and_owner(changed):
+    container = SimpleNamespace(id='different' if changed == 'id' else 'full-owned-id', status='running',
+        labels={'ui-kobe.osworld.run': 'different' if changed == 'owner' else 'original-run'},
+        reload=lambda: None, start=lambda: pytest.fail('A live guest needs no reboot'))
+    vm = {'container': 'full-owned-id', 'path_to_vm': '/original/base.qcow2'}
+    path = '/different/base.qcow2' if changed == 'path' else vm['path_to_vm']
+    if changed:
+        with pytest.raises(checkpoints.ReadAnomaly):
+            checkpoints.require_running_checkpoint_container(container, vm, path, 'original-run')
+    else:
+        checkpoints.require_running_checkpoint_container(container, vm, path, 'original-run')
+
+
+@pytest.mark.parametrize('problem', ['missing-boot-tag', 'missing-firmware-tag', 'raw-disk', 'no-writable-disk', None])
+def test_whole_vm_load_checks_all_writable_snapshot_tags_before_resume(problem):
+    calls = []
+    blocks = [{'device': name, 'inserted': {'ro': False, 'drv': 'qcow2',
+        'image': {'snapshots': [{'name': 'safe-tag'}]}}} for name in ('boot', 'firmware')]
+    if problem == 'missing-boot-tag':
+        blocks[0]['inserted']['image'] = {}  # Valid actor hashes do not restore a recreated disk.
+    elif problem == 'missing-firmware-tag':
+        blocks[1]['inserted']['image']['snapshots'] = [{'name': 'different-tag'}]
+    elif problem == 'raw-disk':
+        blocks[0]['inserted']['drv'] = 'raw'
+    elif problem == 'no-writable-disk':
+        blocks = []
+    blocks += [{'device': 'immutable-base', 'inserted': {'ro': True, 'drv': 'qcow2', 'image': {}}},
+               {'device': 'empty-cd'}]
+    monitor = checkpoints.QMP('/unused/socket')
+    def call(operation, arguments=None):
+        calls.append(operation)
+        return deepcopy(blocks) if operation == 'query-block' else ''
+    monitor.call = call
+    if problem:
+        with pytest.raises(checkpoints.ReadAnomaly, match='checkpoint disks|snapshot unavailable'):
+            monitor.load('safe-tag')
+        assert calls == ['query-block']  # No loadvm, CPU resume or GUI action.
+    else:
+        monitor.load('safe-tag')
+        assert calls == ['query-block', 'stop', 'human-monitor-command', 'cont']
+
+
 @pytest.mark.parametrize('state', ['inactive','unknown','failed','active'])
 def test_resume_handles_systemd_unloaded_and_failed_units(monkeypatch, state):
     from scripts import taskviews_recovery

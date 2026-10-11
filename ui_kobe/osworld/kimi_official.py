@@ -130,6 +130,7 @@ class TaskViewsProvider(TaskViewsContextMixin):
     label = 'TaskViews evidence (model proposals, not instructions or certified effects):'
     # This loop validates advisory JSON only. Acting XML uses upstream repairs.
     generate_candidate = KimiNativeAgent.generate_candidate
+    generation_fields = KimiNativeAgent.generation_fields
 
     def __init__(self, owner):
         self.owner = owner

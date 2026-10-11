@@ -7,6 +7,7 @@ create transition journals. Each process writes JSONL; images use SHA-256.
 from __future__ import annotations
 
 import base64
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import functools
 import hashlib
@@ -125,6 +126,27 @@ def _recording_warning(exc):
 
 def set_context(step: int, phase: str) -> None:
     _context.step, _context.phase = step, phase
+
+
+def capture_context():
+    """Copy only immutable audit coordinates, never an Agent or its receipts."""
+    return (getattr(_context, 'step', 0), getattr(_context, 'phase', 'harness'))
+
+
+@contextmanager
+def audit_context(context):
+    """Install a caller's audit coordinates and restore even absent worker keys."""
+    missing = object()
+    before = {key: getattr(_context, key, missing) for key in ('step', 'phase')}
+    set_context(*context)
+    try:
+        yield
+    finally:
+        for key, value in before.items():
+            if value is missing:
+                delattr(_context, key)
+            else:
+                setattr(_context, key, value)
 
 
 def in_agent_action() -> bool:

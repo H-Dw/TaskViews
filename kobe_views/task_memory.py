@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 from threading import RLock
@@ -416,9 +417,30 @@ class TaskMemory:
                 raise ValueError('Claim ids are immutable; new or revised evidence requires a new claim id')
 
     @staticmethod
-    def _claim_content_rejection(claim):
+    def _claim_content_rejection(claim, visible_texts=None):
         """One content rule for pure preflight and durable frame admission."""
-        if claim['predicate'].casefold().split('.')[-1] in _GEOMETRY_KEYS or _contains_geometry(claim['value']):
+        value = claim['value']
+        application_math = isinstance(value, dict) and value.get('kind') == 'application_math'
+        if application_math:
+            # This is an explicit domain/provenance contract, not renaming x/y
+            # to smuggle screen coordinates past the same geometry guard.
+            fields = {'kind', 'space', 'object_label', 'coordinates', 'visible_text'}
+            if (set(value) != fields or value['space'] != 'cartesian'
+                    or not isinstance(value['object_label'], str) or not 1 <= len(value['object_label']) <= 128
+                    or not isinstance(value['visible_text'], str) or len(value['visible_text']) > 500
+                    or not isinstance(value['coordinates'], list) or not 2 <= len(value['coordinates']) <= 3
+                    or any(type(n) not in (int, float) or not math.isfinite(n) for n in value['coordinates'])):
+                return 'invalid_application_math_contract'
+            quote = value['visible_text']
+            if not visible_texts or quote not in visible_texts or quote != claim['locator']:
+                return 'application_math_requires_current_visible_source'
+            number = r'([+\-\u2212]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+\-\u2212]?\d+)?)'
+            pattern = re.escape(value['object_label']) + r'\s*=\s*\(\s*' + r'\s*,\s*'.join(
+                [number] * len(value['coordinates'])) + r'\s*\)'
+            match = re.fullmatch(pattern, quote)
+            if not match or [float(n.replace('\u2212', '-')) for n in match.groups()] != value['coordinates']:
+                return 'application_math_value_disagrees_with_visible_source'
+        elif claim['predicate'].casefold().split('.')[-1] in _GEOMETRY_KEYS or _contains_geometry(value):
             return 'current_frame_geometry_only'
         try:
             _credential_safe(claim['value'])
@@ -429,7 +451,7 @@ class TaskMemory:
         return None
 
     @staticmethod
-    def validate_proposal_content(proposals):
+    def validate_proposal_content(proposals, *, visible_texts=None):
         """Reject content before publication, within the reader's repair loop.
 
         This writes nothing, edits no candidate and grants no frame provenance.
@@ -439,7 +461,7 @@ class TaskMemory:
         TaskMemory.validate_proposal_structure(proposals)
         rejected, dropped = [], set()
         for index, claim in enumerate(proposals['claims']):
-            reason = TaskMemory._claim_content_rejection(claim)
+            reason = TaskMemory._claim_content_rejection(claim, visible_texts)
             if reason:
                 rejected.append({'index': index, 'id': claim['id'], 'reason': reason})
                 dropped.add(claim['id'])
@@ -460,7 +482,9 @@ class TaskMemory:
             raise ValueError('Current-frame semantic content rejected: ' + dumps({
                 'rejected': packet, 'omitted_rejections': len(rejected) - len(packet)})
                 + '. Omit rejected claims and their dependent claims; keep geometry only in current-frame '
-                  'visual evidence. Do not rename fields or IDs to evade admission.')
+                  'visual evidence. Application mathematical coordinates require the explicit typed '
+                  'application_math contract and matching current visible source. '
+                  'Do not rename fields or IDs to evade admission.')
 
     def accept_proposals(self, proposals, *, frame_id=None, source_ref=None):
         """Accept bounded open-schema semantic proposals bound to a trusted frame.
@@ -510,7 +534,8 @@ class TaskMemory:
                     predicate = claim["predicate"]
                     if not isinstance(predicate, str) or not _NAME.fullmatch(predicate):
                         raise ValueError("Invalid semantic predicate")
-                    reason = self._claim_content_rejection(claim)
+                    reason = self._claim_content_rejection(claim,
+                        [e['text'] for e in current['evidence']['elements']])
                     if reason:
                         rejection = {"index": index, "reason": reason}
                         if reason != 'credential_field_or_value':

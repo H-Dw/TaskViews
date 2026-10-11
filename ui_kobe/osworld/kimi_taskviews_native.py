@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import time
 
-from ui_kobe.api.kimi_budget import StepLedger
+from ui_kobe.api.kimi_budget import StepLedger, ConcurrentAdvisoryLedger
 from . import telemetry
 from .kimi_native import KimiNativeAgent, PROTOCOL as PROTOCOL
 from .task_control import PersistentTaskControl
@@ -20,6 +20,9 @@ class KimiTaskViewsNativeAgent(TaskViewsContextMixin, KimiNativeAgent):
     def __init__(self, **kwargs):
         self.control = None
         self.checkpoint_reads = os.environ.get('UI_KOBE_CHECKPOINT_READS') == '1'
+        # Opt in per frozen new test plan; legacy paused episodes keep their
+        # original protocol until an explicitly validated checkpoint repair.
+        self.feedback_v10 = os.environ.get('UI_KOBE_TASKVIEWS_FEEDBACK_V10') == '1'
         self.advisory_effort = os.environ.get('UI_KOBE_ADVISORY_EFFORT', 'low' if self.checkpoint_reads else
                                              os.environ.get('UI_KOBE_GENERATION_EFFORT', 'max'))
         super().__init__(**kwargs)
@@ -41,11 +44,21 @@ class KimiTaskViewsNativeAgent(TaskViewsContextMixin, KimiNativeAgent):
             context_bytes=self.contract.taskviews_context_bytes)
         self.control.compact_core = self.checkpoint_reads
 
+    def current_frame_content(self):
+        if not getattr(self, 'feedback_v10', False):
+            return super().current_frame_content()
+        from .pointer_grounding import current_frame_content
+        content = current_frame_content(self.frame)
+        telemetry.emit('actor_frame_contract', **self.frame.metadata,
+            mandatory=True, workflow_revision='pointer-v11', text=content[0]['text'])
+        return content
+
     def optional_context(self, instruction, obs):
         self.instruction, self.observation = instruction, obs
         self.view_trace = {}
         end = time.monotonic() + self.budget.step_s - self.budget.generation_s - self.budget.connect_s
-        self.advisory_ledger = StepLedger(self.profile, end, telemetry.emit,
+        ledger_type = ConcurrentAdvisoryLedger if self.feedback_v10 else StepLedger
+        self.advisory_ledger = ledger_type(self.profile, end, telemetry.emit,
             actor_repairs=self.contract.tool_repair_retries, advisory_repairs=self.contract.advisory_repair_retries)
         try:
             return self.build_views(end)

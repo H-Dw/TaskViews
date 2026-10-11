@@ -78,7 +78,7 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False):
     import docker
     from scripts.native_resource_accounting import sample, reserve_ok
     from scripts.osworld_task035_background import cgroup
-    from ui_kobe.osworld.checkpoints import Checkpoints
+    from ui_kobe.osworld.checkpoints import Checkpoints, QMP, require_running_checkpoint_container
     manifest = load(stage/'manifest.json')
     if manifest.get('task_id') != '059' or not manifest.get('checkpoint_policy', {}).get('enabled'):
         raise ValueError('Not a checkpoint-enabled Task059 run')
@@ -109,9 +109,8 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False):
             raise RuntimeError('Original task asset changed')
     with closing(docker.from_env()) as client:
         owned = client.containers.get(saved['vm']['container'])
-        owned.reload()
-        if owned.labels.get('ui-kobe.osworld.run') != manifest['run_id']:
-            raise RuntimeError('Checkpoint VM ownership mismatch')
+        require_running_checkpoint_container(owned, saved['vm'], saved['vm']['path_to_vm'], manifest['run_id'])
+        QMP(Path(saved['vm']['storage'])/'taskviews.qmp').require_snapshot(saved['tag'])
         windows = sample(client, {**manifest, 'cgroup': None}, host_status, cgroup(), teardown=False)['windows']
         if not reserve_ok(windows, startup=True):
             return {'status':'waiting_for_resources','windows':windows,'checkpoint':saved['tag']}

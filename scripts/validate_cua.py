@@ -99,6 +99,7 @@ def main():
     state = json.loads(args.state.read_text(encoding="utf-8"))
     if args.worker:
         import pytest
+        restore_cwd()
         path = Path(state["test_files"][len(state["suites"])])
         xml = args.state.parent / (path.stem + ".xml")
         with (args.state.parent / (path.stem + ".log")).open("w", encoding="utf-8") as log:

@@ -1,5 +1,16 @@
 """Per-step output admission; actual input/output usage is separately recorded."""
 import time
+from copy import deepcopy
+from functools import wraps
+from threading import RLock
+
+
+def _locked(method):
+    @wraps(method)
+    def invoke(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return invoke
 
 
 class StepTokenBudgetError(RuntimeError):
@@ -66,3 +77,26 @@ class StepLedger:
                 'known_usage': dict(self.usage), 'unknown_usage_requests': sum(r['usage'] is None for r in self.requests.values()),
                 'semantic_regenerations': self.regenerations, 'repair_counts': dict(self.repair_counts),
                 'repair_limits': dict(self.repair_limits), 'requests': len(self.requests)}
+
+
+class ConcurrentAdvisoryLedger(StepLedger):
+    """Opt-in TaskViews locking; the common actor/baseline ledger is unchanged."""
+    def __init__(self, *args, **kwargs):
+        self._lock = RLock()
+        super().__init__(*args, **kwargs)
+
+    allowance = _locked(StepLedger.allowance)
+    reserve = _locked(StepLedger.reserve)
+    settle = _locked(StepLedger.settle)
+    regenerate = _locked(StepLedger.regenerate)
+    snapshot = _locked(StepLedger.snapshot)
+
+    def __deepcopy__(self, memo):
+        # Request capture may snapshot a ledger. Never copy/share its lock, or
+        # let a recorder's independent snapshot spend the live admission pool.
+        with self._lock:
+            copied = type(self).__new__(type(self))
+            memo[id(self)] = copied
+            copied.__dict__ = {k: deepcopy(v, memo) for k, v in self.__dict__.items() if k != '_lock'}
+            copied._lock = RLock()
+            return copied

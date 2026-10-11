@@ -163,7 +163,8 @@ class PersistentTaskControl:
         # Event/action entities are audit material. They cannot displace newly
         # discovered target-specific objects in the controller's bounded index.
         semantic = [e for e in snapshot.entities.values()
-                    if e["type"] not in {"observation", "action", "action_attempt", "ui_observation"}]
+                    if e["type"] not in {"observation", "action", "action_attempt", "ui_observation",
+                        "execution_transition", "execution_event", "task_module", "module_report", "ui_state"}]
         selected = sorted(semantic, key=lambda e: (e["id"] != "task", e["type"] != "resource"))
         head = selected[:16]
         tail = [e for e in reversed(selected) if e["id"] not in {x["id"] for x in head}][:48]

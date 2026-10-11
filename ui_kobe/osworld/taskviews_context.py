@@ -45,6 +45,9 @@ class TaskViewsContextMixin:
         return value
 
     def build_views(self, deadline):
+        if getattr(self, 'feedback_v10', False):
+            from .taskviews_feedback import build_feedback_views
+            return build_feedback_views(self, deadline)
         control = self.control
         journal = getattr(self, 'execution_journal', None)
         if journal is not None and control.memory is None:

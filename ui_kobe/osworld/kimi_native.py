@@ -146,12 +146,6 @@ class KimiNativeAgent:
         self.view_step = self.total_steps
         self.frame = self.contract.process(obs["screenshot"], self.total_steps)
         telemetry.emit("cua_frame", **self.frame.metadata)
-        self.cached_context = self.optional_context(instruction, obs)
-        # Optional analysis owns a separate ledger/deadline. It cannot consume
-        # actor repair/output admission or shorten this common actor window.
-        deadline = time.monotonic() + self.budget.step_s
-        self.step_ledger = StepLedger(self.profile, deadline, telemetry.emit,
-            actor_repairs=self.contract.tool_repair_retries, advisory_repairs=self.contract.advisory_repair_retries)
         if self.pending:
             ids = [self.pending] if isinstance(self.pending, str) else self.pending
             for index, identifier in enumerate(ids):
@@ -162,7 +156,7 @@ class KimiNativeAgent:
             self.turns[-1].append({"role": "user", "content": str(obs["user_response"])})
         self.pending = None
         self.executions = []
-        user = {"role": "user", "content": [self.frame.image]}
+        user = {"role": "user", "content": self.current_frame_content()}
         system = {"role": "system", "content": native_system(self.frame, getattr(self, "task_current_date", None))}
         self.folded_prefix_count, removed, text_chars = compact(self.turns, step=self.total_steps,
             folded=self.folded_prefix_count, contract=self.contract, system=system, current=user,
@@ -170,6 +164,15 @@ class KimiNativeAgent:
         telemetry.emit("history_trim", history_turns_omitted=removed, retained_history_turns=len(self.turns),
                        retained_history_text_chars=text_chars, folded_prefix=self.folded_prefix_count)
         messages = [system, *(message for turn in self.turns for message in turn), user]
+        # TaskViews can admit its supplement against the actual compacted actor
+        # input before paying for analysis. The goal and native IDs are unchanged.
+        self.actor_input_messages = messages
+        self.cached_context = self.optional_context(instruction, obs)
+        # Optional analysis owns a separate ledger/deadline. It cannot consume
+        # actor repair/output admission or shorten this common actor window.
+        deadline = time.monotonic() + self.budget.step_s
+        self.step_ledger = StepLedger(self.profile, deadline, telemetry.emit,
+            actor_repairs=self.contract.tool_repair_retries, advisory_repairs=self.contract.advisory_repair_retries)
         telemetry.set_context(self.view_step, 'native_executor')
         response, (arguments, batch) = self.generate_candidate(self.client, "executor", deadline,
             {"model": self.model_name, "messages": messages, "tools": [native_schema(self.frame)], "tool_choice": "auto"},
@@ -191,6 +194,11 @@ class KimiNativeAgent:
             "terminal_origin": "explicit_model_tool" if batch.terminal_status else None}
         self.context_trace()
         return batch.question or original.get("content") or json.dumps(original, ensure_ascii=False), batch.commands
+
+    def current_frame_content(self):
+        # Legacy/baseline input stays unchanged. TaskViews can add mandatory
+        # current-frame text BEFORE history admission and optional analysis.
+        return [self.frame.image]
 
     def optional_context(self, instruction, obs):
         return None

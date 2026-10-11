@@ -98,9 +98,41 @@ class QMP:
             self.call('cont')
 
     def load(self, tag):
+        self.require_snapshot(tag)
         self.call('stop')
         self.hmp('loadvm ' + tag)
         self.call('cont')
+
+    def require_snapshot(self, tag):
+        """Metadata hashes alone cannot prove the disks still have a VM tag."""
+        writable = []
+        for block in self.call('query-block'):
+            inserted = block.get('inserted')
+            if not inserted or inserted['ro']:
+                continue
+            writable.append(block['device'])
+            snapshots = inserted.get('image', {}).get('snapshots', [])
+            if (inserted['drv'] != 'qcow2'
+                    or not any(item.get('name') == tag for item in snapshots)):
+                raise ReadAnomaly('Preserved VM snapshot unavailable on writable device '
+                                  + block['device'] + '; no reset or container restart allowed')
+        if not writable:
+            raise ReadAnomaly('Preserved VM has no writable checkpoint disks')
+
+
+def require_running_checkpoint_container(container, vm, path_to_vm, owner):
+    """Reuse a live paused guest; never reboot the image's destructive entrypoint."""
+    container.reload()
+    if container.id != vm['container'] or path_to_vm != vm['path_to_vm']:
+        raise ReadAnomaly('Preserved VM identity/base disk changed; no fresh VM allowed')
+    if container.labels.get('ui-kobe.osworld.run') != owner:
+        raise ReadAnomaly('Checkpoint VM ownership mismatch')
+    if container.status != 'running':
+        # The pinned /run/install.sh unconditionally recreates /boot.qcow2 on
+        # container start. Starting an exited container destroys internal
+        # snapshots even when all actor/graph metadata hashes remain correct.
+        raise ReadAnomaly('Preserved VM container is not running; restarting may overwrite '
+                          'its checkpoint disk. Keep evidence and require disk recovery')
 
 
 CHECKPOINT_CPU_FLAGS = 'migratable=on,-invtsc'
@@ -469,17 +501,10 @@ def install(stage, manifest, *, agent_type=None):
         if resuming:
             vm = json.loads((Path(stage)/'checkpoint-vm.json').read_text())
             self.container = self.client.containers.get(vm['container'])
-            self.container.reload()
-            if path_to_vm != vm['path_to_vm']:
-                raise RuntimeError('Preserved VM missing or base disk changed; no fresh VM allowed')
+            require_running_checkpoint_container(self.container, vm, path_to_vm, manifest['run_id'])
             for key, value in vm['ports'].items():
                 setattr(self, key, value)
             self.container._osworld_storage = Path(vm['storage']).parent
-            if self.container.status == 'exited':
-                self.container.start()
-                self._wait_for_vm_ready()
-            elif self.container.status != 'running':
-                raise RuntimeError('Preserved VM is not resumable')
             import threading
             event = threading.Event()
             local_budget.STOP_EVENTS[self.container.id] = event

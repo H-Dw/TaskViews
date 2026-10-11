@@ -113,6 +113,20 @@ assistant/tool history. No rejected call is submitted to env.step.
     return result
 
 
+def available_context_bytes(messages, *, label, contract):
+    """Conservative pre-admission under the real actor input, not output tokens.
+
+    UTF-8 bytes also bound text characters; reserve JSON escaping overhead for
+    a supplemental string so Chinese/quoted packets cannot exceed the envelope.
+    """
+    payload, chars = context_size(messages)
+    overhead = len(json.dumps({'type': 'text', 'text': label + '\n'}, ensure_ascii=False)) + 8
+    remaining = min(contract.context_max_payload_chars - payload - overhead,
+                    contract.context_max_text_chars - chars - len(label) - 1,
+                    contract.context_rough_text_token_budget * 4 - chars - len(label) - 1)
+    return max(0, min(contract.taskviews_context_bytes, remaining // 2))
+
+
 def supplement(messages, text, *, label, contract):
     """Keep optional evidence out of durable actor history and preserve the goal.
 
