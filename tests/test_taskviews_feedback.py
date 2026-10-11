@@ -1,5 +1,6 @@
 from copy import deepcopy
 from io import BytesIO
+import json
 
 from PIL import Image
 import pytest
@@ -1133,3 +1134,40 @@ def test_serialized_native_message_without_prose_does_not_invent_intent(tmp_path
     finally:
         log.close()
         memory.close()
+
+
+@pytest.mark.parametrize('candidate', [
+    {'action': 'click', 'coordinate': [674, 253]},
+    {'action_check': {'frame_id': 'frame'}, 'last_action': {}, 'frame': {},
+     'mandatory_core': {}, 'entity_records': [], 'semantic_schema': {}}])
+def test_perception_envelope_repairs_actor_output_and_input_echo_with_exact_fields(candidate):
+    from ui_kobe.osworld.taskviews_feedback import validate_feedback_envelope
+    original = deepcopy(candidate)
+    with pytest.raises(ValueError, match='response envelope invalid') as error:
+        validate_feedback_envelope(candidate)
+    detail = json.loads(str(error.value).split(': ', 1)[1])
+    assert set(detail['missing_root_fields']) == {'summary', 'elements', 'semantics', 'ui_state'} | (
+        {'action_check'} if 'action_check' not in candidate else set())
+    assert set(detail['unexpected_root_fields']) == set(candidate) - {'action_check'}
+    assert 'perception, not the GUI actor' in detail['repair'] and candidate == original
+
+
+def test_perception_envelope_error_bounds_whole_names_and_preserves_strict_guard():
+    from ui_kobe.osworld.taskviews_feedback import validate_feedback_envelope
+    raw = {('长' * 100) + str(i): i for i in range(50)}
+    with pytest.raises(ValueError) as error:
+        validate_feedback_envelope(raw)
+    assert len(str(error.value).encode()) < 2000 and '"omitted_received_field_names":50' in str(error.value)
+    good = {'summary': '', 'elements': [], 'semantics': {'entities': [], 'claims': []},
+            'ui_state': {'page_id': None, 'fields': {}}, 'action_check': None}
+    validate_feedback_envelope(good)
+    validate_feedback_envelope({**good, 'subgoal_review': None})
+    with pytest.raises(ValueError):
+        validate_feedback_envelope({**good, 'last_action': {}})
+
+
+def test_perception_wrong_role_and_echo_repair_complete_full_fixture_with_original_limit(tmp_path):
+    result = run_fixture(tmp_path/'schema-repair', bad_perception_envelopes=2)
+    assert result['terminal'] and not result['paused'] and result['fixture_score'] == 1.0
+    assert result['official_score'] is None and not result['model_ability_measured']
+    assert result['compiler_checks'] == 7 and result['roles']['perception'] == 9

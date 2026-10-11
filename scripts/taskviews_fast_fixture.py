@@ -78,7 +78,7 @@ class FixtureSnapshots:
         return {'status': 'paused' if command == 'stop' else 'running'}
 
 
-def run_fixture(directory, *, bad_action_binding=False, null_subgoal_review=False):
+def run_fixture(directory, *, bad_action_binding=False, null_subgoal_review=False, bad_perception_envelopes=0):
     import httpx
     from ui_kobe.api.qwen_native import MODEL, BASE_URL, QwenNativeClient
     from ui_kobe.osworld.qwen_taskviews_native import QwenTaskViewsNativeAgent
@@ -109,9 +109,10 @@ def run_fixture(directory, *, bad_action_binding=False, null_subgoal_review=Fals
               {'action': 'terminate', 'status': 'success'}]
     requests, actor_packets, roles, native_index = [], [], Counter(), 0
     first_plan = True
+    envelope_failures = 0
 
     def handler(request):
-        nonlocal native_index, first_plan
+        nonlocal native_index, first_plan, envelope_failures
         payload = json.loads(request.content)
         requests.append(payload)
         system = payload['messages'][0]['content']
@@ -173,6 +174,9 @@ def run_fixture(directory, *, bad_action_binding=False, null_subgoal_review=Fals
                         'objects': ','.join(ui.objects), 'saved': ui.saved}}}
                 if null_subgoal_review:
                     value['subgoal_review'] = None
+                if envelope_failures < bad_perception_envelopes:
+                    value = {'action': 'click', 'coordinate': [200, 200]} if envelope_failures == 0 else context
+                    envelope_failures += 1
             elif 'task controller' in system:
                 roles['view_controller'] += 1
                 value = {'stage': 'work', 'subgoal_id': 'create-save',

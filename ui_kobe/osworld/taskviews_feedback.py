@@ -72,6 +72,39 @@ visible_text must exactly match an element's displayed text and the claim locato
 the numeric components must match that text. Do not derive an axis from this type,
 or use it for screen/pointer coordinates. All accepted math remains a proposal."""
 
+FEEDBACK_RESPONSE = """You are the perception reader, not the GUI executor.
+Return a NEW evidence response whose root fields are exactly summary, elements,
+semantics, ui_state, action_check; only subgoal_review is optional.
+summary is a concise current-image description, elements are its literal visible
+labels/boxes, semantics={entities,claims}, ui_state={page_id,fields}, and
+action_check follows the supplied binding and check rules below. Unknown state
+is null. Do not emit action/coordinate commands: you have no GUI execution tools.
+The user message is READ-ONLY INPUT CONTEXT, not an output template. Do not echo
+frame, mandatory_core, entity_records, semantic_schema, last_action, actor_intent,
+context_gaps, or image references as root response fields. Preserve the input
+IDs only inside the specified evidence/check fields. A rejected response is
+not accepted evidence; regenerate the complete response in this output schema."""
+
+
+def validate_feedback_envelope(raw):
+    """Keep the strict schema, but tell a repairing reader exactly what failed."""
+    required = {'summary', 'elements', 'semantics', 'action_check', 'ui_state'}
+    allowed = required | {'subgoal_review'}
+    if isinstance(raw, dict) and required <= set(raw) <= allowed:
+        return
+    keys = list(raw) if isinstance(raw, dict) else []
+    named = [key for key in keys if isinstance(key, str) and len(key.encode()) <= 80][:16]
+    detail = {'required_root_fields': sorted(required), 'optional_root_fields': ['subgoal_review'],
+        'missing_root_fields': sorted(required - set(keys)),
+        'unexpected_root_fields': sorted(key for key in named if key not in allowed),
+        'omitted_received_field_names': len(keys) - len(named),
+        'received_type': type(raw).__name__,
+        'repair': 'Return NEW current-image summary/elements/semantics/ui_state/action_check. '
+                  'This is perception, not the GUI actor. Do not issue action/coordinate commands '
+                  'or echo the read-only input packet. Regenerate the complete required response; '
+                  'do not silently delete fields or treat input context as newly observed evidence.'}
+    raise ValueError('Feedback perception response envelope invalid: ' + dumps(detail))
+
 STABLE_PLAN = """For this protocol return stage, needs, subgoal_id and, on the first
 plan only, subgoals:[{id,label,dependencies:[earlier goal IDs]}]. Derive 1..8 small
 subgoals and their dependencies from the original user goal, not screen anchors
@@ -286,9 +319,7 @@ def build_feedback_views(owner, deadline):
     request['inventory_omissions_do_not_create_new_ids'] = True
 
     def validate_read(raw):
-        required = {'summary', 'elements', 'semantics', 'action_check', 'ui_state'}
-        if not required <= set(raw) or set(raw) - required - {'ui_state', 'subgoal_review'}:
-            raise ValueError('Feedback perception requires current evidence and action_check')
+        validate_feedback_envelope(raw)
         bounded_visual_evidence({k: raw[k] for k in ('summary', 'elements')},
                                 screenshot.model_width, screenshot.model_height)
         semantics = raw['semantics']
@@ -322,7 +353,7 @@ def build_feedback_views(owner, deadline):
                 or any(not any(q in text for text in _visible(raw)) for q in review['quotes'])):
             raise ValueError('Subgoal review requires an existing ID and visible evidence')
 
-    prompt = (SEMANTIC_PERCEPTION + '\nFor this protocol action_check is required. '
+    prompt = (SEMANTIC_PERCEPTION + '\n' + FEEDBACK_RESPONSE + '\nFor this protocol action_check is required. '
         'Existing entity IDs/type/label and claim IDs are immutable. Inventories may omit older records; '
         'repair conflicts using the original records or omit redeclaration. Keep <=8 entities/12 claims.\n'
         + ACTION_READ + '\n' + owner.frame.instruction)
