@@ -76,6 +76,14 @@ class KimiTaskViewsNativeAgent(TaskViewsContextMixin, KimiNativeAgent):
     def context_trace(self):
         self.last_trace['taskviews'] = self.view_trace
 
+    def validate_actor_candidate(self, response):
+        result = super().validate_actor_candidate(response)
+        if getattr(self, 'feedback_v10', False) and getattr(self, 'modules', None):
+            from .pointer_grounding import validate_pointer_strategy
+            validate_pointer_strategy(result[0], self.modules.stalled_pointer_actions(),
+                                      frame_id=self.frame.metadata['frame_id'])
+        return result
+
     def close(self):
         try:
             self.sync_execution()

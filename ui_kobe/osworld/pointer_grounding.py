@@ -18,6 +18,31 @@ confirmation, verifying each visible effect. Never use terminal or scripting.
 This contract belongs to the current image; older frame contracts are history."""
 
 
+def validate_pointer_strategy(arguments, stalled, *, frame_id):
+    """Reject an exact failed pointer cycle before dispatch; never move a point.
+
+    The shared native compiler validates first. The original repair loop owns
+    retries, complete rejected assistants/tool IDs, output admission and time.
+    A batch cannot establish new focus before its dependent operations without
+    a fresh image. Changed parameters, keys, captures and termination retain
+    their original native validation and commands.
+    """
+    from kobe_views.model import dumps
+    from ui_kobe.api.kimi_stream import StreamProtocolError
+    for action in arguments:
+        match = next((row for row in stalled if row['parameters'] == action), None)
+        if match:
+            detail = {'frame_id': frame_id, 'rejected_parameters': action,
+                'transition_ids': match['transition_ids'], 'assessments': match['assessments'],
+                'grade': 'model_proposal', 'repair':
+                    'These exact pointer parameters repeatedly failed to establish the intended effect. '
+                    'Re-ground the control in the current image or use a normal application keyboard route. '
+                    'Choose one operation and observe its effect before dependent input; '
+                    'do not scale, clamp, slightly offset a stale guess, or infer focus from a receipt.'}
+            raise StreamProtocolError('Repeated unconfirmed pointer strategy: ' + dumps(detail),
+                code='repeated_unconfirmed_pointer', retryable=True)
+
+
 def current_frame_content(frame):
     landmarks = ''
     if frame.metadata['coordinate_type'] == 'absolute':

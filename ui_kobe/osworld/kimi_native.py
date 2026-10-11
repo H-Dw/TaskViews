@@ -176,7 +176,7 @@ class KimiNativeAgent:
         telemetry.set_context(self.view_step, 'native_executor')
         response, (arguments, batch) = self.generate_candidate(self.client, "executor", deadline,
             {"model": self.model_name, "messages": messages, "tools": [native_schema(self.frame)], "tool_choice": "auto"},
-            lambda response: validate_native(response, self.frame))
+            self.validate_actor_candidate)
         original = response.model_dump()["choices"][0]["message"]
         ids = [call["id"] for call in original.get("tool_calls") or []]
         self.pending = ids[0] if len(ids) == 1 else (ids or None)
@@ -199,6 +199,10 @@ class KimiNativeAgent:
         # Legacy/baseline input stays unchanged. TaskViews can add mandatory
         # current-frame text BEFORE history admission and optional analysis.
         return [self.frame.image]
+
+    def validate_actor_candidate(self, response):
+        """Shared native policy first; TaskViews may add a pre-dispatch check."""
+        return validate_native(response, self.frame)
 
     def optional_context(self, instruction, obs):
         return None

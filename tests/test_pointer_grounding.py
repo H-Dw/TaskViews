@@ -67,6 +67,28 @@ def test_invalid_coordinates_remain_official_failures(point):
         official_compile([{'action':'left_click','coordinate':list(point)}],frame())
 
 
+@pytest.mark.parametrize('action', [
+    {'action': 'left_click', 'coordinate': [239, 228]},
+    {'action': 'right_click', 'coordinate': [891, 45]},
+    {'action': 'double_click', 'coordinate': [319, 720]}])
+def test_stalled_pointer_rejected_before_dispatch_without_coordinate_correction(action):
+    from ui_kobe.osworld.pointer_grounding import validate_pointer_strategy
+    from ui_kobe.api.kimi_stream import StreamProtocolError
+    original = deepcopy(action)
+    stalled = [{'parameters': action, 'transition_ids': ['edge-1', 'edge-3'],
+                'assessments': ['not_observed', 'unknown']}]
+    with pytest.raises(StreamProtocolError, match='edge-3') as failure:
+        validate_pointer_strategy([action], stalled, frame_id='current')
+    assert failure.value.code == 'repeated_unconfirmed_pointer' and failure.value.retryable
+    assert action == original
+    with pytest.raises(StreamProtocolError):
+        validate_pointer_strategy([action, {'action': 'type', 'text': 'requested'}], stalled, frame_id='current')
+    # New proposals keep their exact native coordinates/parameters; no scaling.
+    different = {**action, 'coordinate': [1711, 49]}
+    validate_pointer_strategy([different], stalled, frame_id='current')
+    validate_pointer_strategy([{'action': 'key', 'keys': ['alt', 'f']}], stalled, frame_id='current')
+
+
 def qwen_actor(monkeypatch, tmp_path, responses):
     from ui_kobe.osworld.qwen_taskviews_native import QwenTaskViewsNativeAgent
     from ui_kobe.osworld import telemetry
@@ -100,6 +122,58 @@ def qwen_actor(monkeypatch, tmp_path, responses):
     image=BytesIO()
     Image.new('RGB',(1920,1080)).save(image,'PNG')
     return actor,{'screenshot':image.getvalue()},sent,reads
+
+
+@pytest.mark.parametrize('enabled', [True, False])
+def test_real_predict_repairs_exact_stalled_pointer_with_original_history_and_budget(
+        monkeypatch, tmp_path, enabled):
+    stale = {'action': 'left_click', 'coordinate': [239, 228]}
+    keyboard = {'action': 'key', 'keys': ['alt', 'f']}
+    actor, obs, sent, _ = qwen_actor(monkeypatch, tmp_path, [stale, keyboard])
+    actor.feedback_v10 = enabled
+    if not enabled:
+        # The opt-out correctly omits the mandatory TaskViews frame supplement;
+        # this fixture's opt-in-only admission assertion must also be disabled.
+        actor.optional_context = lambda goal, observation: None
+        actor.view_trace = {}
+    actor.modules = SimpleNamespace(stalled_pointer_actions=lambda: [
+        {'parameters': stale, 'transition_ids': ['original-1', 'original-3'],
+         'assessments': ['unknown', 'not_observed']}])
+    try:
+        _, commands = actor.predict('Original exact task', obs)
+        if enabled:
+            assert len(sent) == 2
+            assert commands == official_compile([keyboard], actor.frame).commands
+            rejected = next(m for m in sent[1]['messages'] if m['role'] == 'assistant')
+            assert rejected['tool_calls'][0]['id'] == 'tool-1'
+            assert json.loads(rejected['tool_calls'][0]['function']['arguments']) == stale
+            feedback = next(m for m in sent[1]['messages'] if m['role'] == 'tool')
+            assert feedback['tool_call_id'] == 'tool-1' and set(json.loads(feedback['content'])) == {'error'}
+            assert actor.step_ledger.snapshot()['repair_counts'] == {'executor': 1, 'advisory': 0}
+            assert actor.step_ledger.snapshot()['known_usage']['total_tokens'] == 60
+        else:
+            assert len(sent) == 1 and commands == ['pyautogui.click(239, 228)']
+        assert all(request['max_tokens'] == 16000 for request in sent)
+        assert actor.contract.tool_repair_retries == 2
+    finally:
+        actor.close()
+
+
+def test_stalled_pointer_exhaustion_produces_no_decision_or_history_promotion(monkeypatch, tmp_path):
+    from ui_kobe.api.kimi_stream import StreamProtocolError
+    stale = {'action': 'left_click', 'coordinate': [239, 228]}
+    actor, obs, sent, _ = qwen_actor(monkeypatch, tmp_path, [stale])
+    actor.modules = SimpleNamespace(stalled_pointer_actions=lambda: [
+        {'parameters': stale, 'transition_ids': ['original-1', 'original-3'],
+         'assessments': ['unknown', 'not_observed']}])
+    try:
+        with pytest.raises(StreamProtocolError, match='Repeated unconfirmed pointer'):
+            actor.predict('Original exact task', obs)
+        assert len(sent) == 3 and actor.turns == [] and actor.pending is None
+        assert actor.step_ledger.snapshot()['repair_counts']['executor'] == 2
+        assert actor.step_ledger.snapshot()['known_usage']['total_tokens'] == 90
+    finally:
+        actor.close()
 
 
 def test_actual_predict_delivers_current_contract_before_analysis_each_turn(monkeypatch,tmp_path):

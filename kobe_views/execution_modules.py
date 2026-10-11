@@ -414,13 +414,67 @@ class ExecutionModules:
         self.report('last_action', value, frame=frame)
         self.save()
 
+    def original_parameters(self, record):
+        """Read pointer parameters from the immutable edge, not semantic hashes.
+
+        Older module projections can have geometry-free action fingerprints.
+        They remain historical records; never rewrite them to repair counting.
+        """
+        journal = getattr(self, 'journal', None)
+        if journal is None or journal.closed:
+            return None
+        edge = self.event(record['transition_id'])
+        return plain((edge.get('tool') or {}).get('arguments')) if edge else None
+
+    def _action_fingerprint(self, record):
+        parameters = self.original_parameters(record)
+        return digest(parameters) if parameters is not None else record.get('action_fingerprint')
+
+    def stalled_pointer_actions(self):
+        """Exact repeated pointers with action-bound unchanged state proposals.
+
+        Only the current subgoal and eight recent edges participate. A known
+        state change clears earlier failures; unknown without comparable state
+        is insufficient. This supplies a bounded validation warning, not an
+        executable alternative, verified effect, or completion decision.
+        """
+        groups, cleared = {}, set()
+        for record in reversed(self.recent):
+            if record.get('module_id') != self.active:
+                continue
+            effect = self.effects.get(record['transition_id'], {})
+            comparison = effect.get('state_comparison', {})
+            if comparison.get('changed_field_keys'):
+                break
+            parameters = self.original_parameters(record)
+            if not isinstance(parameters, dict) or parameters.get('action') not in {
+                    'left_click', 'right_click', 'double_click'}:
+                continue
+            identity = digest(parameters)
+            if identity in cleared:
+                continue
+            if effect.get('assessment') == 'observed':
+                groups.pop(identity, None)
+                cleared.add(identity)
+                continue
+            uncertain_unchanged = (effect.get('assessment') == 'unknown'
+                and bool(comparison.get('shared_field_keys')))
+            if effect.get('assessment') != 'not_observed' and not uncertain_unchanged:
+                continue
+            group = groups.setdefault(identity, {'parameters': parameters, 'transition_ids': [],
+                'assessments': [], 'grade': 'model_proposal'})
+            group['transition_ids'].append(record['transition_id'])
+            group['assessments'].append(effect['assessment'])
+        return [value for value in groups.values() if len(value['transition_ids']) >= 2]
+
     def feedback(self):
         last = self.last_action()
         if not last:
             return {'last_action': None, 'repetition_count': 0, 'strategy_review': False}
         count = 0
         for record in reversed(self.recent):
-            if record.get('module_id') != last['module_id'] or record.get('action_fingerprint') != last.get('action_fingerprint'):
+            if (record.get('module_id') != last['module_id']
+                    or self._action_fingerprint(record) != self._action_fingerprint(last)):
                 continue
             effect = self.effects.get(record['transition_id'], {})
             legacy_click = (getattr(self, 'compare_state_v10', False)

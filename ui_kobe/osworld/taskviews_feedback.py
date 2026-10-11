@@ -91,6 +91,11 @@ goal_targets:[{quote:literal substring of original_task,status:'requested'}].
 Use math_hypotheses=[] for a GUI input/save plan with no mathematical inference.
 Do not claim a requested goal is already visible or mathematically verified."""
 
+RECOVERY_PLAN = """Keep advice within 900 UTF-8 bytes. Give one next recovery
+operation and its visible verification, without re-telling the whole task.
+This concise advice is protected in the actor packet; longer supporting
+evidence remains in the original report. Do not supply a guessed location."""
+
 
 def validate_planner_report(report, *, visible_texts, original_task, string_list):
     if (not isinstance(report, dict) or not {'advice', 'needed_evidence'} <= set(report)
@@ -313,7 +318,10 @@ def build_feedback_views(owner, deadline):
         def validate_planner(report):
             validate_planner_report(report, visible_texts=_visible(raw), original_task=owner.instruction,
                                     string_list=control._strings)
-        report = owner.role('planner', ADVISER + '\n' + PLANNING, context, image, deadline, validate_planner)
+            if len(report['advice'].encode()) > 900:
+                raise ValueError('Keep recovery advice within 900 UTF-8 bytes; provide one next operation and verification')
+        report = owner.role('planner', ADVISER + '\n' + PLANNING + '\n' + RECOVERY_PLAN,
+                            context, image, deadline, validate_planner)
         advisers['planner'] = {'report': report, 'grade': 'model_proposal', 'frame_id': frame}
         modules.report('planner', report, frame=frame)
         if 'assigned_views' in context:
@@ -324,6 +332,17 @@ def build_feedback_views(owner, deadline):
         'mandatory_core_ref': hashlib.sha256(dumps(core).encode()).hexdigest(),
         'last_action_feedback': modules.actor_feedback(),
         'frame_id': frame, 'grade': 'model_proposal'}
+    # Failed-strategy advice must reach the actor before bulky graph/module
+    # detail. Keep whole original advice, exact goal identity and current frame;
+    # this neither chooses an action nor promotes a hypothesis to an effect.
+    if reasons and 'planner' in advisers:
+        protected['next_strategy'] = {'subgoal': modules.subgoals[proposed['subgoal_id']],
+            'advice': advisers['planner']['report']['advice'], 'frame_id': frame,
+            'grade': 'model_proposal', 'full_report_ref':
+                str(modules.path) + '#modules/' + module + '/reports/planner'}
+    stalls = modules.stalled_pointer_actions()
+    if stalls:
+        protected['stalled_pointer_actions'] = stalls
     optional = [('active_subgoal', modules.subgoals[proposed['subgoal_id']]),
         ('input_policy', feedback.get('guidance')),
         ('current_visible_evidence', {'summary': raw['summary'], 'elements': raw['elements']}),

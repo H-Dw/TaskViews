@@ -50,6 +50,71 @@ def test_repeated_unconfirmed_strategy_detects_interleaved_input_submit_cycle():
     module.memory = SimpleNamespace()
 
 
+def pointer_history(parameters, assessments=None):
+    """Old geometry-free hashes must not merge different original pointers."""
+    from types import SimpleNamespace
+    module = ExecutionModules.__new__(ExecutionModules)
+    module.active = 'stable-subgoal'
+    module.recent = [{'transition_id': f'edge-{i}', 'module_id': module.active,
+                      'action_fingerprint': 'old-geometry-free-click'} for i in range(len(parameters))]
+    edges = {row['transition_id']: {'tool': {'arguments': value}}
+             for row, value in zip(module.recent, parameters)}
+    module.journal = SimpleNamespace(closed=False)
+    module.event = lambda identity: deepcopy(edges[identity])
+    module.effects = {row['transition_id']: {'assessment': (assessments or ['unknown'] * len(parameters))[i],
+        'state_comparison': {'shared_field_keys': ['focus', 'input'], 'changed_field_keys': []}}
+        for i, row in enumerate(module.recent)}
+    module.last_action = lambda: deepcopy(module.recent[-1])
+    return module
+
+
+def test_alternating_positions_count_exact_original_parameters_and_retain_both_failures():
+    a = {'action': 'left_click', 'coordinate': [239, 228]}
+    b = {'action': 'left_click', 'coordinate': [891, 45]}
+    module = pointer_history([a, b, a, b])
+    original = deepcopy([module.recent, module.effects])
+    assert module.feedback()['repetition_count'] == 2
+    stalled = module.stalled_pointer_actions()
+    assert {tuple(row['parameters']['coordinate']) for row in stalled} == {(239, 228), (891, 45)}
+    assert all(len(row['transition_ids']) == 2 for row in stalled)
+    assert [module.recent, module.effects] == original
+    module.recent[-1]['module_id'] = 'different-subgoal'
+    assert len(module.stalled_pointer_actions()) == 1
+
+
+@pytest.mark.parametrize('assessment,shared,changed,expected', [
+    ('unknown', [], [], 0), ('unknown', ['focus'], [], 1),
+    ('not_observed', [], [], 1), ('observed', ['focus'], [], 0),
+    ('unknown', ['focus'], ['focus'], 0)])
+def test_pointer_guard_requires_actual_effect_evidence_and_clears_after_state_change(
+        assessment, shared, changed, expected):
+    point = {'action': 'left_click', 'coordinate': [239, 228]}
+    module = pointer_history([point, point], [assessment, assessment])
+    for effect in module.effects.values():
+        effect['state_comparison'] = {'shared_field_keys': shared, 'changed_field_keys': changed}
+    assert len(module.stalled_pointer_actions()) == expected
+
+
+def test_confirmed_intervening_change_clears_older_pointer_cycle():
+    point = {'action': 'left_click', 'coordinate': [239, 228]}
+    module = pointer_history([point, point, {'action': 'key', 'keys': ['alt', 'f']}, point])
+    module.effects['edge-2']['state_comparison']['changed_field_keys'] = ['menu']
+    assert module.stalled_pointer_actions() == []
+
+
+def test_current_recovery_advice_precedes_optional_graph_and_is_not_promoted_to_command():
+    from ui_kobe.osworld.taskviews_feedback import _admit
+    module, _ = repeated_warning_module()
+    protected = {'last_action_feedback': module.actor_feedback(), 'next_strategy': {
+        'subgoal': {'id': 'save', 'label': 'Save requested document', 'dependencies': []},
+        'advice': 'Re-observe the Name field before entering text; confirm the visible filename.',
+        'frame_id': 'current', 'grade': 'model_proposal'}}
+    packet = _admit(protected, [('assigned_views', 'x' * 6000), ('advisers', 'x' * 3000)], 2600)
+    assert packet['next_strategy'] == protected['next_strategy']
+    assert packet['last_action_feedback'] == protected['last_action_feedback']
+    assert packet['context_gaps'] == ['budget_omitted:assigned_views', 'budget_omitted:advisers']
+
+
 def repeated_warning_module(assessment='unknown', parameters=None, quotes=None):
     module = ExecutionModules.__new__(ExecutionModules)
     module.recent = [{'transition_id': 'edge-' + str(i), 'module_id': 'input',
