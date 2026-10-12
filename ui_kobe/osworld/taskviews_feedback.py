@@ -491,6 +491,12 @@ def build_feedback_views(owner, deadline):
         'evidence, not an edit to an old claim ID. Identity repair lists conflicting_claim_records and '
         'changed_identity_fields; unchanged facts need not be redeclared. Never invent another identity '
         'for an unchanged fact to bypass a conflict or status. Keep <=8 entities/12 claims.\n'
+        + 'For genuinely NEW observations in this current frame, generate claim IDs beginning with '
+        + dumps('claim_' + frame + '_') + '. This prefix comes from the supplied current frame_id. '
+        'Do not restart generic claim counters such as c1: omitted older claims may already own them. '
+        'Omit unchanged task/static facts; reuse an existing claim ID only with its original identity '
+        'and status rules. This naming instruction does not authorize renaming an unchanged fact, '
+        'bypassing a rejected identity, or weakening current-frame/content checks. Entity IDs stay stable.\n'
         + ACTION_READ + '\n' + owner.frame.instruction)
     raw = owner.role('perception', prompt, request, image, deadline, validate_read)
     evidence, normalization = bounded_visual_evidence({k: raw[k] for k in ('summary', 'elements')},

@@ -924,6 +924,28 @@ def test_complete_native_fixture_closes_focus_input_submit_save_and_grade(tmp_pa
         assert pools['actor']['charged_output'] <= 32000 and pools['analysis']['charged_output'] <= 16000
 
 
+def test_reader_receives_current_frame_claim_namespace_through_complete_loop(tmp_path, monkeypatch):
+    from ui_kobe.osworld.taskviews_context import TaskViewsContextMixin
+    original = TaskViewsContextMixin.role
+    frames = []
+
+    def capture(self, name, prompt, context, image, deadline, validator):
+        if name == 'perception':
+            frame = context['frame']['frame_id']
+            assert dumps('claim_' + frame + '_') in prompt
+            assert 'Omit unchanged task/static facts' in prompt
+            assert 'Entity IDs stay stable' in prompt
+            frames.append(frame)
+        return original(self, name, prompt, context, image, deadline, validator)
+
+    monkeypatch.setattr(TaskViewsContextMixin, 'role', capture)
+    result = run_fixture(tmp_path / 'frame-claim-loop')
+    assert result['terminal'] and not result['paused']
+    assert result['official_score'] is None and result['fixture_score'] == 1
+    assert result['all_actor_packets_delivered'] and result['controller_actions'] == 6
+    assert len(frames) == len(set(frames)) == result['roles']['perception'] == 7
+
+
 def test_wrong_last_action_binding_repairs_then_pauses_before_next_dispatch(tmp_path):
     result = run_fixture(tmp_path / 'bad-binding', bad_action_binding=True)
     assert result['paused'] and not result['terminal'] and result['fixture_score'] is None
