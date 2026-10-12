@@ -46,3 +46,11 @@ controls 开启时，current 额外提供一个有界 `recent_repetition` 原记
 该字段的 grade 为 `literal_journal_comparison`，effect 继续 unknown。图像不同也不证明操作成功，图像相同也不证明隐藏状态没变化、目标焦点或任务失败；它只让 actor 能把近期原记录与当前图和现有按键指引结合。没有新增依赖 gate、自动选择按键、动作黑名单、角色模型请求或语义事实。
 
 该短反馈复用原 3000-byte 包，并保持来源与整条省略：无法兼容时明确 `recent_repetition_omitted`，原动作、原图、完整历史和目录不被偷偷截断。M0关闭 controls 时不增加该字段或查询。现有 controls catalog/policy 没有改变，检查点送达游标和原 native 状态保持原恢复契约。
+
+## 原生字段错误的精确纠错
+
+正式第 184 步，三次完整模型响应均将 `key` 的按键写入 `text`；第三次 prose 虽声称改用 `keys`，实际调用仍未改变。官方编译器连续拒绝 `key requires keys`，两次修复耗尽后在第 183 步安全检查点暂停，尚无第 184 步执行。当前工具定义已经声明 `keys` 是数组、`text` 用于输入文字；旧纠错只重复短错误，没有明确原调用所提供的字段与声明类型。
+
+controls 开启的 Mini 在已有原生修复请求中，针对编译器真实报告的 `action requires field` 追加有界字段反馈：从该请求的原 `computer_use` 工具定义取出对应字段名和完整声明，列出匹配原候选的索引、tool ID 与实际字段名。反馈最多 1400 UTF-8 bytes，外来错误/未知动作/缺失声明/超长内容不推断额外要求。没有新增 API、角色或修复次数，完整坏 assistant 与原工具错误仍保留。
+
+反馈要求模型自行按声明字段名和 JSON 类型重新生成完整调用；程序不把 `text` 自动转换为 `keys`，不自动选择按键或改写原参数。原官方 schema/compiler/controller、校验拒绝条件、目录 policy、检查点与预算保持原样。关闭 controls 的 Mini、UI-KOBE-like 与其他 actor 默认不启用此反馈。离线回归和原数据重放仅验证纠错来源与边界，真实新请求仍需证明模型生成是否合法及后图变化。

@@ -65,7 +65,63 @@ def _declared_native_actions(request):
     return list(values)
 
 
-def repair_messages(request, observed, error, *, role, compact_executor_feedback=False):
+def _declared_parameter_requirement(request, observed, error):
+    """Explain an actual compiler requirement using this request's exact schema.
+
+    This is repair guidance only: never modify the rejected call or fill a field.
+    Do not infer action-dependent requirements that the compiler did not report.
+    """
+    if getattr(error, 'code', None) != 'malformed_tool_call' or not isinstance(observed, dict):
+        return None
+    parts = str(error).split(' requires ')
+    actions = _declared_native_actions(request)
+    if len(parts) != 2 or not actions or parts[0] not in actions:
+        return None
+    action, name = parts
+    tool = next(tool['function'] for tool in request['tools'] if isinstance(tool, dict)
+                and isinstance(tool.get('function'), dict) and tool['function'].get('name') == 'computer_use')
+    definition = tool['parameters']['properties'].get(name)
+    if not isinstance(definition, dict) or not isinstance(definition.get('type'), str):
+        return None
+    choices = observed.get('choices')
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        return None
+    message = choices[0].get('message')
+    calls = message.get('tool_calls') if isinstance(message, dict) else None
+    if not isinstance(calls, list) or not 1 <= len(calls) <= 16:
+        return None
+    rejected = []
+    for index, call in enumerate(calls):
+        function = call.get('function') if isinstance(call, dict) else None
+        if not isinstance(function, dict) or function.get('name') != 'computer_use':
+            return None
+        encoded = function.get('arguments')
+        if not isinstance(encoded, str) or len(encoded.encode('utf-8')) > 6000:
+            return None
+        try:
+            value = json.loads(encoded)
+        except (ValueError, TypeError):
+            return None
+        if not isinstance(value, dict):
+            return None
+        if value.get('action') == action:
+            names = sorted(value)
+            if len(names) > 32 or any(len(key) > 64 for key in names):
+                return None
+            rejected.append({'candidate_index': index, 'tool_call_id': call.get('id'),
+                             'provided_parameter_names': names})
+    if not rejected:
+        return None
+    feedback = {'source': 'current computer_use tool schema and original compiler error',
+                'action': action, 'compiler_error': str(error),
+                'required_parameter': {'name': name, 'schema': definition},
+                'matching_original_calls': rejected}
+    encoded = json.dumps(feedback, ensure_ascii=False, separators=(',', ':'))
+    return encoded if len(encoded.encode('utf-8')) <= 1400 else None
+
+
+def repair_messages(request, observed, error, *, role, compact_executor_feedback=False,
+                    declared_parameter_feedback=False):
     """Keep a complete rejected native candidate and resolve its tool IDs.
 
 Truncated or structurally malformed calls remain raw evidence, never valid
@@ -117,6 +173,13 @@ assistant/tool history. No rejected call is submitted to env.step.
                 '\nUse an exact action identifier from the current computer_use schema (underscores matter): '
                 + json.dumps(actions, ensure_ascii=False)
                 + '. Python/PyAutoGUI method names and other aliases are invalid.')
+    if role == 'executor' and declared_parameter_feedback and complete_tool_feedback:
+        requirement = _declared_parameter_requirement(request, observed, error)
+        if requirement:
+            result['messages'][-1]['content'][0]['text'] += (
+                '\nExact parameter requirement: ' + requirement
+                + '\nRegenerate the complete call using the declared field name and JSON type. '
+                'Changing a value in another field does not supply the required parameter.')
     return result
 
 

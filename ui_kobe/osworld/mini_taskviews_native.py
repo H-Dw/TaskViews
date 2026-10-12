@@ -26,6 +26,7 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
         if control_version not in ('disabled', VERSION):
             raise ValueError('Unknown Mini controls view')
         self.controls_view_enabled = control_version == VERSION
+        self.native_parameter_repair_feedback = self.controls_view_enabled
         self.context_label = CONTROLS_LABEL if self.controls_view_enabled else LABEL
         super().__init__(**options)
 
