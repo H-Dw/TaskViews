@@ -217,6 +217,173 @@ def test_canonical_reload_recovers_accepted_reports_and_retains_chronological_ef
         journal.db.close()
 
 
+def durable_failure_fixture(tmp_path, count=82):
+    import sqlite3
+    from types import SimpleNamespace
+    journal = SimpleNamespace(episode_id='durable-episode', closed=False, db=sqlite3.connect(':memory:'))
+    journal.db.execute('CREATE TABLE events (seq INTEGER, id TEXT, payload TEXT)')
+    reports, claims = {}, {}
+    for seq in range(count):
+        identity = f'operation-{count-seq:03}'
+        edge = {'id': identity, 'kind': 'transition', 'target': identity+'-post'}
+        journal.db.execute('INSERT INTO events VALUES(?,?,?)', (seq, identity, dumps(edge)))
+        report = {'transition_id': identity, 'target_observation_id': edge['target'], 'frame_id': f'frame-{seq}',
+            'grade': 'model_proposal', 'module_id': 'import',
+            'assessment': 'not_observed' if seq == 0 else 'observed',
+            'checks': [{'kind': 'submission' if seq == 0 else 'focus',
+                        'assessment': 'not_observed' if seq == 0 else 'observed',
+                        'quotes': ['Unsupported operation: ExampleCommand' if seq == 0 else 'Editor']}],
+            'raw_transition_ref': '/immutable/events#'+identity}
+        reports[identity] = report
+        claims[identity] = {'predicate': 'module_report.record', 'value': {
+            'grade': 'model_proposal', 'report': report}}
+    # Deliberately reverse the graph/cache keys: IDs and JSON order are not time.
+    claims = dict(reversed(list(claims.items())))
+    identities = list(reports)[-64:]
+    (tmp_path/'execution-modules.json').write_text(dumps({'episode_id': journal.episode_id,
+        'cursor': 0, 'active': 'import', 'modules': {}, 'recent': [],
+        'effects': {identity: reports[identity] for identity in identities}, 'effect_order': identities}))
+    memory = SimpleNamespace(directory=tmp_path, snapshot=SimpleNamespace(claims=claims),
+                             _atomic_json=TaskMemory._atomic_json)
+    module = ExecutionModules(memory, journal)
+    module.verification_intent = lambda record: {'text': 'Submit the requested operation',
+        'original_text_sha256': 'c'*64, 'original_text_bytes': 30}
+    return module, journal, reports, claims
+
+
+def test_application_rejection_outlives_64_effects_and_reaches_actor_and_planner(tmp_path):
+    from ui_kobe.osworld.taskviews_feedback import _admit_execution_feedback
+    module, journal, reports, _ = durable_failure_fixture(tmp_path)
+    try:
+        oldest = next(iter(reports))
+        original = deepcopy(module.effects)
+        assert oldest not in module.effects and module.actor_prior_action_evidence()['records'] == []
+        module.enable_application_failure_retention()
+        actor = module.actor_prior_action_evidence()
+        planner = module.prior_action_evidence()
+        assert actor['records'][0]['transition_id'] == planner['records'][0]['transition_id'] == oldest
+        assert actor['records'][0]['checks'] == reports[oldest]['checks']
+        assert actor['records'][0]['raw_transition_ref'] == reports[oldest]['raw_transition_ref']
+        assert actor['records'][0]['original_feedback_sha256'] == hashlib.sha256(dumps(reports[oldest]).encode()).hexdigest()
+        assert len(dumps(actor).encode()) <= 900 and len(dumps(planner).encode()) <= 1600
+        assert module.effects == original and len(module.effects) == 64
+        delivered = _admit_execution_feedback(local_feedback_base(), [], duplicated_local_reference_module(),
+            8000, strategy_review=False, prior_evidence=actor)
+        assert delivered['prior_action_evidence'] == actor
+        assert actor['scope'] == 'past_application_feedback_not_current_state_or_math'
+    finally:
+        journal.db.close()
+
+
+def test_durable_failure_restore_uses_accepted_graph_and_does_not_rescan_every_frame(tmp_path):
+    module, journal, reports, _ = durable_failure_fixture(tmp_path)
+    try:
+        module.enable_application_failure_retention()
+        module.save()
+        saved = json.loads(module.path.read_text())
+        assert saved['application_failure_memory']['reports'] == [next(iter(reports.values()))]
+        # Persisted cache is not authority: recover exact accepted graph values.
+        saved['application_failure_memory']['reports'][0]['checks'][0]['quotes'] = ['Forged cache text']
+        module.path.write_text(dumps(saved))
+        reopened = ExecutionModules(module.memory, journal)
+        reopened.enable_application_failure_retention()
+        assert reopened.application_failure_memory == module.application_failure_memory
+        reopened.memory.snapshot.claims = {}
+        reopened.enable_application_failure_retention()
+        assert reopened.application_failure_memory == module.application_failure_memory
+        assert reopened.effects == module.effects
+    finally:
+        journal.db.close()
+
+
+@pytest.mark.parametrize('invalid', ['unknown', 'observed', 'focus', 'no-quote', 'target', 'raw', 'grade', 'other-goal'])
+def test_durable_migration_requires_accepted_application_checks_and_exact_binding(tmp_path, invalid):
+    module, journal, reports, _ = durable_failure_fixture(tmp_path)
+    try:
+        report = next(iter(reports.values()))
+        if invalid in {'unknown', 'observed'}:
+            report['assessment'] = invalid
+        elif invalid == 'focus':
+            report['checks'][0]['kind'] = 'focus'
+        elif invalid == 'no-quote':
+            report['checks'][0]['quotes'] = []
+        elif invalid == 'target':
+            report['target_observation_id'] = 'wrong-post'
+        elif invalid == 'raw':
+            report['raw_transition_ref'] = '/different/events#wrong-edge'
+        elif invalid == 'grade':
+            report['grade'] = 'verified'
+        else:
+            report['module_id'] = 'save'
+        module.enable_application_failure_retention()
+        assert module.application_failure_memory['reports'] == []
+        assert module.actor_prior_action_evidence()['records'] == []
+    finally:
+        journal.db.close()
+
+
+def test_durable_reports_are_whole_bounded_and_repeated_literal_failures_keep_first_provenance(tmp_path):
+    module, journal, reports, _ = durable_failure_fixture(tmp_path)
+    try:
+        for index, report in enumerate(reports.values()):
+            report.update(assessment='not_observed', checks=[{'kind': 'submission', 'assessment': 'not_observed',
+                'quotes': [f'Rejected operation {index % 10}']}])
+        module.enable_application_failure_retention()
+        retained = module.application_failure_memory
+        assert len(retained['reports']) == 8 and retained['reports'] == list(reports.values())[:8]
+        assert retained['omitted_reports'] > 0
+        actor = module.actor_prior_action_evidence()
+        assert actor['records'][0]['transition_id'] == next(iter(reports))
+        assert len(dumps(actor).encode()) <= 900
+        reduced = module.actor_prior_action_evidence(len(dumps(actor).encode())-1)
+        assert reduced['omitted_records'] > actor['omitted_records']
+        assert all(row in actor['records'] for row in reduced['records'])
+        assert retained['reports'] == list(reports.values())[:8]
+        with pytest.raises(ValueError, match='omission metadata'):
+            module.actor_prior_action_evidence(1)
+    finally:
+        journal.db.close()
+
+
+def test_subgoal_change_rebuilds_only_that_goal_and_restores_earlier_goal_failure(tmp_path):
+    module, journal, reports, _ = durable_failure_fixture(tmp_path)
+    try:
+        module.enable_application_failure_retention()
+        original = deepcopy(module.application_failure_memory)
+        module.active = 'save'
+        module.enable_application_failure_retention()
+        assert module.application_failure_memory['module_id'] == 'save'
+        assert module.actor_prior_action_evidence()['records'] == []
+        module.active = 'import'
+        module.enable_application_failure_retention()
+        assert module.application_failure_memory == original
+        assert module.actor_prior_action_evidence()['records'][0]['transition_id'] == next(iter(reports))
+    finally:
+        journal.db.close()
+
+
+def test_new_accepted_application_failure_is_persisted_without_extending_recent_cache(tmp_path):
+    module, journal, reports, _ = durable_failure_fixture(tmp_path)
+    try:
+        module.enable_application_failure_retention()
+        identity = list(reports)[-1]
+        module.last_effect_record = lambda: {'transition_id': identity, 'module_id': 'import',
+            'raw_ref': reports[identity]['raw_transition_ref'], 'error': None}
+        module.transition_packet = lambda record: dict(record)
+        module.report = lambda *args, **kwargs: None
+        check = {**reports[identity], 'assessment': 'not_observed',
+            'checks': [{'kind': 'object', 'assessment': 'not_observed', 'quotes': ['No requested object']}]}
+        module.record_action_check(check, frame='new-frame')
+        assert [row['transition_id'] for row in module.application_failure_memory['reports']] == [next(iter(reports)), identity]
+        saved = json.loads(module.path.read_text())
+        assert saved['application_failure_memory'] == module.application_failure_memory
+        assert len(module.effects) == len(module.effect_order) == 64
+        module.record_action_check({**check, 'assessment': 'observed'}, frame='later-frame')
+        assert saved['application_failure_memory'] == module.application_failure_memory
+    finally:
+        journal.db.close()
+
+
 def test_planner_separates_explicit_goal_targets_from_visible_math_hypotheses():
     from ui_kobe.osworld.taskviews_feedback import validate_planner_report
     args = {'visible_texts': ['Empty Algebra panel', 'Input:'],

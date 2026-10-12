@@ -474,6 +474,7 @@ def build_feedback_views(owner, deadline):
         modules.intent_verification_v12 = True
         modules.subgoal_state_review_v12 = True
         modules.returned_page_intent_v12 = True
+        modules.enable_application_failure_retention()
     core, inventory = control._core(), control.inventory()
     frame = owner.frame.metadata['frame_id']
     last = modules.verification_action() if modules else None

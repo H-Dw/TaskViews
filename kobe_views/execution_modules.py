@@ -9,6 +9,7 @@ import json
 import hashlib
 import re
 from collections.abc import Mapping
+from datetime import datetime
 
 from .model import digest, dumps, plain, View
 from .task_views import task_view_delta
@@ -42,6 +43,8 @@ class ExecutionModules:
         self.effect_order = []
         self.selected_needs, self.page_id = [], None
         self.uncertainty_reviews = {}
+        self.application_failure_memory = {'module_id': None, 'reports': [], 'omitted_reports': 0}
+        self._application_failures_ready = False
         if self.path.exists():
             saved = json.loads(self.path.read_text())
             if saved['episode_id'] != journal.episode_id:
@@ -55,6 +58,7 @@ class ExecutionModules:
             self.unresolved = saved.get('unresolved', [])
             self.selected_needs, self.page_id = saved.get('selected_needs', []), saved.get('page_id')
             self.uncertainty_reviews = saved.get('uncertainty_reviews', {})
+            self.application_failure_memory = saved.get('application_failure_memory', self.application_failure_memory)
             if (len(self.effect_order) != len(self.effects)
                     or len(set(self.effect_order)) != len(self.effect_order)
                     or set(self.effect_order) != set(self.effects)):
@@ -93,6 +97,78 @@ class ExecutionModules:
         self.effect_order = [identity for _, identity in sorted(ordered)][-64:]
         self.effects = {identity: candidates[identity] for identity in self.effect_order}
 
+    @staticmethod
+    def _application_failure_checks(report):
+        if report.get('grade') != 'model_proposal' or report.get('assessment') != 'not_observed':
+            return []
+        return [{key: plain(item[key]) for key in ('kind', 'assessment', 'quotes')}
+                for item in report.get('checks', []) if item.get('kind') in {'submission', 'object'}
+                and item.get('assessment') == 'not_observed' and item.get('quotes')]
+
+    def enable_application_failure_retention(self):
+        """Recover accepted application feedback independently of the recent cache.
+
+        Eight distinct whole reports for the active subgoal preserve the earliest
+        response to each failure. Repeated attempts and dialog dismissal cannot
+        evict it. On restore/subgoal change, rebuild once from immutable accepted
+        graph reports with exact transition bindings; never parse actor history.
+        Historical checks remain proposals, not command bans or current state.
+        """
+        self.application_failure_retention_v12 = True
+        if (self._application_failures_ready
+                and self.application_failure_memory['module_id'] == self.active):
+            return
+        ordered = []
+        for claim in self.memory.snapshot.claims.values():
+            if claim['predicate'] != 'module_report.record':
+                continue
+            value = claim['value']
+            report = value.get('report') if isinstance(value, Mapping) else None
+            if (not isinstance(report, Mapping) or value.get('grade') != 'model_proposal'
+                    or report.get('module_id') != self.active or not self._application_failure_checks(report)):
+                continue
+            identity = report.get('transition_id')
+            edge = self.event(identity)
+            if (not edge or edge.get('kind') != 'transition'
+                    or edge['target'] != report.get('target_observation_id')
+                    or not report.get('raw_transition_ref', '').endswith('#' + str(identity))):
+                continue
+            row = self.journal.db.execute('SELECT seq FROM events WHERE id=?', (identity,)).fetchone()
+            occurred = claim.get('evidence', {}).get('occurred_at')
+            stamp = datetime.fromisoformat(occurred.replace('Z', '+00:00')).timestamp() if occurred else 0
+            ordered.append((row[0], stamp, dumps(report), report))
+        self.application_failure_memory = {'module_id': self.active, 'reports': [], 'omitted_reports': 0}
+        self._application_failures_ready = True
+        for _, _, _, report in sorted(ordered, key=lambda row: row[:3]):
+            self._retain_application_failure(report)
+
+    def _retain_application_failure(self, report):
+        if not getattr(self, 'application_failure_retention_v12', False):
+            return
+        checks = self._application_failure_checks(report)
+        if not checks or report.get('module_id') != self.active:
+            return
+        if self.application_failure_memory['module_id'] != self.active:
+            self.enable_application_failure_retention()
+        saved = self.application_failure_memory
+        signature = dumps(checks)
+        if any(row['transition_id'] == report['transition_id']
+               or dumps(self._application_failure_checks(row)) == signature for row in saved['reports']):
+            return
+        if len(saved['reports']) < 8:
+            saved['reports'].append(plain(report))
+        else:
+            saved['omitted_reports'] += 1
+
+    def _prior_effect_items(self):
+        retained = (self.application_failure_memory['reports']
+                    if getattr(self, 'application_failure_retention_v12', False)
+                    and self.application_failure_memory['module_id'] == self.active else [])
+        identities = {report['transition_id'] for report in retained}
+        return [(report['transition_id'], report) for report in retained] + [
+            (identity, self.effects[identity]) for identity in getattr(self, 'effect_order', list(self.effects))
+            if identity not in identities]
+
     def save(self):
         self.memory._atomic_json(self.path, {'episode_id': self.journal.episode_id, 'cursor': self.cursor,
                                              'active': self.active, 'modules': self.modules, 'recent': self.recent,
@@ -101,7 +177,10 @@ class ExecutionModules:
                                              'effect_order': self.effect_order,
                                              'selected_needs': self.selected_needs, 'page_id': self.page_id,
                                              **({'uncertainty_reviews': self.uncertainty_reviews}
-                                                if getattr(self, 'uncertainty_reviews', {}) else {})})
+                                                if getattr(self, 'uncertainty_reviews', {}) else {}),
+                                             **({'application_failure_memory': self.application_failure_memory}
+                                                if getattr(self, 'application_failure_memory', {}).get('module_id')
+                                                is not None else {})})
 
     def event(self, identity):
         """Read one immutable event, without exporting the entire trajectory."""
@@ -563,6 +642,7 @@ class ExecutionModules:
         if check['assessment'] == 'not_observed' or last['error']:
             self.unresolved = (self.unresolved + [self.transition_packet(last)])[-8:]
         self.report('last_action', value, frame=frame)
+        self._retain_application_failure(value)
         self.save()
 
     def original_parameters(self, record):
@@ -705,9 +785,7 @@ class ExecutionModules:
         """
         candidates = []
         recent = {record['transition_id']: record for record in self.recent[-8:]}
-        order = getattr(self, 'effect_order', list(self.effects))
-        for identity in order:
-            effect = self.effects[identity]
+        for identity, effect in self._prior_effect_items():
             record = recent.get(identity) or {'transition_id': identity,
                 'module_id': effect.get('module_id'), 'raw_ref': effect.get('raw_transition_ref')}
             if record.get('module_id') != self.active:
@@ -795,8 +873,7 @@ class ExecutionModules:
         """
         candidates = []
         recent = {record['transition_id']: record for record in self.recent[-8:]}
-        for identity in getattr(self, 'effect_order', list(self.effects)):
-            effect = self.effects[identity]
+        for identity, effect in self._prior_effect_items():
             record = recent.get(identity) or {'module_id': effect.get('module_id'),
                                             'raw_ref': effect.get('raw_transition_ref')}
             if record.get('module_id') != self.active or effect.get('assessment') != 'not_observed':
