@@ -177,6 +177,13 @@ class ContextClient:
             prepared['messages'] = request['messages']
         if (owner.cached_context and prepared['messages'] is request['messages']
                 and getattr(owner, 'feedback_v10', False) and getattr(owner, 'checkpoint_reads', False)):
+            readmit = getattr(owner, 'readmit_context_messages', None)
+            if callable(readmit):
+                rebound = readmit(request['messages'])
+                if rebound is not None:
+                    prepared['messages'] = rebound
+        if (owner.cached_context and prepared['messages'] is request['messages']
+                and getattr(owner, 'feedback_v10', False) and getattr(owner, 'checkpoint_reads', False)):
             from .checkpoints import ReadAnomaly
             raise ReadAnomaly('Current TaskViews evidence cannot fit this native request; '
                               'preserve checkpoint before actor dispatch')

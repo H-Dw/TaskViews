@@ -946,6 +946,79 @@ def test_reader_receives_current_frame_claim_namespace_through_complete_loop(tmp
     assert len(frames) == len(set(frames)) == result['roles']['perception'] == 7
 
 
+def repair_capacity_owner(packet, messages, *, spare):
+    from types import SimpleNamespace
+    from ui_kobe.osworld.taskviews_context import TaskViewsContextMixin
+    from ui_kobe.osworld.native_history import context_size
+
+    owner = TaskViewsContextMixin()
+    owner.feedback_v10 = owner.checkpoint_reads = True
+    owner.modules = None
+    owner.frame = SimpleNamespace(metadata={'frame_id': packet['frame_id']})
+    owner.context_label = 'TaskViews evidence'
+    owner.cached_context = dumps(packet)
+    owner.view_trace = {'executor_context': deepcopy(packet), 'available_actor_context_bytes': 8000}
+    original = deepcopy(messages)
+    original[-1]['content'].append({'type': 'text', 'text': owner.context_label + '\n' + owner.cached_context})
+    owner.contract = CUAContract(context_max_text_chars=context_size(original)[1] + spare)
+    return owner
+
+
+def test_repair_readmission_changes_only_fixed_policy_and_keeps_original_tool_history():
+    from types import SimpleNamespace
+    from ui_kobe.osworld.actor_context import ContextClient
+    from ui_kobe.osworld.taskviews_feedback import LOCAL_EXECUTION, LOCAL_EXECUTION_COMPACT
+    packet = {**local_feedback_base(), 'execution_boundary': LOCAL_EXECUTION,
+              'role_evidence': {'execution_modules': {'recent_transitions': [{'transition_id': 'original-edge',
+                  'raw_ref': '/original/receipt', 'before_image': {'sha256': 'a'*64},
+                  'after_image': {'sha256': 'b'*64}}]}, 'strategy_review': True},
+              'context_gaps': ['budget_omitted:prior_action_evidence']}
+    messages = [{'role': 'user', 'content': [{'type': 'text', 'text': 'Original task and image'}]},
+        {'role': 'assistant', 'content': 'Original rejected prose', 'tool_calls': [{'id': 'original-id',
+            'type': 'function', 'function': {'name': 'computer_use', 'arguments': '{"action":"left_click"}'}}]},
+        {'role': 'tool', 'tool_call_id': 'original-id', 'content': dumps({'error': 'Complete original error ' * 40})},
+        {'role': 'user', 'content': [{'type': 'text', 'text': 'Regenerate the complete candidate'}]}]
+    owner = repair_capacity_owner(packet, messages, spare=-200)
+    original = deepcopy(messages)
+    requests = []
+    wire = SimpleNamespace(create=lambda **request: requests.append(request), last_timing={})
+    ContextClient(owner, wire).create(messages=messages, tools=['original-tool-schema'])
+    assert len(requests) == 1 and requests[0]['tools'] == ['original-tool-schema'] and messages == original
+    assert requests[0]['messages'][:-1] == original[:-1]
+    assert requests[0]['messages'][-1]['content'][:-1] == original[-1]['content']
+    current = json.loads(owner.cached_context)
+    assert current['execution_boundary'] == LOCAL_EXECUTION_COMPACT
+    assert current['execution_boundary_original_sha256'] == hashlib.sha256(LOCAL_EXECUTION.encode()).hexdigest()
+    assert {key: value for key, value in current.items() if key not in {'execution_boundary',
+        'execution_boundary_variant', 'execution_boundary_original_sha256'}} == {
+        key: value for key, value in packet.items() if key != 'execution_boundary'}
+    assert owner.view_trace['actor_context_readmissions'][0]['original_context'] == packet
+    assert len(owner.cached_context.encode()) <= owner.view_trace['available_actor_context_bytes']
+
+
+@pytest.mark.parametrize('mode', ['foreign-policy', 'already-compact', 'stale-frame', 'still-too-small'])
+def test_repair_readmission_never_changes_foreign_policy_frame_or_exceeds_capacity(mode):
+    from types import SimpleNamespace
+    from ui_kobe.osworld.actor_context import ContextClient
+    from ui_kobe.osworld.checkpoints import ReadAnomaly
+    from ui_kobe.osworld.taskviews_feedback import LOCAL_EXECUTION, LOCAL_EXECUTION_COMPACT
+    packet = {**local_feedback_base(), 'execution_boundary': LOCAL_EXECUTION}
+    if mode == 'foreign-policy':
+        packet['execution_boundary'] = 'Foreign instruction that must not change'
+    if mode == 'already-compact':
+        packet['execution_boundary'] = LOCAL_EXECUTION_COMPACT
+    messages = [{'role': 'user', 'content': [{'type': 'text', 'text': 'Original complete error and history'}]}]
+    owner = repair_capacity_owner(packet, messages, spare=-200 if mode != 'still-too-small' else -1900)
+    if mode == 'stale-frame':
+        owner.frame.metadata['frame_id'] = 'other-frame'
+    original_context, original_trace = owner.cached_context, deepcopy(owner.view_trace)
+    calls = []
+    wire = SimpleNamespace(create=lambda **request: calls.append(request), last_timing={})
+    with pytest.raises(ReadAnomaly, match='cannot fit'):
+        ContextClient(owner, wire).create(messages=messages)
+    assert not calls and owner.cached_context == original_context and owner.view_trace == original_trace
+
+
 def test_wrong_last_action_binding_repairs_then_pauses_before_next_dispatch(tmp_path):
     result = run_fixture(tmp_path / 'bad-binding', bad_action_binding=True)
     assert result['paused'] and not result['terminal'] and result['fixture_score'] is None

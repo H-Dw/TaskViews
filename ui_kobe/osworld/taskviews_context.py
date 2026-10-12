@@ -10,6 +10,12 @@ from ui_kobe.api.kimi_stream import StreamProtocolError
 
 
 class TaskViewsContextMixin:
+    def readmit_context_messages(self, messages):
+        if not (getattr(self, 'feedback_v10', False) and getattr(self, 'checkpoint_reads', False)):
+            return None
+        from .taskviews_feedback import compact_cached_execution_context
+        return compact_cached_execution_context(self, messages)
+
     def context_delivered(self):
         if getattr(self, 'modules', None):
             context = self.view_trace.get('executor_context', {})

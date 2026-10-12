@@ -231,6 +231,42 @@ not current image/math, verified facts or an action choice. Dismissing a dialog
 does not validate rejected input; reassess before repeating."""
 
 
+def compact_cached_execution_context(owner, messages):
+    """Re-admit the same frame after native repair grows its original history.
+
+    Only our own fixed policy can change. Every model/evidence value and the
+    complete original assistant/tool feedback remain at their original bytes.
+    """
+    from .actor_context import supplement
+
+    packet = owner.view_trace.get('executor_context')
+    frame = getattr(owner, 'frame', None)
+    if (not isinstance(packet, dict) or packet.get('execution_boundary') != LOCAL_EXECUTION
+            or not frame or packet.get('frame_id') != frame.metadata['frame_id']
+            or owner.cached_context != dumps(packet)):
+        return None
+    compact = {**plain(packet), 'execution_boundary': LOCAL_EXECUTION_COMPACT,
+        'execution_boundary_variant': 'compact_same_policy',
+        'execution_boundary_original_sha256': hashlib.sha256(LOCAL_EXECUTION.encode()).hexdigest()}
+    text = dumps(compact)
+    prepared = supplement(messages, text, label=owner.context_label, contract=owner.contract)
+    if prepared is messages:
+        return None
+    limit = available_context_bytes(messages, label=owner.context_label, contract=owner.contract)
+    readmission = {'reason': 'native_input_capacity', 'original_context': plain(packet),
+        'original_context_sha256': hashlib.sha256(owner.cached_context.encode()).hexdigest(),
+        'original_bytes': len(owner.cached_context.encode()), 'new_bytes': len(text.encode()),
+        'available_bytes': limit, 'new_context_sha256': hashlib.sha256(text.encode()).hexdigest()}
+    owner.view_trace.setdefault('actor_context_readmissions', []).append(readmission)
+    owner.view_trace.setdefault('initial_available_actor_context_bytes',
+                                owner.view_trace['available_actor_context_bytes'])
+    owner.view_trace['executor_context'] = compact
+    owner.view_trace['available_actor_context_bytes'] = limit
+    owner.cached_context = text
+    telemetry.emit('taskviews_context_readmission', **readmission)
+    return prepared
+
+
 def feedback_analysis_triggers(modules, raw, feedback, pointer_recovery):
     """A single unobserved action stays in the local actor/effect loop.
 
