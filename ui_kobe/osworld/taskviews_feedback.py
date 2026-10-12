@@ -174,6 +174,8 @@ schemas, not known unchanged values. Several operations remain unconfirmed in th
 same subgoal despite varying parameters. Re-observe the actual control and focus;
 choose one different ordinary route with visible verification. Do not claim the
 uncertainty proves failure or keep slightly offsetting a stale pointer guess.
+For same_source_point_unconfirmed_focus, changing click count at the same location
+is not re-grounding. Window recovery does not verify that earlier input focus.
 prior_action_evidence contains literal checks from earlier frames in this same
 subgoal, with immutable refs and fallible original intent. Keep an application's
 earlier rejection in mind after its dialog disappears. Closing that dialog does
@@ -539,6 +541,7 @@ def build_feedback_views(owner, deadline):
         modules.intent_verification_v12 = True
         modules.subgoal_state_review_v12 = True
         modules.returned_page_intent_v12 = True
+        modules.returned_page_pointer_review_v12 = True
         modules.enable_application_failure_retention()
     core, inventory = control._core(), control.inventory()
     frame = owner.frame.metadata['frame_id']

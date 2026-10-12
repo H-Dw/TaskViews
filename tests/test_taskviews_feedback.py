@@ -620,6 +620,124 @@ def destination_cycle(tmp_path, *, first_prose='Open the requested menu', batch=
     return memory, journal, module, click, failed
 
 
+def focus_review_step(module, journal, step, parameters, *, before='Editor', after='Editor'):
+    journal.begin('Focus the input control', image(), step=step)
+    before_fields = {'window': before, 'input': 'original text', 'focus': None}
+    journal.annotate(journal.current['id'], logical_page=before, state_schema=before_fields,
+                     evidence_ref=f'before-{step}.png')
+    journal.decide('Focus the input' if before == after else 'Switch windows', ['operation'],
+                   step=step, tools=[{'id': f'tool-{step}', 'arguments': parameters, 'command_indices': [0]}])
+    edge = journal.result('operation', step=step, observation=image(), receipts=[{'returncode': 0}])
+    module.sync()
+    assessment = 'unknown' if before == after else 'observed'
+    check = {'transition_id': edge['id'], 'target_observation_id': edge['target'], 'frame_id': str(step),
+             'assessment': assessment, 'checks': [
+                 {'kind': 'focus' if before == after else 'state', 'assessment': assessment, 'quotes': [after]},
+                 {'kind': 'intent', 'assessment': assessment, 'quotes': [after],
+                  'state_keys': ['focus'] if before == after else ['window']}]}
+    expected = module.last_action()['expected_change']['kind']
+    if expected not in {item['kind'] for item in check['checks']}:
+        check['checks'].append({'kind': expected, 'assessment': assessment, 'quotes': [after]})
+    state = {'page_id': after, 'fields': {**before_fields, 'window': after}}
+    module.validate_action_check(check, frame=str(step), visible_texts=[after], current_state=state)
+    module.record_action_check(check, frame=str(step), current_state=state)
+    journal.annotate(journal.current['id'], logical_page=after, state_schema=state['fields'],
+                     evidence_ref=f'after-{step}.png')
+    module.sync()
+    return edge['id']
+
+
+def focus_review_cycle(tmp_path):
+    memory = TaskMemory('task', tmp_path/'memory')
+    memory.initialize('Focus the input control')
+    journal = TransitionJournal(tmp_path/'events', task_id='task', run_id='run',
+                                contract=CUAContract(model_screen_width=64, model_screen_height=48))
+    module = ExecutionModules(memory, journal)
+    module.compare_state_v10 = module.intent_verification_v12 = module.subgoal_state_review_v12 = True
+    module.returned_page_pointer_review_v12 = True
+    ids = [focus_review_step(module, journal, step, {'action': action, 'coordinate': [3, 4]})
+           for step, action in enumerate(['left_click', 'triple_click', 'double_click'], 1)]
+    keys = {'action': 'key', 'keys': ['alt', 'tab']}
+    focus_review_step(module, journal, 4, keys, after='Other')
+    focus_review_step(module, journal, 5, keys, before='Other')
+    return memory, journal, module, ids
+
+
+def test_unconfirmed_focus_survives_window_return_without_merging_click_commands(tmp_path):
+    memory, journal, module, ids = focus_review_cycle(tmp_path)
+    try:
+        original = deepcopy([module.recent, module.effects])
+        assert module._stalled_actions({'left_click', 'double_click'}) == []
+        review = module.unconfirmed_state_review()
+        assert review['reason'] == 'same_source_point_unconfirmed_focus'
+        assert review['transition_ids'] == list(reversed(ids))
+        assert review['comparison_field_keys'] == ['input', 'window']
+        assert review['grade'] == 'model_proposal' and module.feedback()['strategy_review']
+        assert [module.recent, module.effects] == original
+        assert [module.original_parameters(row)['action'] for row in module.recent[:3]] == [
+            'left_click', 'triple_click', 'double_click']
+        restored = ExecutionModules(memory, journal)
+        restored.subgoal_state_review_v12 = restored.returned_page_pointer_review_v12 = True
+        restored.intent_verification_v12 = True
+        assert restored.unconfirmed_state_review() == review
+        restored.returned_page_pointer_review_v12 = False
+        assert restored.unconfirmed_state_review() is None
+    finally:
+        journal.close()
+        memory.close()
+
+
+@pytest.mark.parametrize('mode', ['other-page', 'different-state', 'unknown-state', 'changed-geometry',
+                                'no-focus-check', 'observed-focus', 'changed-effect', 'other-goal',
+                                'omitted-intent', 'different-position', 'missing-position'])
+def test_returned_focus_review_requires_original_comparable_unconfirmed_evidence(tmp_path, mode):
+    memory, journal, module, ids = focus_review_cycle(tmp_path)
+    try:
+        if mode in {'other-page', 'different-state', 'unknown-state', 'changed-geometry'}:
+            if mode == 'changed-geometry':
+                journal.contract = CUAContract(model_screen_width=128, model_screen_height=48)
+            journal.begin('Focus input', image(), step=6)
+            journal.annotate(journal.current['id'], logical_page='Other' if mode == 'other-page' else 'Editor',
+                state_schema={'window': 'Editor', 'input': None if mode == 'unknown-state' else
+                              'changed text' if mode == 'different-state' else 'original text'},
+                evidence_ref='latest.png')
+        elif mode == 'no-focus-check':
+            module.effects[ids[-1]]['checks'][0]['kind'] = 'state'
+        elif mode == 'observed-focus':
+            module.effects[ids[-1]]['checks'][0]['assessment'] = 'observed'
+        elif mode == 'changed-effect':
+            module.effects[ids[-1]]['state_comparison']['changed_field_keys'] = ['input']
+        elif mode == 'other-goal':
+            module.recent[2]['module_id'] = 'other-goal'
+        elif mode == 'omitted-intent':
+            original = module.verification_intent
+            module.verification_intent = lambda row: {**original(row), 'text_omitted': True}
+        else:
+            original = module.original_parameters
+            module.original_parameters = lambda row: {**original(row), 'coordinate':
+                None if mode == 'missing-position' else [10, 12]} \
+                if row['transition_id'] == ids[-1] else original(row)
+        assert module.unconfirmed_state_review() is None
+    finally:
+        journal.close()
+        memory.close()
+
+
+def test_returned_focus_review_requires_three_new_attempts_after_completed_review(tmp_path):
+    memory, journal, module, _ = focus_review_cycle(tmp_path)
+    try:
+        module.record_uncertainty_review(module.unconfirmed_state_review())
+        assert module.unconfirmed_state_review() is None
+        for step, action in enumerate(['left_click', 'triple_click', 'double_click'], 6):
+            focus_review_step(module, journal, step, {'action': action, 'coordinate': [3, 4]})
+            if step < 8:
+                assert module.unconfirmed_state_review() is None
+        assert module.unconfirmed_state_review()['unconfirmed_operation_count'] == 3
+    finally:
+        journal.close()
+        memory.close()
+
+
 def test_return_to_source_page_preserves_failed_intention_without_coordinate_rewrite(tmp_path):
     memory, journal, module, click, failed = destination_cycle(tmp_path)
     try:

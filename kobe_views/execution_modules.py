@@ -875,10 +875,74 @@ class ExecutionModules:
                 fields = common
             identities.append(record['transition_id'])
         if len(identities) < 3:
-            return None
+            return self._returned_page_pointer_review(reviewed)
         return {'module_id': self.active, 'transition_ids': identities,
                 'unconfirmed_operation_count': len(identities),
                 'comparison_field_keys': sorted(fields or []), 'grade': 'model_proposal'}
+
+    def _returned_page_pointer_review(self, reviewed):
+        """Review a location reused across click types and window recoveries.
+
+        This never merges original operations for dispatch or marks unknown
+        focus as failure. Exact source page/geometry and at least two matching
+        known field proposals bind the historical attempts to the current page.
+        Three unconfirmed focus attempts warrant planning, not a new locator.
+        """
+        if not getattr(self, 'returned_page_pointer_review_v12', False):
+            return None
+        current = self.journal.current if not self.journal.closed else None
+        annotation = self._observation_annotation(current['id']) if current else None
+        if not annotation or not annotation.get('logical_page'):
+            return None
+        frame, fields = self.event(current['id'])['frame'], annotation['state_schema']
+        groups, cleared = {}, set()
+        for record in reversed(self.recent[-8:]):
+            if record.get('module_id') != self.active or record['transition_id'] == reviewed:
+                break
+            parameters = self.original_parameters(record)
+            if not isinstance(parameters, dict) or parameters.get('action') not in {
+                    'left_click', 'double_click', 'triple_click'}:
+                continue
+            coordinate = parameters.get('coordinate')
+            if not isinstance(coordinate, list) or len(coordinate) != 2:
+                continue
+            edge = self.event(record['transition_id'])
+            before = self._observation_annotation(edge['source']) if edge and edge.get('source') else None
+            source = self.event(edge['source']) if before else None
+            if (not before or before['logical_page'] != annotation['logical_page'] or not source
+                    or any(source['frame'][key] != frame[key] for key in ('model_size', 'coordinate_type'))):
+                continue
+            identity = dumps({key: value for key, value in parameters.items() if key != 'action'})
+            if identity in cleared:
+                continue
+            effect = self.effects.get(record['transition_id'], {})
+            focus = next((item for item in effect.get('checks', []) if item['kind'] == 'focus'), None)
+            if focus and focus['assessment'] == 'observed':
+                groups.pop(identity, None)
+                cleared.add(identity)
+                continue
+            prose = self.verification_intent(record)
+            known = {key for key in before['state_schema'].keys() & fields.keys()
+                     if key.casefold() not in {'clock', 'time', 'timestamp'}
+                     and before['state_schema'][key] is not None and fields[key] is not None}
+            if (not focus or focus['assessment'] not in {'unknown', 'not_observed'}
+                    or not focus['quotes'] or effect.get('assessment') not in {'unknown', 'not_observed'}
+                    or effect.get('state_comparison', {}).get('changed_field_keys')
+                    or not prose or prose['text_omitted'] or prose['command_count'] != 1
+                    or len(known) < 2
+                    or any(dumps(before['state_schema'][key]) != dumps(fields[key]) for key in known)):
+                continue
+            group = groups.setdefault(identity, {'transition_ids': [], 'fields': known})
+            group['transition_ids'].append(record['transition_id'])
+            group['fields'] &= known
+        candidate = next((row for row in groups.values()
+                          if len(row['transition_ids']) >= 3 and len(row['fields']) >= 2), None)
+        if candidate is None:
+            return None
+        return {'module_id': self.active, 'transition_ids': candidate['transition_ids'],
+                'unconfirmed_operation_count': len(candidate['transition_ids']),
+                'comparison_field_keys': sorted(candidate['fields']), 'grade': 'model_proposal',
+                'reason': 'same_source_point_unconfirmed_focus'}
 
     def actor_prior_action_evidence(self, max_bytes=900):
         """Keep accepted application rejection proposals in the local loop.
