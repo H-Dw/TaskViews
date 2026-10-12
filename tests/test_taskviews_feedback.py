@@ -1435,6 +1435,62 @@ def test_reader_receives_current_frame_claim_namespace_through_complete_loop(tmp
     assert len(frames) == len(set(frames)) == result['roles']['perception'] == 7
 
 
+@pytest.mark.parametrize('provided,current,enabled,changed,omitted', [
+    ({'focus': False}, {'focus': False, 'canvas': 'grid_only'}, True, [], ['canvas']),
+    ({'focus': False}, {'focus': True, 'canvas': 'grid_only'}, True, ['focus'], ['canvas']),
+    ({'focus': False, 'canvas': 'empty_grid'}, {'focus': False, 'canvas': 'grid_only'},
+     True, ['canvas'], []),
+    ({'focus': False}, {'focus': False, 'canvas': 'grid_only'}, False, ['canvas'], ['canvas'])])
+def test_comparison_uses_admitted_source_fields_without_aliasing_values(
+        provided, current, enabled, changed, omitted):
+    module = ExecutionModules.__new__(ExecutionModules)
+    source = {'observation_id': 'original-before', 'evidence_ref': '/original/image.png',
+              'fields': {'focus': False, 'canvas': 'empty_grid'}, 'grade': 'model_proposal'}
+    original = deepcopy(source)
+    packet = {'before_state': {**deepcopy(source), 'fields': deepcopy(provided)},
+              'omitted_before_state_keys': omitted}
+    module.last_action = lambda: {'before_state': deepcopy(source)}
+    module.verification_action = lambda: deepcopy(packet)
+    module.provided_state_comparison_v12 = enabled
+    comparison = module.state_comparison({'fields': current})
+    assert comparison['changed_field_keys'] == changed
+    assert comparison['source_observation_id'] == source['observation_id']
+    assert comparison['source_evidence_ref'] == source['evidence_ref']
+    if enabled:
+        assert comparison['source_scope'] == 'provided_verification_before_state'
+        assert comparison['omitted_source_field_keys'] == omitted
+        assert comparison['shared_field_keys'] == sorted(set(provided) & set(current))
+    else:
+        assert 'source_scope' not in comparison and 'omitted_source_field_keys' not in comparison
+    assert source == original and packet['before_state']['fields'] == provided
+
+
+def test_admitted_state_guidance_reaches_reader_without_freezing_real_fixture_changes(tmp_path, monkeypatch):
+    from ui_kobe.osworld.taskviews_context import TaskViewsContextMixin
+    original = TaskViewsContextMixin.role
+    changed = []
+
+    def capture(self, name, prompt, context, image, deadline, validator):
+        before = deepcopy(context)
+        if name == 'perception':
+            assert 'a synonym is not a GUI change' in prompt
+            assert 'their current values cannot establish a comparison' in prompt
+            assert self.modules.provided_state_comparison_v12
+        response = original(self, name, prompt, context, image, deadline, validator)
+        assert context == before
+        if name == 'perception' and context['last_action']:
+            previous = (context['last_action']['before_state'] or {}).get('fields', {})
+            current = response['ui_state']['fields']
+            changed.extend(k for k in previous.keys() & current.keys() if previous[k] != current[k])
+        return response
+
+    monkeypatch.setattr(TaskViewsContextMixin, 'role', capture)
+    result = run_fixture(tmp_path/'admitted-state-loop')
+    assert result['terminal'] and not result['paused'] and result['official_score'] is None
+    assert result['controller_actions'] == 6 and result['all_actor_packets_delivered']
+    assert {'focus', 'input', 'objects', 'saved'} <= set(changed)
+
+
 def repair_capacity_owner(packet, messages, *, spare):
     from types import SimpleNamespace
     from ui_kobe.osworld.taskviews_context import TaskViewsContextMixin

@@ -42,6 +42,12 @@ values are null. Visible absence is different from unknown: when this current
 image establishes that a menu/dialog/object is absent, use {status:'absent'} as
 that field's whole value and describe the absence in summary. Do not convert
 uncertainty to absence. Copy supplied before_state field keys when still relevant.
+For a still-relevant state that the current image establishes is unchanged,
+reuse its exact supplied value representation; a synonym is not a GUI change.
+Report genuine changed values as observed, and uncertainty as null. Do not copy
+an old value merely to preserve history. omitted_before_state_keys have no prior
+value in this bounded input: their current values cannot establish a comparison
+with the unavailable source. Never invent their old value or a semantic alias.
 For a click/key/submission to be observed, at least one known field must actually
 change from before_state. An already selected filename or static label is not
 evidence this click worked. When no source state exists or nothing demonstrably
@@ -542,6 +548,7 @@ def build_feedback_views(owner, deadline):
         modules.subgoal_state_review_v12 = True
         modules.returned_page_intent_v12 = True
         modules.returned_page_pointer_review_v12 = True
+        modules.provided_state_comparison_v12 = True
         modules.enable_application_failure_retention()
     core, inventory = control._core(), control.inventory()
     frame = owner.frame.metadata['frame_id']

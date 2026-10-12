@@ -430,7 +430,19 @@ class ExecutionModules:
         return result
 
     def state_comparison(self, current_state):
+        """Omitted verification fields cannot establish a before/after change.
+
+        Keep exact values and literal comparison. The opt-in reader only knows
+        its admitted source fields; other fields remain uncomparable, never
+        silently unchanged or normalized to a synonym.
+        """
         before = (self.last_action() or {}).get('before_state')
+        omitted = []
+        bounded = getattr(self, 'provided_state_comparison_v12', False)
+        if bounded:
+            verification = self.verification_action()
+            before = (verification or {}).get('before_state')
+            omitted = (verification or {}).get('omitted_before_state_keys', [])
         old = before['fields'] if before else {}
         new = current_state.get('fields', {}) if isinstance(current_state, dict) else {}
         shared = sorted(set(old) & set(new))
@@ -438,7 +450,9 @@ class ExecutionModules:
                    and key.casefold() not in {'clock', 'time', 'timestamp'} and dumps(old[key]) != dumps(new[key])]
         return {'source_observation_id': before['observation_id'] if before else None,
                 'source_evidence_ref': before['evidence_ref'] if before else None,
-                'shared_field_keys': shared, 'changed_field_keys': changed, 'grade': 'model_proposal'}
+                'shared_field_keys': shared, 'changed_field_keys': changed, 'grade': 'model_proposal',
+                **({'source_scope': 'provided_verification_before_state',
+                    'omitted_source_field_keys': list(omitted)} if bounded else {})}
 
     def verification_intent(self, last):
         """Read original actor prose, not a planner's replacement of its intent."""
@@ -570,7 +584,9 @@ class ExecutionModules:
                 if item['assessment'] == 'observed':
                     comparison = self.state_comparison(current_state)
                     if intent['text_omitted'] or not keys or not set(keys) <= set(comparison['changed_field_keys']):
-                        before = (last.get('before_state') or {}).get('fields', {})
+                        supplied = (self.verification_action()
+                            if getattr(self, 'provided_state_comparison_v12', False) else last)
+                        before = (supplied.get('before_state') or {}).get('fields', {})
                         current = (current_state or {}).get('fields', {})
                         detail = {'provided_state_keys': keys, 'changed_field_keys': comparison['changed_field_keys'],
                                   'unknown_or_missing_state_keys': [key for key in keys
