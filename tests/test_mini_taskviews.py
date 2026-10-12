@@ -93,6 +93,26 @@ def test_fixed_views_use_one_actor_and_no_full_control(monkeypatch, tmp_path):
     actor.close()
 
 
+def test_current_geometry_is_literal_current_frame_and_does_not_transform_native_arguments(monkeypatch, tmp_path):
+    original = {'action': 'left_click', 'coordinate': [698, 248]}
+    actor, obs, transport = make_actor(monkeypatch, tmp_path, actions=[original, original])
+    commands = predict(actor, obs)
+    value = packet(transport)
+    current = value['views']['current']['records'][0]
+    assert current['frame_geometry'] == {key: actor.frame.metadata[key] for key in
+        ('coordinate_type', 'original_size', 'model_size', 'coordinate_bounds')}
+    assert current['frame_geometry']['coordinate_type'] == 'absolute'
+    assert current['frame_geometry']['original_size'] == current['frame_geometry']['model_size'] == [1920, 1080]
+    assert current['frame_geometry']['coordinate_bounds'] == [1920, 1080]
+    assert commands == ['pyautogui.click(698, 248)']
+    first_frame = value['frame_id']
+    predict(actor, obs)
+    assert packet(transport)['frame_id'] != first_frame
+    assert packet(transport)['views']['current']['records'][0]['original_sha256'] == actor.frame.original_sha256
+    assert len(transport.requests) == 2 and actor.contract.taskviews_context_bytes == 8000
+    actor.close()
+
+
 def test_real_edges_errors_and_prose_have_distinct_source_grades(monkeypatch, tmp_path):
     actor, obs, transport = make_actor(monkeypatch, tmp_path)
     predict(actor, obs, error='Original controller error')

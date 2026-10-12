@@ -131,6 +131,8 @@ class MiniTaskViewsContext:
             packet = materialize(episode_id=journal.episode_id, frame_id=self.owner.frame.metadata['frame_id'],
                 current={'observation_id': current['id'], 'task_input_id': journal.task_input['id'],
                          'original_sha256': self.owner.frame.original_sha256,
+                         'frame_geometry': {key: deepcopy(self.owner.frame.metadata[key]) for key in
+                             ('coordinate_type', 'original_size', 'model_size', 'coordinate_bounds')},
                          'grade': 'original_input', 'image_source': 'current_native_message'},
                 attempts=projected, lessons=lessons,
                 totals={'attempts': attempt_total, 'lessons': error_total + decision_total}, max_bytes=limit)
