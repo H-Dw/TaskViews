@@ -2038,6 +2038,66 @@ def local_feedback_base():
                 'grade': 'model_proposal', 'pointer_source': 'current_original_screenshot'}}
 
 
+def test_actor_reference_sharing_retains_exact_distinct_edges_and_feedback():
+    from kobe_views.execution_modules import ExecutionPacketBudgetError
+    from ui_kobe.osworld.taskviews_feedback import _admit_execution_feedback
+    module, base = duplicated_local_reference_module(), local_feedback_base()
+    base['last_action_feedback']['raw_transition_ref'] = module.recent[0]['raw_ref']
+    module.unresolved[0].update(transition_id='other-edge', raw_ref='/other/original#other-edge')
+    original = deepcopy([base, module.recent, module.unresolved])
+    with pytest.raises(ExecutionPacketBudgetError) as raised:
+        module.packet(max_bytes=1, include_modules=False, share_duplicate_refs=True, share_exact_refs=True)
+    floor = raised.value.projection
+    # This envelope cannot fit even after whole visible labels yield. Its long
+    # latest raw path is already concrete in protected actor feedback.
+    minimal = deepcopy(base['current_visible_evidence'])
+    minimal.pop('summary')
+    minimal.update(elements=[], omitted_elements=1, summary_omitted=True)
+    fixed = {**base, 'current_visible_evidence': minimal,
+             'role_evidence': {'execution_modules': floor, 'strategy_review': True}, 'context_gaps': []}
+    limit = len(dumps(fixed).encode()) - 80
+    packet = _admit_execution_feedback(base, [], module, limit, strategy_review=True)
+    projected = packet['role_evidence']['execution_modules']
+    alias = projected['recent_transitions'][0]['raw_ref']
+    assert alias == {'actor_packet_ref': '#/last_action_feedback/raw_transition_ref'}
+    assert packet['last_action_feedback']['raw_transition_ref'] == original[1][0]['raw_ref']
+    # A module-local receipt alias may terminate at the actor-root raw alias.
+    receipt = projected['recent_transitions'][0]['controller_receipt_ref']
+    assert receipt == {'value_ref': '#/recent_transitions/0/raw_ref'}
+    assert projected['unresolved_failures'][0]['raw_ref'] == '/other/original#other-edge'
+    assert projected['unresolved_failures'][0]['transition_id'] == 'other-edge'
+    assert projected['unresolved_failures'][0]['error'] == original[2][0]['error']
+    assert packet['last_action_feedback'] == base['last_action_feedback']
+    assert packet['next_strategy'] == base['next_strategy'] and len(dumps(packet).encode()) <= limit
+    assert [base, module.recent, module.unresolved] == original
+    wide = _admit_execution_feedback(base, [], module, 20000, strategy_review=True)
+    assert 'actor_packet_ref_scope' not in wide
+    assert wide['role_evidence']['execution_modules']['recent_transitions'][0]['raw_ref'] == original[1][0]['raw_ref']
+    with pytest.raises(ExecutionPacketBudgetError):
+        _admit_execution_feedback(base, [], module, 1, strategy_review=True)
+
+
+@pytest.mark.parametrize('mode', ['different-id', 'different-ref', 'short-ref', 'missing-id', 'already-aliased'])
+def test_actor_reference_sharing_requires_exact_identity_and_concrete_profitable_value(mode):
+    from ui_kobe.osworld.taskviews_feedback import _share_actor_action_reference
+    projection = {'recent_transitions': [{'transition_id': 'edge', 'raw_ref': '/' + 'a' * 240}],
+                  'unresolved_failures': []}
+    feedback = {'transition_id': 'edge', 'raw_transition_ref': projection['recent_transitions'][0]['raw_ref']}
+    if mode == 'different-id':
+        feedback['transition_id'] = 'other'
+    elif mode == 'different-ref':
+        feedback['raw_transition_ref'] += '-different'
+    elif mode == 'short-ref':
+        projection['recent_transitions'][0]['raw_ref'] = feedback['raw_transition_ref'] = '/short'
+    elif mode == 'missing-id':
+        feedback.pop('transition_id')
+    else:
+        projection['recent_transitions'][0]['raw_ref'] = {'value_ref': '#/previous'}
+    original = deepcopy([projection, feedback])
+    result, shared = _share_actor_action_reference(projection, feedback)
+    assert not shared and result == projection and [projection, feedback] == original
+
+
 def test_reference_floor_error_exposes_exact_reduced_projection_without_mutating_history():
     from kobe_views.execution_modules import ExecutionPacketBudgetError
     module = duplicated_local_reference_module()

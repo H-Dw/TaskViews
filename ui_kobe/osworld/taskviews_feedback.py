@@ -374,6 +374,31 @@ def _visible(raw):
     return [raw['summary'], *(e['text'] for e in raw['elements'])]
 
 
+def _share_actor_action_reference(projection, feedback):
+    """Share a long exact raw reference across the two local feedback wrappers.
+
+    The operation ID must match too. The concrete value stays in actor feedback;
+    an actor_packet_ref has a different root from module-local value_ref. Neither
+    persistent records nor model assessments/parameters are rewritten.
+    """
+    if not isinstance(feedback, dict):
+        return projection, False
+    raw = feedback.get('raw_transition_ref')
+    if not isinstance(raw, str) or not feedback.get('transition_id'):
+        return projection, False
+    reference = {'actor_packet_ref': '#/last_action_feedback/raw_transition_ref'}
+    if len(dumps(reference).encode()) >= len(dumps(raw).encode()):
+        return projection, False
+    result, shared = plain(projection), False
+    for collection in ('recent_transitions', 'unresolved_failures'):
+        for record in result.get(collection, []):
+            if (record.get('transition_id') == feedback['transition_id']
+                    and record.get('raw_ref') == raw):
+                record['raw_ref'] = dict(reference)
+                shared = True
+    return (result, True) if shared else (projection, False)
+
+
 def _admit_execution_feedback(protected, optional, modules, limit, *, strategy_review, prior_evidence=None):
     """Reserve execution identity before supplementary current-frame labels.
 
@@ -409,6 +434,9 @@ def _admit_execution_feedback(protected, optional, modules, limit, *, strategy_r
         projection = exc.projection
         if len(dumps(projection).encode()) > 6000:
             raise
+        projection, shared = _share_actor_action_reference(projection, protected.get('last_action_feedback'))
+        if shared:
+            protected = {**protected, 'actor_packet_ref_scope': 'JSON pointer from this actor packet root'}
         fixed = {**envelope(projection), 'current_visible_evidence': None}
         visible_budget = limit - len(dumps(fixed).encode()) + len('null')
         original = protected['current_visible_evidence']
