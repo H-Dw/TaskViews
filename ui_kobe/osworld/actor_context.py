@@ -168,6 +168,12 @@ class ContextClient:
 
     def create(self, **request):
         owner = self.owner
+        if getattr(owner, 'strict_native_input', False):
+            payload, chars = context_size(request['messages'])
+            if (payload > owner.contract.context_max_payload_chars or chars > owner.contract.context_max_text_chars
+                    or (chars + 3) // 4 > owner.contract.context_rough_text_token_budget):
+                from .checkpoints import ReadAnomaly
+                raise ReadAnomaly('Mandatory native history exceeds the declared Mini input budget')
         prepared = dict(request)
         try:
             prepared['messages'] = supplement(request['messages'], owner.cached_context,
@@ -187,6 +193,9 @@ class ContextClient:
             from .checkpoints import ReadAnomaly
             raise ReadAnomaly('Current TaskViews evidence cannot fit this native request; '
                               'preserve checkpoint before actor dispatch')
+        omitted = getattr(owner, 'context_omitted', None)
+        if owner.cached_context and prepared['messages'] is request['messages'] and callable(omitted):
+            omitted('actor_request_budget')
         response = self.transport.create(**prepared)
         if owner.cached_context and prepared['messages'] is not request['messages']:
             owner.context_delivered()
