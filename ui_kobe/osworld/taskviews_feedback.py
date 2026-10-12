@@ -148,6 +148,11 @@ different ordinary route and verify its intended result, not just a window chang
 When a folder click has no visible effect, consider normal dialog keyboard
 location/full-requested-path navigation. Verify the resulting folder and filename
 before confirmation; do not substitute a guessed pointer coordinate.
+An entered path/command is an attempted value, not evidence of the guest's home
+directory or of a file's existence. Ground file locations in the original task
+or actual directory/filename observations, then verify the selected file before
+opening. Keep different literal application errors tied to their own operations;
+a generic open error alone does not establish a particular filesystem cause.
 For an uncertain click, plan a single operation followed by a fresh observation
 before dependent typing/submission. A save dialog has separate filename, folder
 and confirmation effects; do not certify all three from one unchanged label.

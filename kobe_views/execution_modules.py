@@ -165,9 +165,23 @@ class ExecutionModules:
                     if getattr(self, 'application_failure_retention_v12', False)
                     and self.application_failure_memory['module_id'] == self.active else [])
         identities = {report['transition_id'] for report in retained}
-        return [(report['transition_id'], report) for report in retained] + [
+        items = [(report['transition_id'], report) for report in retained] + [
             (identity, self.effects[identity]) for identity in getattr(self, 'effect_order', list(self.effects))
             if identity not in identities]
+        if getattr(self, 'application_failure_retention_v12', False):
+            # The durable store keeps the first provenance of each rejection.
+            # A short local brief must also expose the most recent route's
+            # response instead of filling its budget with the oldest error.
+            # SQLite event sequence, not JSON/ID order or a guessed timestamp,
+            # orders the unchanged original reports. This is projection only.
+            ordered = []
+            for identity, report in items:
+                row = self.journal.db.execute('SELECT seq FROM events WHERE id=?', (identity,)).fetchone()
+                if not row:
+                    raise ValueError('Historical feedback requires its original operation sequence')
+                ordered.append((row[0], identity, report))
+            items = [(identity, report) for _, identity, report in sorted(ordered, key=lambda row: row[0], reverse=True)]
+        return items
 
     def save(self):
         self.memory._atomic_json(self.path, {'episode_id': self.journal.episode_id, 'cursor': self.cursor,
@@ -806,7 +820,9 @@ class ExecutionModules:
                        'source_sha256': (intent or {}).get('original_text_sha256'),
                        'source_bytes': (intent or {}).get('original_text_bytes'),
                        'whole_text_omitted': not text or len(text.encode()) > 400}}
-            # Prefer earlier application responses over later recovery attempts.
+            # Prefer application responses over recovery attempts. The opt-in
+            # durable protocol orders those responses by original sequence,
+            # most recent first, without changing the retained first provenance.
             # Check kinds alone cannot distinguish Return submission from dialog
             # dismissal. No error phrase or application name is hardcoded.
             candidates.append(row)

@@ -333,7 +333,9 @@ def test_durable_reports_are_whole_bounded_and_repeated_literal_failures_keep_fi
         assert len(retained['reports']) == 8 and retained['reports'] == list(reports.values())[:8]
         assert retained['omitted_reports'] > 0
         actor = module.actor_prior_action_evidence()
-        assert actor['records'][0]['transition_id'] == next(iter(reports))
+        # This fixture changes the accepted graph reports after loading its
+        # recent cache; only the retained first eight reflect those failures.
+        assert actor['records'][0]['transition_id'] == retained['reports'][-1]['transition_id']
         assert len(dumps(actor).encode()) <= 900
         reduced = module.actor_prior_action_evidence(len(dumps(actor).encode())-1)
         assert reduced['omitted_records'] > actor['omitted_records']
@@ -380,6 +382,93 @@ def test_new_accepted_application_failure_is_persisted_without_extending_recent_
         assert len(module.effects) == len(module.effect_order) == 64
         module.record_action_check({**check, 'assessment': 'observed'}, frame='later-frame')
         assert saved['application_failure_memory'] == module.application_failure_memory
+    finally:
+        journal.db.close()
+
+
+def test_recent_route_error_outweighs_older_durable_rejection_in_small_briefs(tmp_path):
+    module, journal, reports, _ = durable_failure_fixture(tmp_path)
+    try:
+        oldest, latest = list(reports)[0], list(reports)[-1]
+        reports[latest].update(assessment='not_observed', checks=[
+            {'kind': 'submission', 'assessment': 'not_observed', 'quotes': ['Selected resource could not be opened']},
+            {'kind': 'object', 'assessment': 'not_observed', 'quotes': ['Selected resource could not be opened']}])
+        module.effects[latest] = deepcopy(reports[latest])
+        original = deepcopy([module.effects, module.recent, reports])
+        module.enable_application_failure_retention()
+        retained = deepcopy(module.application_failure_memory)
+        for method, cap in ((module.actor_prior_action_evidence, 900), (module.prior_action_evidence, 1600)):
+            full = method(10000)
+            latest_row = full['records'][0]
+            assert latest_row['transition_id'] == latest
+            assert latest_row['original_feedback_sha256'] == hashlib.sha256(dumps(reports[latest]).encode()).hexdigest()
+            assert latest_row['raw_transition_ref'] == reports[latest]['raw_transition_ref']
+            bound = len(dumps({**full, 'records': [latest_row], 'omitted_records': len(full['records'])-1}).encode())
+            assert bound <= cap
+            short = method(bound)
+            assert short['records'] == [latest_row] and short['omitted_records'] == len(full['records'])-1
+            assert oldest in [row['transition_id'] for row in full['records']]
+        assert module.application_failure_memory == retained
+        assert [module.effects, module.recent, reports] == original
+    finally:
+        journal.db.close()
+
+
+def test_failure_brief_order_survives_sorted_json_reload_and_dialog_dismissal(tmp_path):
+    module, journal, reports, _ = durable_failure_fixture(tmp_path)
+    try:
+        latest = list(reports)[-2]
+        reports[latest].update(assessment='not_observed', checks=[
+            {'kind': 'object', 'assessment': 'not_observed', 'quotes': ['No imported object']}])
+        module.effects[latest] = deepcopy(reports[latest])
+        module.enable_application_failure_retention()
+        expected = module.actor_prior_action_evidence()
+        assert expected['records'][0]['transition_id'] == latest
+        module.save()
+        reopened = ExecutionModules(module.memory, journal)
+        reopened.verification_intent = module.verification_intent
+        reopened.enable_application_failure_retention()
+        assert reopened.actor_prior_action_evidence() == expected
+        assert reopened.prior_action_evidence()['records'][0]['transition_id'] == latest
+        assert reopened.application_failure_memory == module.application_failure_memory
+    finally:
+        journal.db.close()
+
+
+def test_priority_projection_skips_unknown_focus_and_other_goal_checks(tmp_path):
+    module, journal, reports, _ = durable_failure_fixture(tmp_path)
+    try:
+        module.enable_application_failure_retention()
+        oldest = next(iter(reports))
+        # Recent records exist and have later sequences, but only the accepted
+        # application response in this subgoal qualifies as route evidence.
+        for index, invalid in enumerate(('unknown', 'focus', 'other-goal')):
+            identity = list(reports)[-1-index]
+            item = module.effects[identity]
+            item.update(assessment='not_observed', checks=[
+                {'kind': 'submission', 'assessment': 'not_observed', 'quotes': ['Unconfirmed']}])
+            if invalid == 'unknown':
+                item['assessment'] = 'unknown'
+            elif invalid == 'focus':
+                item['checks'][0]['kind'] = 'focus'
+            else:
+                item['module_id'] = 'other'
+        assert module.actor_prior_action_evidence()['records'][0]['transition_id'] == oldest
+        assert module.application_failure_memory['reports'][0] == reports[oldest]
+    finally:
+        journal.db.close()
+
+
+def test_opt_in_failure_priority_requires_real_sequence_and_preserves_legacy_order(tmp_path):
+    module, journal, reports, _ = durable_failure_fixture(tmp_path)
+    try:
+        module.enable_application_failure_retention()
+        identity = next(iter(reports))
+        journal.db.execute('DELETE FROM events WHERE id=?', (identity,))
+        with pytest.raises(ValueError, match='original operation sequence'):
+            module.actor_prior_action_evidence()
+        legacy = prior_failure_module()
+        assert [row['transition_id'] for row in legacy.actor_prior_action_evidence()['records']] == ['submit', 'dismiss']
     finally:
         journal.db.close()
 
