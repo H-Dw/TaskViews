@@ -87,6 +87,45 @@ class MiniTaskViewsContext:
                     pass  # Plain original prose can also begin with a brace.
         return text if isinstance(text, str) and text else None
 
+    def recent_repetition(self, attempts):
+        """Literal recent journal comparison, never a semantic failure judgment."""
+        if not attempts:
+            return None
+        _, latest, _ = attempts[0]
+        arguments = (latest.get('tool') or {}).get('arguments')
+        if not isinstance(arguments, dict) or arguments.get('action') not in (
+                'left_click', 'right_click', 'middle_click', 'double_click', 'triple_click',
+                'key', 'type', 'scroll', 'mouse_move', 'hold_key'):
+            return None
+        repeated = []
+        for row in attempts:
+            event = row[1]
+            if event.get('action') != latest.get('action') or (event.get('tool') or {}).get('arguments') != arguments:
+                break
+            if not event.get('dispatch_observed') or event.get('command_alignment') != 'matched' or event.get('gaps'):
+                return None
+            repeated.append(row)
+        if len(repeated) < 2:
+            return None
+        identical = 0
+        for _, event, _ in repeated:
+            hashes = []
+            for key in ('source', 'target'):
+                rows = self.read('SELECT seq,id,payload FROM events WHERE id=?', (event.get(key),))
+                if len(rows) != 1 or rows[0][1].get('kind') != 'observation':
+                    raise ReadAnomaly('Mini repeat feedback observation is unavailable')
+                observation = rows[0][1]
+                sha = observation.get('images', {}).get('original', {}).get('sha256')
+                if (not isinstance(sha, str) or len(sha) != 64 or any(c not in '0123456789abcdef' for c in sha)
+                        or sha != observation.get('frame', {}).get('original_sha256')):
+                    raise ReadAnomaly('Mini repeat feedback image provenance differs')
+                hashes.append(sha)
+            identical += hashes[0] == hashes[1]
+        _, event, sha = repeated[0]
+        return {'grade': 'literal_journal_comparison', 'source_seqs': sorted(row[0] for row in repeated),
+                'latest_event_id': event['id'], 'latest_event_sha256': sha, 'action': event['action'],
+                'repeat_count': len(repeated), 'same_image_count': identical, 'effect_status': 'unknown'}
+
     def context(self, instruction):
         self.cached = None
         self.trace = {'profile': PROFILE, 'frame_id': self.owner.frame.metadata['frame_id'],
@@ -143,13 +182,16 @@ class MiniTaskViewsContext:
         # Real errors get first opportunity; proposals never become verified errors.
         limit = min(MAX_BYTES, available_context_bytes(self.owner.actor_input_messages,
                       label=self.owner.context_label, contract=self.owner.contract))
+        original_current = {'observation_id': current['id'], 'task_input_id': journal.task_input['id'],
+                            'original_sha256': self.owner.frame.original_sha256,
+                            'frame_geometry': {key: deepcopy(self.owner.frame.metadata[key]) for key in
+                                ('coordinate_type', 'original_size', 'model_size', 'coordinate_bounds')},
+                            'grade': 'original_input', 'image_source': 'current_native_message'}
+        if controls is not None and (repeated := self.recent_repetition(attempts)) is not None:
+            original_current['recent_repetition'] = repeated
         try:
             packet = materialize(episode_id=journal.episode_id, frame_id=self.owner.frame.metadata['frame_id'],
-                current={'observation_id': current['id'], 'task_input_id': journal.task_input['id'],
-                         'original_sha256': self.owner.frame.original_sha256,
-                         'frame_geometry': {key: deepcopy(self.owner.frame.metadata[key]) for key in
-                             ('coordinate_type', 'original_size', 'model_size', 'coordinate_bounds')},
-                         'grade': 'original_input', 'image_source': 'current_native_message'},
+                current=original_current,
                 attempts=projected, lessons=lessons,
                 totals={'attempts': attempt_total, 'lessons': error_total + decision_total}, max_bytes=limit,
                 controls=controls)

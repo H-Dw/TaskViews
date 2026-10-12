@@ -46,6 +46,10 @@ def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max
                 'grade': 'model_proposal', 'reobserve_required': True}
         # The new independently declared guidance is either whole or explicitly absent.
         # Historical attempts/lessons cannot evict it. No budget or M0 default changes.
+        if len(dumps(packet).encode()) > limit and 'recent_repetition' in packet['views']['current']['records'][0]:
+            literal = packet['views']['current']['records'][0]
+            del literal['recent_repetition']
+            literal['recent_repetition_omitted'] = True
     if len(dumps(packet).encode()) > limit:
         return None
     selected = {key: set() for key in rows}
