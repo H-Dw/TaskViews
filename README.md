@@ -1,6 +1,8 @@
 # OSWorld K3 TaskViews
 
-当前 v7 分为 **baseline、UI-KOBE-like、TaskViews 三组**，共用同一套 actor、K3 协议适配、截图/坐标契约和官方执行评分。baseline 不创建转换图数据库，也不读取扩展记忆；UI-KOBE-like 单独测试执行边的保存与检索，TaskViews 在此基础上增加任务模块和自适应视图。详见 [三组 actor 与证据边界](docs/cua-v7.md)。
+`mini` 分支提供 **TaskViews Mini M0**：一个共同 native actor、三个固定只读 views、零额外分析角色请求、显式 profile 与检查点。后续 Mini 测试先执行 `git switch mini`，使用带分支检查的 `scripts/validate_mini.py`。实现、配置和运行边界见 [Mini 使用说明](docs/taskviews-mini.md)，后续分层接入见 [路线图](docs/taskviews-mini-roadmap-20261012.md)。当前暂停的完整 V12 不迁移为 Mini。
+
+以下 v7 说明是旧 Kimi 比较路径的历史接口文档，不是 Mini 或 Qwen 完整版的当前配置。v7 分为 **baseline、UI-KOBE-like、TaskViews 三组**，共用同一套 actor、K3 协议适配、截图/坐标契约和官方执行评分。baseline 不创建转换图数据库，也不读取扩展记忆；UI-KOBE-like 单独测试执行边的保存与检索，TaskViews 在此基础上增加任务模块和自适应视图。详见 [三组 actor 与证据边界](docs/cua-v7.md)。
 
 baseline 的提示保留固定官方文本，native 路径仅替换 XML 的传输格式说明；移除项目追加的提示增强。模型只接收最小工具结果、真实错误或用户答复。原始 SSE、完整命令、控制器回执、后截图和评分保存在独立审计中，不自动拼入模型反馈。实验组只能通过有界可选上下文消费其记录。
 
@@ -14,7 +16,7 @@ native 三组继承同一个 `KimiNativeAgent.predict`，这是 native 协议桥
 
 官方底座固定为 `xlang-ai/OSWorld-V2@3d778a3c9a34a079316f70df023b166700445792`，从外部 checkout 加载；仓库不复制或修改官方执行器、评分器或任务答案。运行前逐字节检查关键官方文件，并保存运行前后源码索引。
 
-## 共同 CUA 契约
+## v7 历史 CUA 契约
 
 - 默认配置：[cua-v5-absolute.json](configs/cua-v5-absolute.json)。预先选择官方 **absolute**，模型图固定 **1920×1080**，所有动作均以这张模型图的像素为单位。原图可以有其他尺寸，官方投影负责映射回 guest。
 - 可选配置：[cua-v5-relative.json](configs/cua-v5-relative.json)。预先选择官方 **relative**，使用官方图片 resize，动作每轴 **0..1000**。实际模型图尺寸仍随 frame 保存；感知 bbox 始终是模型图像素。
@@ -47,7 +49,7 @@ PYTHONDONTWRITEBYTECODE=1 systemd-run --user --scope \
 
 v7 的 [离线验证](validation/three-arm-actor-v7-20261007-complete.json) 为 **614 passed、0 failed、Ruff 通过**，核验三组 actor 一致、baseline 无转换库、审计与模型反馈分离、原工具 ID、分析预算隔离和官方底座未改。此前 [v6 验证](docs/v6-validation.md) 与 v5 原件保留，不能当作当前源码的验证记录。
 
-## 新实验入口
+## v7 历史实验入口
 
 只支持 v7 的新三组冻结计划。上一批 v4/v5/v6 的计划和证据保持原样，不能让新代码继续旧目录，也不自动重跑旧实验。
 

@@ -114,6 +114,23 @@ def test_real_edges_errors_and_prose_have_distinct_source_grades(monkeypatch, tm
     actor.close()
 
 
+@pytest.mark.parametrize('result', [
+    {'status': 'error', 'returncode': 0}, {'status': 'failed'},
+    {'status': 'success', 'returncode': 1, 'stderr': 'Original command stderr'}])
+def test_original_controller_status_and_returncode_enter_lessons_without_visual_claims(monkeypatch, tmp_path, result):
+    actor, obs, transport = make_actor(monkeypatch, tmp_path)
+    commands = predict(actor, obs, dispatch=False)
+    receipts = [{'command': commands[0], 'result': deepcopy(result)}]
+    actor.execution_journal.result(commands[0], step=1, observation=obs, receipts=receipts)
+    actor.record_execution(commands[0], receipts=receipts)
+    predict(actor, obs)
+    errors = [row for row in packet(transport)['views']['lessons']['records']
+              if row['grade'] == 'execution_error_record']
+    assert len(errors) == 1 and errors[0]['controller_receipts'] == receipts
+    assert errors[0]['error'] is None and 'assessment' not in errors[0]
+    actor.close()
+
+
 def test_too_small_optional_view_is_exactly_the_common_native_input(monkeypatch, tmp_path):
     mini, obs, mini_transport = make_actor(monkeypatch, tmp_path / 'mini', tiny=True)
     predict(mini, obs)

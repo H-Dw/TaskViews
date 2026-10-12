@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import base64
 from copy import deepcopy
+from contextlib import closing
 import functools
 import hashlib
 import inspect
@@ -260,6 +261,10 @@ class Checkpoints:
         atomic(self.stage/'checkpoint-vm.json', self.vm)
 
     def save(self, agent, instruction, obs):
+        from .taskviews_profiles import FULL_PROFILE, checkpoint_profile
+        actor_profile = getattr(agent, 'checkpoint_profile', FULL_PROFILE)
+        if actor_profile != checkpoint_profile(self.manifest):
+            raise ReadAnomaly('Checkpoint actor profile differs from frozen manifest')
         agent.flush_execution()
         journal = agent.execution_journal
         if agent.total_steps and journal is None:
@@ -285,6 +290,9 @@ class Checkpoints:
                          tag=tag, completed_steps=agent.total_steps,
                          environment={k: deepcopy(getattr(self.env, k)) for k in ENV_FIELDS} if self.env else {},
                          generation_profile=agent.profile.__dict__, cua_contract=agent.contract.snapshot())
+            state['checkpoint_actor_profile'] = actor_profile
+            if actor_profile != FULL_PROFILE:
+                state['profile_state'] = agent.checkpoint_state()
             if journal is not None:
                 with sqlite3.connect(dest/'execution.sqlite') as db:
                     journal.db.backup(db)
@@ -292,10 +300,14 @@ class Checkpoints:
                 state['journal_directory'] = str(journal.directory)
                 state['command_count'] = journal.db.execute(
                     "SELECT count(*) FROM events WHERE json_extract(payload,'$.kind')='transition'").fetchone()[0]
+                state['journal_origin'] = {'path': str(journal.path), 'directory': str(journal.directory),
+                    'episode_id': journal.episode_id, 'seq': journal.db.execute(
+                        'SELECT coalesce(max(seq),0) FROM events').fetchone()[0]}
             else:
                 state['command_count'] = 0
-            control = agent.control
-            if control.memory:
+                state['journal_origin'] = None
+            control = getattr(agent, 'control', None)
+            if control is not None and control.memory:
                 copy_state(control.directory, dest/'task-memory')
                 state['control'] = {'directory': str(control.directory), 'settings': control.settings,
                                     'stage': control.stage, 'last_trace': control.last_trace,
@@ -306,7 +318,8 @@ class Checkpoints:
             atomic(dest/'environment.json', state['environment'])
             # Auxiliary inspection never materializes the growing actor history.
             atomic(dest/'boundary.json', {k: state[k] for k in
-                   ('tag', 'completed_steps', 'command_count', 'vm', 'generation_profile', 'cua_contract')})
+                   ('tag', 'completed_steps', 'command_count', 'vm', 'generation_profile', 'cua_contract',
+                    'checkpoint_actor_profile', 'journal_origin')})
             hashes = {str(p.relative_to(dest)): sha(p) for p in dest.rglob('*') if p.is_file()}
             atomic(dest/'manifest.json', {'tag': tag, 'files': hashes, 'completed_steps': agent.total_steps,
                                          'snapshot_scope': 'guest RAM and all writable qcow2 disks',
@@ -357,10 +370,41 @@ class Checkpoints:
                 raise ValueError('Checkpoint file hash mismatch: '+rel)
         return dest, json.loads((dest/('boundary.json' if metadata_only else 'actor.json')).read_text())
 
+    def require_no_replay(self, boundary):
+        """Mini cannot restore behind a later real journal command, even in a failed branch."""
+        from .taskviews_profiles import FULL_PROFILE
+        if boundary.get('checkpoint_actor_profile', FULL_PROFILE) == FULL_PROFILE:
+            return
+        origin = boundary.get('journal_origin')
+        if origin is None:
+            if boundary['completed_steps']:
+                raise ReadAnomaly('Mini checkpoint is missing its original journal boundary')
+            return
+        directory, original = Path(origin['directory']), Path(origin['path'])
+        if original.parent.resolve() != directory.resolve() or not original.is_file():
+            raise ReadAnomaly('Mini original execution journal is unavailable')
+        for path in directory.glob(origin['episode_id'] + '*.sqlite'):
+            try:
+                with closing(sqlite3.connect(path.resolve().as_uri() + '?mode=ro', uri=True)) as db:
+                    later = db.execute("SELECT seq FROM events WHERE json_extract(payload,'$.kind')='transition' "
+                        "AND (json_extract(payload,'$.step') > ? OR (? AND seq > ?)) LIMIT 1",
+                        (boundary['completed_steps'], path == original, origin['seq'])).fetchone()
+                if later:
+                    raise ReadAnomaly('A real command occurred after this Mini checkpoint; refuse replay')
+            except sqlite3.Error as exc:
+                raise ReadAnomaly('Cannot verify the Mini no-replay journal boundary') from exc
+
     def restore_agent(self, agent):
+        from .taskviews_profiles import FULL_PROFILE, checkpoint_profile
         dest, state = self.read(self.resume_tag)
+        expected = getattr(agent, 'checkpoint_profile', FULL_PROFILE)
+        if (state.get('checkpoint_actor_profile', FULL_PROFILE) != expected
+                or expected != checkpoint_profile(self.manifest)
+                or (expected != FULL_PROFILE and ('profile_state' not in state or state.get('control')))):
+            raise ReadAnomaly('Checkpoint profile cannot be switched between full, Mini and UI-KOBE-like')
         if state['generation_profile'] != agent.profile.__dict__ or state['cua_contract'] != agent.contract.snapshot():
             raise ValueError('Checkpoint actor contract changed')
+        self.require_no_replay(state)
         for key in ACTOR_FIELDS:
             setattr(agent, key, state[key])
         if state.get('journal'):
@@ -390,6 +434,8 @@ class Checkpoints:
                 setattr(agent.control, k, data[k])
             agent.modules = None
             agent.sync_execution()
+        if expected != FULL_PROFILE:
+            agent.restore_checkpoint_state(state['profile_state'])
         self.resume_state = state
         return state
 
@@ -460,7 +506,10 @@ def checkpoint_volume_finalizer(original, resuming):
 
 
 def install(stage, manifest, *, agent_type=None):
-    if manifest['task_id'] != '059' or manifest['arm'] != 'taskviews':
+    from .taskviews_profiles import FULL_PROFILE, MINI_PROFILE, checkpoint_profile
+    mini = manifest.get('taskviews_profile') == MINI_PROFILE
+    if manifest['task_id'] != '059' or (manifest['arm'] != 'taskviews' and not (
+            mini and manifest['arm'] == 'ui_kobe_like')):
         raise ValueError('Desktop rewind currently supports only isolated Task059 TaskViews')
     from desktop_env.desktop_env import DesktopEnv
     from desktop_env.providers.docker import provider
@@ -529,6 +578,9 @@ def install(stage, manifest, *, agent_type=None):
                 env._set_task_info(kwargs['task_config'])
                 manager.bind(env)
                 dest, state = manager.read(manager.resume_tag, metadata_only=True)
+                if state.get('checkpoint_actor_profile', FULL_PROFILE) != checkpoint_profile(manifest):
+                    raise ReadAnomaly('VM snapshot profile differs from frozen manifest')
+                manager.require_no_replay(state)
                 manager.qmp.load(state['tag'])
                 for key, value in json.loads((dest/'environment.json').read_text()).items():
                     setattr(env, key, value)
@@ -553,7 +605,9 @@ def install(stage, manifest, *, agent_type=None):
     DesktopEnv.close = close
     old_agent_reset = agent_type.reset
     def agent_reset(agent, *args, **kwargs):
-        if resuming and agent.control is not None and not getattr(agent, '_checkpoint_restored', False):
+        ready = getattr(agent, 'checkpoint_ready', None)
+        initialized = ready() if callable(ready) else getattr(agent, 'control', None) is not None
+        if resuming and initialized and not getattr(agent, '_checkpoint_restored', False):
             try:
                 state = manager.restore_agent(agent)
             except Exception as exc:

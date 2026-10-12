@@ -79,7 +79,11 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False):
     from scripts.native_resource_accounting import sample, reserve_ok
     from scripts.osworld_task035_background import cgroup
     from ui_kobe.osworld.checkpoints import Checkpoints, QMP, require_running_checkpoint_container
+    from ui_kobe.osworld.taskviews_profiles import MINI_PROFILE, FULL_PROFILE, checkpoint_profile
     manifest = load(stage/'manifest.json')
+    if manifest.get('taskviews_profile', FULL_PROFILE) == MINI_PROFILE:
+        from scripts.osworld_native_experiment import require_mini_branch
+        require_mini_branch()
     if manifest.get('task_id') != '059' or not manifest.get('checkpoint_policy', {}).get('enabled'):
         raise ValueError('Not a checkpoint-enabled Task059 run')
     active = subprocess.run(['systemctl','--user','is-active',manifest['unit']],
@@ -96,6 +100,9 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False):
         raise RuntimeError('Current repair needs passing bounded validation')
     cp = Checkpoints(stage, manifest)
     _, saved = cp.read(checkpoint, metadata_only=True)
+    if saved.get('checkpoint_actor_profile', FULL_PROFILE) != checkpoint_profile(manifest):
+        raise RuntimeError('Cannot migrate a checkpoint between full, Mini and UI-KOBE-like profiles')
+    cp.require_no_replay(saved)
     old = Path(manifest['plan_root'])
     # Official files and assets are still frozen. A repair gets a new source
     # revision; original plans/manifests/failed branch data remain intact.

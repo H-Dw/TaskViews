@@ -12,6 +12,7 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
     experiment_arm = 'taskviews'
     transition_recording = True
     taskviews_profile = PROFILE
+    checkpoint_profile = PROFILE
     context_label = LABEL
     strict_native_input = True
 

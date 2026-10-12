@@ -126,9 +126,12 @@ def interface_protocols(interface):
 
 
 def check_interface(plan):
+    from ui_kobe.osworld.taskviews_profiles import MINI_PROFILE, validate_profile
+    mini = validate_profile(plan) == MINI_PROFILE
     if plan.get('agent_interface') == 'qwen-native':
         from ui_kobe.api.qwen_native import BASE_URL, MODEL, PROTOCOL, QwenGenerationProfile
-        if (plan.get('implementation_version') != 9 or plan.get('arms') != ['taskviews']
+        if (plan.get('implementation_version') != (10 if mini else 9)
+                or (not mini and plan.get('arms') != ['taskviews'])
                 or plan.get('protocols') != [PROTOCOL] or plan.get('task_id') != '059'
                 or plan.get('model') != MODEL or plan.get('base_url') != BASE_URL
                 or plan.get('api_key_env') != 'QWEN_API_KEY'
@@ -156,6 +159,8 @@ def trial_max_steps(purpose, max_steps=None):
 
 
 def taskviews_workflow(plan):
+    from ui_kobe.osworld.taskviews_profiles import validate_profile
+    validate_profile(plan)
     enabled = plan.get('taskviews_feedback', False)
     if type(enabled) is not bool:
         raise ValueError('TaskViews feedback opt-in must be a boolean')
@@ -172,23 +177,41 @@ def committed_source():
     return subprocess.check_output(['git', '-C', str(PROJECT), 'rev-parse', 'HEAD'], text=True).strip()
 
 
+def require_mini_branch():
+    branch = subprocess.check_output(['git', '-C', str(PROJECT), 'branch', '--show-current'], text=True).strip()
+    if branch != 'mini':
+        raise RuntimeError('Switch Git to mini before preparing, launching or resuming Mini tests')
+
+
 def prepare(root, task, validation, purpose="evaluation", admission=None, profile_name="low-16k", cua_config=None,
             agent_interface='official-xml', compatibility=None, max_steps=None, checkpoints=False,
-            taskviews_feedback=False):
+            taskviews_feedback=False, taskviews_profile='full_checkpoint', qwen_arm='taskviews'):
     from examples.osworld2_eval import official_identity
     from ui_kobe.osworld.task_examples import task_example
     from ui_kobe.osworld.runner import source_snapshot
     from ui_kobe.api.kimi_stream import StreamBudget
     from ui_kobe.api.kimi import generation_profile
     from ui_kobe.api.qwen_native import BASE_URL as QWEN_URL, MODEL as QWEN_MODEL, PROTOCOL as QWEN_PROTOCOL, QwenGenerationProfile
+    from ui_kobe.osworld.taskviews_profiles import FULL_PROFILE, MINI_PROFILE, frozen_profile, mini_cua_contract
+    mini = taskviews_profile == MINI_PROFILE
     qwen = agent_interface == 'qwen-native'
+    if taskviews_profile not in (FULL_PROFILE, MINI_PROFILE):
+        raise ValueError('Unknown TaskViews profile')
+    if mini:
+        require_mini_branch()
+        if (not qwen or taskviews_feedback or qwen_arm not in ('taskviews', 'ui_kobe_like')):
+            raise ValueError('Mini requires one Qwen native arm without full feedback')
+    elif qwen_arm != 'taskviews':
+        raise ValueError('Explicit UI-KOBE-like Qwen comparison requires the Mini profile')
     if qwen and (task != '059' or not checkpoints or purpose != 'evaluation'):
         raise ValueError('Qwen native runs require isolated Task059 TaskViews checkpoints')
     profile = QwenGenerationProfile() if qwen else generation_profile(profile_name)
     from ui_kobe.osworld.cua_contract import CUAContract
     from ui_kobe.osworld.official_base import verify_official_base, OFFICIAL_COMMIT
     verify_official_base(REPO)
-    contract = CUAContract(**load(cua_config)) if cua_config else CUAContract()
+    contract = CUAContract(**load(cua_config)) if cua_config else CUAContract(**mini_cua_contract()) if mini else CUAContract()
+    if mini and contract.snapshot() != mini_cua_contract():
+        raise ValueError('Mini comparisons retain the frozen geometry/history/input/repair contract')
     decisions = trial_max_steps(purpose, max_steps)
     if purpose == 'cua_smoke' and (task != '059' or agent_interface != 'k3-native'):
         raise ValueError('This CUA smoke trial uses Task059 with the preselected K3 native interface')
@@ -222,8 +245,8 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
               for name in task_example(task).assets}
     plan = {"created_utc": now(), "task_id": task, "model": QWEN_MODEL if qwen else "kimi-k3", "base_url": QWEN_URL if qwen else "https://api.moonshot.ai/v1",
         "api_key_env": "QWEN_API_KEY" if qwen else "KIMI_API_KEY", "official": identity, "asset_sha256": assets,
-        "arms": ['taskviews'] if qwen else list(ARMS), "protocols": [QWEN_PROTOCOL] if qwen else interface_protocols(agent_interface),
-        'implementation_version': 9 if qwen else 7, 'agent_interface': agent_interface,
+        "arms": [qwen_arm] if qwen else list(ARMS), "protocols": [QWEN_PROTOCOL] if qwen else interface_protocols(agent_interface),
+        'implementation_version': 10 if mini else 9 if qwen else 7, 'agent_interface': agent_interface,
         'arm_variables': {'baseline': 'no transition database or optional memory context',
                          'ui_kobe_like': 'transition database and bounded edge retrieval',
                          'taskviews': 'transition database plus task modules and adaptive context'},
@@ -287,6 +310,21 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
             plan['user_authorization'] += '; explicitly requested qwen3.8-max Task059 TaskViews execution and real-time debugging'
             plan['comparison_limit'] = 'New Qwen native-tools, non-stream, thinking-disabled protocol; not the original Qwen XML agent or the completed Kimi comparison conditions'
     plan['taskviews_feedback'] = taskviews_feedback
+    plan['taskviews_profile'] = taskviews_profile
+    if mini:
+        plan['mini_profile'] = frozen_profile(qwen_arm)
+        plan['source_branch'] = 'mini'
+        plan['source_commit'] = committed_source()
+        plan['iteration_commit_required'] = True
+        plan['runtime_revision'] = 10
+        plan['taskviews_variant'] = 'fixed current/attempts/lessons' if qwen_arm == 'taskviews' else 'native UI-KOBE-like recent edges'
+        plan['arm_variables'] = {qwen_arm: plan['taskviews_variant']}
+        plan['execution_policy']['taskviews_advisers'] = 'none; fixed read-only selectors; native actor only'
+        plan['budget_scopes']['advisory'] = 'no extra role requests in M0'
+        plan['checkpoint_policy']['inspection_minutes'] = 30
+        plan['checkpoint_policy']['read_error_policy'] = 'core frame/journal/native/VM integrity pauses; optional projection omitted whole'
+        plan['user_authorization'] = ('2026-10-12: user authorized Mini implementation on mini branch. '
+            'Preparing a plan does not authorize a new evaluation episode or migration of paused full TaskViews.')
     taskviews_workflow(plan)
     if taskviews_feedback:
         plan['taskviews_variant'] = 'action-bound feedback, stable subgoals, pointer frame contract, event-triggered analysis'
@@ -348,6 +386,10 @@ def launch(root, arm):
     frozen_check(root)
     plan = load(root / "plan.json")
     check_interface(plan)
+    from ui_kobe.osworld.taskviews_profiles import MINI_PROFILE
+    mini = plan.get('taskviews_profile') == MINI_PROFILE
+    if mini:
+        require_mini_branch()
     decisions = trial_max_steps(plan.get('purpose', 'evaluation'), plan.get('max_steps'))
     from ui_kobe.osworld.cua_contract import CUAContract
     if arm not in ARMS or arm not in plan['arms']:
@@ -397,8 +439,12 @@ def launch(root, arm):
         "runtime_paths": [], "created_utc": now()}
     manifest['taskviews_feedback'] = plan.get('taskviews_feedback', False)
     manifest['source_commit'] = plan.get('source_commit')
+    manifest['taskviews_profile'] = plan.get('taskviews_profile', 'full_checkpoint')
+    if mini:
+        manifest['mini_profile'] = plan['mini_profile']
+        manifest['source_branch'] = plan['source_branch']
     if plan.get('checkpoint_policy', {}).get('enabled'):
-        if arm != 'taskviews':
+        if arm != 'taskviews' and not (mini and arm == 'ui_kobe_like'):
             raise ValueError('Checkpoint-enabled recovery run is TaskViews only')
         manifest['checkpoint_policy'] = plan['checkpoint_policy']
         manifest['runtime_revision'] = plan['runtime_revision']
@@ -766,12 +812,15 @@ def main():
     parser.add_argument('--k3-compatibility', '--provider-compatibility', type=Path)
     parser.add_argument('--checkpoints', action='store_true')
     parser.add_argument('--taskviews-feedback', action='store_true', help='Freeze the validated action feedback/pointer workflow for Qwen TaskViews')
+    parser.add_argument('--taskviews-profile', choices=('full_checkpoint', 'mini_fixed_v1'), default='full_checkpoint')
+    parser.add_argument('--qwen-arm', choices=('taskviews', 'ui_kobe_like'), default='taskviews')
     args = parser.parse_args()
     require_scope(2 * GIB if args.action == "supervise" else 128 * 1024**2)
     root = args.root.resolve()
     if args.action == "prepare":
         prepare(root, args.task, args.validation, args.purpose, args.admission, args.profile, args.cua_config,
-                args.agent_interface, args.k3_compatibility, args.max_steps, args.checkpoints, args.taskviews_feedback)
+                args.agent_interface, args.k3_compatibility, args.max_steps, args.checkpoints, args.taskviews_feedback,
+                args.taskviews_profile, args.qwen_arm)
     elif args.action == "launch":
         lock = Path.home() / ".cache/ui-kobe-osworld-experiment.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)

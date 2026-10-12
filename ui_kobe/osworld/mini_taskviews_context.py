@@ -14,7 +14,10 @@ LABEL = 'Fixed TaskViews (historical records and model proposals; not current fa
 ERROR_FILTER = """json_extract(e.payload,'$.kind')='transition' AND (
     json_extract(e.payload,'$.error') IS NOT NULL OR EXISTS (
       SELECT 1 FROM json_each(e.payload,'$.controller_receipts') r WHERE
-      json_extract(r.value,'$.result.success')=0 OR json_extract(r.value,'$.result.error') IS NOT NULL))"""
+      json_extract(r.value,'$.result.success')=0 OR json_extract(r.value,'$.result.error') IS NOT NULL
+      OR json_extract(r.value,'$.result.status') IN ('error','failed')
+      OR (json_type(r.value,'$.result.returncode')='integer'
+          AND json_extract(r.value,'$.result.returncode')!=0)))"""
 PROSE_VALUE = """coalesce(nullif(json_extract(payload,'$.local_instruction'),''),
     CASE WHEN json_valid(json_extract(payload,'$.response')) THEN
       json_extract(json_extract(payload,'$.response'),'$.content')

@@ -9,7 +9,17 @@ import runpy
 import sys
 
 
-def agent_class(interface, arm):
+def agent_class(interface, arm, taskviews_profile='full_checkpoint'):
+    from ui_kobe.osworld.taskviews_profiles import FULL_PROFILE, MINI_PROFILE
+    if taskviews_profile == MINI_PROFILE:
+        if interface != 'qwen-native':
+            raise ValueError('Mini requires the declared Qwen native interface')
+        from ui_kobe.osworld.mini_taskviews_native import QwenMiniTaskViewsNativeAgent
+        from ui_kobe.osworld.qwen_native_base import QwenTransitionNativeAgent
+        return {'taskviews': QwenMiniTaskViewsNativeAgent,
+                'ui_kobe_like': QwenTransitionNativeAgent}[arm]
+    if taskviews_profile != FULL_PROFILE:
+        raise ValueError('Unknown TaskViews profile')
     if interface == 'official-xml':
         from ui_kobe.osworld.kimi_official import OfficialK3Agent, OfficialK3TransitionAgent, OfficialK3TaskViewsAgent
         classes = {'baseline': OfficialK3Agent, 'ui_kobe_like': OfficialK3TransitionAgent,
@@ -26,6 +36,21 @@ def agent_class(interface, arm):
     else:
         raise ValueError('Unknown Agent interface')
     return classes[arm]
+
+
+def configure_profile(plan, manifest):
+    from ui_kobe.osworld.taskviews_profiles import FULL_PROFILE, MINI_PROFILE, validate_profile
+    profile = validate_profile(plan)
+    if manifest.get('taskviews_profile', FULL_PROFILE) != profile:
+        raise RuntimeError('Manifest actor profile differs from frozen plan')
+    if profile == MINI_PROFILE:
+        from scripts.osworld_native_experiment import require_mini_branch
+        if (manifest.get('mini_profile') != plan['mini_profile']
+                or manifest.get('source_branch') != plan['source_branch']):
+            raise RuntimeError('Manifest fixed-view contract differs from frozen Mini plan')
+        require_mini_branch()
+    os.environ['UI_KOBE_TASKVIEWS_PROFILE'] = profile
+    return profile
 
 
 def main():
@@ -45,6 +70,7 @@ def main():
     from ui_kobe.osworld.cua_contract import CUAContract
     plan = json.loads((Path(manifest["plan_root"]) / "plan.json").read_text())
     check_interface(plan)
+    actor_profile = configure_profile(plan, manifest)
     if manifest.get('taskviews_feedback', False) != plan.get('taskviews_feedback', False):
         raise RuntimeError('Manifest feedback workflow differs from frozen plan')
     os.environ.update(taskviews_workflow(plan))
@@ -93,7 +119,7 @@ def main():
     output = Path(manifest["official_results"])
     install_local_memory_profile(output, "minimal", startup_available_gib=STARTUP_AVAILABLE_GIB)
     import mm_agents.qwen
-    selected = agent_class(manifest['agent_interface'], manifest['arm'])
+    selected = agent_class(manifest['agent_interface'], manifest['arm'], actor_profile)
     if manifest.get('transition_recording') != selected.transition_recording:
         raise RuntimeError('Recording policy differs from the frozen experimental arm')
     mm_agents.qwen.QwenAgent = selected
