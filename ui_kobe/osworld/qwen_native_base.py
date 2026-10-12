@@ -1,0 +1,32 @@
+"""Frozen Qwen provider on the shared native loop, independent of TaskViews."""
+from ui_kobe.api.qwen_native import BASE_URL, MODEL, PROTOCOL, QwenGenerationProfile, QwenNativeClient
+from . import telemetry
+from .kimi_native import KimiNativeAgent
+from .kimi_transition_native import KimiTransitionNativeAgent
+
+
+class QwenNativeProvider:
+    provider_name = 'qwen'
+    model_name = MODEL
+    protocol = PROTOCOL
+
+    def provider_profile(self, model, base_url, temperature, max_tokens):
+        profile = QwenGenerationProfile()
+        if (model != MODEL or base_url != BASE_URL or temperature != 0 or max_tokens != profile.max_completion_tokens):
+            raise ValueError('Qwen requires its frozen model, endpoint and 16000-token native profile')
+        return profile
+
+    def provider_transport(self, api_key, trace):
+        return QwenNativeClient(api_key=api_key, budget=self.budget, profile=self.profile,
+                                emit=telemetry.emit, response_dir=trace / 'responses')
+
+    def generation_fields(self, ledger, role):
+        return {'max_tokens': ledger.allowance(role)}
+
+
+class QwenNativeAgent(QwenNativeProvider, KimiNativeAgent):
+    """No graph, roles, pointer workflow or TaskViews control initialization."""
+
+
+class QwenTransitionNativeAgent(QwenNativeProvider, KimiTransitionNativeAgent):
+    """The existing UI-KOBE-like edge retriever with the same Qwen transport."""
