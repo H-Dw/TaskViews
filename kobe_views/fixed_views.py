@@ -17,7 +17,7 @@ def profile_contract():
             'integrity_error_policy': 'pause before next actor', 'strict_native_input': True, 'focus_gate': False}
 
 
-def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max_bytes):
+def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max_bytes, controls=None):
     """Select whole original projections; never truncate a value to fit.
 
     Input lists arrive newest first with their original event seq. Small per-view
@@ -34,6 +34,18 @@ def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max
               'views': {key: {'selector': SELECTORS[key], 'records': [], 'omitted_records':
                         0 if key == 'current' else totals[key]} for key in VIEW_IDS}}
     packet['views']['current']['records'] = [deepcopy(current)]
+    if controls is not None:
+        packet['extensions'] = {'controls': controls['version']}
+        packet['views']['controls'] = {'selector': 'documented_bindings_and_same_actor_notes',
+                                      'records': [deepcopy(controls)], 'omitted_records': 0}
+        if len(dumps(packet).encode()) > limit and controls.get('previous_note') is not None:
+            previous = packet['views']['controls']['records'][0]['previous_note']
+            packet['views']['controls']['records'][0]['previous_note'] = {
+                'whole_note_omitted': True, 'source_event_id': previous['source_event_id'],
+                'source_sha256': previous['source_sha256'], 'note_sha256': previous['note_sha256'],
+                'grade': 'model_proposal', 'reobserve_required': True}
+        # The new independently declared guidance is either whole or explicitly absent.
+        # Historical attempts/lessons cannot evict it. No budget or M0 default changes.
     if len(dumps(packet).encode()) > limit:
         return None
     selected = {key: set() for key in rows}

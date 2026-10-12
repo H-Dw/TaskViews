@@ -46,10 +46,13 @@ def configure_profile(plan, manifest):
     if profile == MINI_PROFILE:
         from scripts.osworld_native_experiment import require_mini_branch
         if (manifest.get('mini_profile') != plan['mini_profile']
-                or manifest.get('source_branch') != plan['source_branch']):
+                or manifest.get('source_branch') != plan['source_branch']
+                or manifest.get('mini_controls_view') != plan.get('mini_controls_view')):
             raise RuntimeError('Manifest fixed-view contract differs from frozen Mini plan')
         require_mini_branch()
     os.environ['UI_KOBE_TASKVIEWS_PROFILE'] = profile
+    os.environ['UI_KOBE_MINI_CONTROLS_VIEW'] = (plan['mini_controls_view']['version']
+        if plan.get('mini_controls_view') is not None else 'disabled')
     return profile
 
 

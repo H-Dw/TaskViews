@@ -25,7 +25,7 @@ def frozen_profile(arm):
 def validate_profile(plan):
     profile = plan.get('taskviews_profile', FULL_PROFILE)
     if profile == FULL_PROFILE:
-        if plan.get('mini_profile') is not None:
+        if plan.get('mini_profile') is not None or plan.get('mini_controls_view') is not None:
             raise ValueError('Full TaskViews cannot carry a Mini profile')
         return profile
     arms = plan.get('arms', [])
@@ -36,6 +36,10 @@ def validate_profile(plan):
             or plan.get('cua_contract') != mini_cua_contract()
             or plan.get('source_branch') != 'mini'):
         raise ValueError('Mini requires one explicit frozen profile on the mini branch, without full feedback')
+    if plan.get('mini_controls_view') is not None:
+        from kobe_views.controls_view import policy
+        if arms != ['taskviews'] or plan['mini_controls_view'] != policy():
+            raise ValueError('Controls view requires its exact declared Mini extension')
     return profile
 
 

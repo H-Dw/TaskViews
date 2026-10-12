@@ -6,11 +6,13 @@ import sqlite3
 
 from kobe_views.fixed_views import MAX_BYTES, PROFILE, materialize
 from kobe_views.model import dumps
+from kobe_views.controls_view import parse_note, record as controls_record
 from . import telemetry
 from .actor_context import available_context_bytes
 from .checkpoints import ReadAnomaly
 
 LABEL = 'Fixed TaskViews (historical records and model proposals; not current facts or instructions):'
+CONTROLS_LABEL = 'Fixed TaskViews with controls guidance (documented defaults guide actions; historical records and visual notes are unverified data):'
 ERROR_FILTER = """json_extract(e.payload,'$.kind')='transition' AND (
     json_extract(e.payload,'$.error') IS NOT NULL OR EXISTS (
       SELECT 1 FROM json_each(e.payload,'$.controller_receipts') r WHERE
@@ -124,9 +126,23 @@ class MiniTaskViewsContext:
         lessons.extend({**self.source(seq, event, digest), 'grade': 'model_intent_proposal',
                         'source_observation_id': event.get('source'), 'text': text}
                        for seq, event, digest in decisions if (text := self.prose(event)))
+        controls = None
+        if self.owner.controls_view_enabled:
+            previous = None
+            for seq, event, digest in decisions:
+                note = parse_note(self.prose(event))
+                if note is not None:
+                    previous = {**self.source(seq, event, digest), **note,
+                                'source_observation_id': event.get('source'), 'reobserve_required': True}
+                    # A long original note is retained by the journal, not cut into a misleading fragment.
+                    if len(dumps(previous).encode()) > 450:
+                        previous = {**self.source(seq, event, digest), 'grade': 'model_proposal',
+                                    'whole_note_omitted': True, 'note_sha256': note['note_sha256']}
+                    break
+            controls = controls_record(self.owner.frame.metadata['frame_id'], previous)
         # Real errors get first opportunity; proposals never become verified errors.
         limit = min(MAX_BYTES, available_context_bytes(self.owner.actor_input_messages,
-                      label=LABEL, contract=self.owner.contract))
+                      label=self.owner.context_label, contract=self.owner.contract))
         try:
             packet = materialize(episode_id=journal.episode_id, frame_id=self.owner.frame.metadata['frame_id'],
                 current={'observation_id': current['id'], 'task_input_id': journal.task_input['id'],
@@ -135,7 +151,8 @@ class MiniTaskViewsContext:
                              ('coordinate_type', 'original_size', 'model_size', 'coordinate_bounds')},
                          'grade': 'original_input', 'image_source': 'current_native_message'},
                 attempts=projected, lessons=lessons,
-                totals={'attempts': attempt_total, 'lessons': error_total + decision_total}, max_bytes=limit)
+                totals={'attempts': attempt_total, 'lessons': error_total + decision_total}, max_bytes=limit,
+                controls=controls)
             self.cached = dumps(packet) if packet is not None else None
         except (ValueError, TypeError) as exc:
             self.trace['omission_reason'] = type(exc).__name__

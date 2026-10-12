@@ -74,7 +74,7 @@ def inspect_stage(stage):
     return result
 
 
-def resume(stage, validation, reason, checkpoint=None, provider_ready=False):
+def resume(stage, validation, reason, checkpoint=None, provider_ready=False, controls_view=False):
     import docker
     from scripts.native_resource_accounting import sample, reserve_ok
     from scripts.osworld_task035_background import cgroup
@@ -107,6 +107,8 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False):
     # Official files and assets are still frozen. A repair gets a new source
     # revision; original plans/manifests/failed branch data remain intact.
     old_plan = load(old/'plan.json')
+    if controls_view and (manifest.get('taskviews_profile') != MINI_PROFILE or manifest.get('arm') != 'taskviews'):
+        raise ValueError('Read-only controls extension can only be enabled for TaskViews Mini')
     repair_commit = None
     if old_plan.get('iteration_commit_required'):
         from scripts.osworld_native_experiment import committed_source
@@ -131,6 +133,10 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False):
                                  'checkpoint':saved['tag'], 'time':time.time()}}
     if repair_commit:
         plan['source_commit'] = repair_commit
+    if controls_view:
+        from kobe_views.controls_view import policy
+        plan['mini_controls_view'] = policy()
+        manifest['mini_controls_view'] = policy()
     write(revision/'plan.json', plan)
     write(revision/'project-source-planned.json', project_snapshot())
     write(revision/'osworld-source-planned.json', source_snapshot(REPO))
@@ -204,12 +210,13 @@ def main():
     p.add_argument('--reason')
     p.add_argument('--checkpoint', help='Exact retained checkpoint tag; default is last safe boundary')
     p.add_argument('--provider-ready', action='store_true', help='Only after the user confirms provider billing/quota recovery')
+    p.add_argument('--controls-view', action='store_true', help='Explicitly enable the checkpoint-compatible Mini controls view')
     args=p.parse_args()
     require_scope(128*1024**2)
     if args.action == 'resume':
         if not args.validation or not args.reason:
             p.error('Resume requires validation and a specific repair/cooldown reason')
-        result=resume(args.stage,args.validation,args.reason,args.checkpoint,args.provider_ready)
+        result=resume(args.stage,args.validation,args.reason,args.checkpoint,args.provider_ready,args.controls_view)
     elif args.action == 'pause':
         if not args.reason:
             p.error('Pause requires a specific anomaly reason')
