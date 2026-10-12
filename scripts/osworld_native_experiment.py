@@ -185,7 +185,8 @@ def require_mini_branch():
 
 def prepare(root, task, validation, purpose="evaluation", admission=None, profile_name="low-16k", cua_config=None,
             agent_interface='official-xml', compatibility=None, max_steps=None, checkpoints=False,
-            taskviews_feedback=False, taskviews_profile='full_checkpoint', qwen_arm='taskviews'):
+            taskviews_feedback=False, taskviews_profile='full_checkpoint', qwen_arm='taskviews',
+            inspection_minutes=None):
     from examples.osworld2_eval import official_identity
     from ui_kobe.osworld.task_examples import task_example
     from ui_kobe.osworld.runner import source_snapshot
@@ -195,6 +196,9 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     from ui_kobe.osworld.taskviews_profiles import FULL_PROFILE, MINI_PROFILE, frozen_profile, mini_cua_contract
     mini = taskviews_profile == MINI_PROFILE
     qwen = agent_interface == 'qwen-native'
+    if inspection_minutes is not None and (
+            not checkpoints or type(inspection_minutes) is not int or not 1 <= inspection_minutes <= 1440):
+        raise ValueError('Inspection interval requires checkpoints and 1..1440 whole minutes')
     if taskviews_profile not in (FULL_PROFILE, MINI_PROFILE):
         raise ValueError('Unknown TaskViews profile')
     if mini:
@@ -326,6 +330,8 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         plan['user_authorization'] = ('2026-10-12: user authorized Mini implementation on mini branch. '
             'Preparing a plan does not authorize a new evaluation episode or migration of paused full TaskViews.')
     taskviews_workflow(plan)
+    if inspection_minutes is not None:
+        plan['checkpoint_policy']['inspection_minutes'] = inspection_minutes
     if taskviews_feedback:
         plan['taskviews_variant'] = 'action-bound feedback, stable subgoals, pointer frame contract, event-triggered analysis'
         plan['advisory_concurrency'] = 1
@@ -814,13 +820,14 @@ def main():
     parser.add_argument('--taskviews-feedback', action='store_true', help='Freeze the validated action feedback/pointer workflow for Qwen TaskViews')
     parser.add_argument('--taskviews-profile', choices=('full_checkpoint', 'mini_fixed_v1'), default='full_checkpoint')
     parser.add_argument('--qwen-arm', choices=('taskviews', 'ui_kobe_like'), default='taskviews')
+    parser.add_argument('--inspection-minutes', type=int, help='Freeze the requested checkpoint inspection interval')
     args = parser.parse_args()
     require_scope(2 * GIB if args.action == "supervise" else 128 * 1024**2)
     root = args.root.resolve()
     if args.action == "prepare":
         prepare(root, args.task, args.validation, args.purpose, args.admission, args.profile, args.cua_config,
                 args.agent_interface, args.k3_compatibility, args.max_steps, args.checkpoints, args.taskviews_feedback,
-                args.taskviews_profile, args.qwen_arm)
+                args.taskviews_profile, args.qwen_arm, args.inspection_minutes)
     elif args.action == "launch":
         lock = Path.home() / ".cache/ui-kobe-osworld-experiment.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)

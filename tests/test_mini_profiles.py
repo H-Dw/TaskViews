@@ -76,7 +76,8 @@ def test_runner_contract_cannot_mix_manifest_and_plan(monkeypatch):
 
 
 @pytest.mark.parametrize('arm', ['taskviews', 'ui_kobe_like'])
-def test_offline_preparation_and_launch_freeze_one_profile_without_starting_services(tmp_path, monkeypatch, arm):
+@pytest.mark.parametrize('inspection', [None, 10])
+def test_offline_preparation_and_launch_freeze_one_profile_without_starting_services(tmp_path, monkeypatch, arm, inspection):
     from examples import osworld2_eval
     from ui_kobe.osworld import official_base, task_examples, runner
     monkeypatch.setattr(official_base, 'verify_official_base', lambda *a: None)
@@ -96,13 +97,13 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
     experiment.write(validation, {'exit_code': 0, 'project_source': {}})
     root = tmp_path / 'offline-plan'
     experiment.prepare(root, '059', validation, agent_interface='qwen-native', compatibility=proof,
-                       checkpoints=True, taskviews_profile=PROFILE, qwen_arm=arm)
+                       checkpoints=True, taskviews_profile=PROFILE, qwen_arm=arm, inspection_minutes=inspection)
     plan = experiment.load(root / 'plan.json')
     assert plan['arms'] == [arm] and plan['implementation_version'] == 10
     assert plan['mini_profile'] == frozen_profile(arm) and plan['taskviews_feedback'] is False
     assert plan['source_branch'] == 'mini' and plan['iteration_commit_required']
     assert plan['cua_contract'] == mini_cua_contract() and plan['max_steps'] == 500
-    assert plan['checkpoint_policy']['inspection_minutes'] == 30
+    assert plan['checkpoint_policy']['inspection_minutes'] == (30 if inspection is None else inspection)
     assert 'does not authorize' in plan['user_authorization']
     home = tmp_path / 'home'
     (home / '.config/systemd/user').mkdir(parents=True)
@@ -116,6 +117,15 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
     assert manifest['source_branch'] == 'mini' and manifest['checkpoint_policy'] == plan['checkpoint_policy']
     assert checks == ['branch', 'branch', 'resources']
     assert commands[-1][-2:] == ['start', manifest['unit']]
+
+
+@pytest.mark.parametrize('interval,checkpoints', [(0, True), (True, True), (1441, True), (10, False)])
+def test_invalid_inspection_interval_fails_before_plan_or_resource_reads(tmp_path, monkeypatch, interval, checkpoints):
+    monkeypatch.setattr(experiment, 'require_mini_branch', lambda: pytest.fail('No branch or resource read required'))
+    with pytest.raises(ValueError, match='Inspection interval'):
+        experiment.prepare(tmp_path / 'plan', '059', tmp_path / 'proof',
+                           taskviews_profile=PROFILE, checkpoints=checkpoints, inspection_minutes=interval)
+    assert not (tmp_path / 'plan').exists()
 
 
 def manager(tmp_path, arm='taskviews'):
