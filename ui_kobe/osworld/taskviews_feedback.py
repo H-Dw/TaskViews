@@ -159,6 +159,9 @@ from the current visible evidence. A hypothesis is not a verified fact or an
 instruction to bypass missing evidence. An explicitly requested future point or
 formula is NOT a visible hypothesis. Keep such original task requirements in
 goal_targets:[{quote:literal substring of original_task,status:'requested'}].
+These optional quotes must preserve original punctuation, including backticks;
+do not paraphrase or remove formatting. Omit goal_targets for an immediate GUI
+recovery unless an exact original-task requirement needs separate attribution.
 Use math_hypotheses=[] for a GUI input/save plan with no mathematical inference.
 Do not claim a requested goal is already visible or mathematically verified.
 When state_review is supplied, its shared field names describe comparable state
@@ -322,11 +325,40 @@ def validate_planner_report(report, *, visible_texts, original_task, string_list
     targets = report.get('goal_targets', [])
     if not isinstance(targets, list) or len(targets) > 4:
         raise ValueError('Bound explicit requested goal targets')
-    for target in targets:
+    invalid_targets = []
+    for index, target in enumerate(targets):
         if (not isinstance(target, dict) or set(target) != {'quote', 'status'}
                 or target['status'] != 'requested' or not isinstance(target['quote'], str)
                 or not 1 <= len(target['quote']) <= 256 or target['quote'] not in original_task):
-            raise ValueError('Requested future state requires an exact original_task quote, never a visible success claim')
+            reasons = []
+            if not isinstance(target, dict):
+                reasons.append('target_must_be_object')
+            else:
+                if set(target) != {'quote', 'status'}:
+                    reasons.append('fields_must_be_exactly_quote_status')
+                if target.get('status') != 'requested':
+                    reasons.append('status_must_be_requested')
+                quote = target.get('quote')
+                if not isinstance(quote, str):
+                    reasons.append('quote_must_be_string')
+                elif not 1 <= len(quote) <= 256:
+                    reasons.append('quote_length_must_be_1_to_256')
+                elif quote not in original_task:
+                    reasons.append('quote_not_exact_original_task_substring')
+            encoded = dumps(target).encode()
+            invalid_targets.append({'candidate_index': index, 'reasons': reasons,
+                'provided_target': plain(target) if len(encoded) <= 800 else None,
+                'whole_target_omitted': len(encoded) > 800,
+                'original_target_bytes': len(encoded),
+                'original_target_sha256': hashlib.sha256(encoded).hexdigest()})
+    if invalid_targets:
+        payload = {'invalid_goal_targets': invalid_targets,
+            'repair': 'Regenerate the complete report. goal_targets is optional: omit it when not needed '
+                      'for this immediate GUI operation. Otherwise copy a contiguous literal substring '
+                      'from original_task, including punctuation/backticks, with exactly quote and '
+                      'status=requested. Do not paraphrase or claim requested results are observed.'}
+        raise ValueError('Requested future state requires an exact original_task quote, '
+                         'never a visible success claim: ' + dumps(payload))
     hypotheses = report.get('math_hypotheses', [])
     if not isinstance(hypotheses, list) or len(hypotheses) > 4:
         raise ValueError('Bound mathematical hypotheses')

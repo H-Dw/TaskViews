@@ -405,6 +405,61 @@ def test_planner_separates_explicit_goal_targets_from_visible_math_hypotheses():
         validate_planner_report(good, **args)
 
 
+def test_planner_goal_feedback_identifies_only_invalid_original_quote_without_rewriting():
+    from ui_kobe.osworld.taskviews_feedback import validate_planner_report
+    task = 'Open `sample.png` on the desktop. Import at default scale.'
+    args = {'visible_texts': ['Open', 'File name:'], 'original_task': task,
+            'string_list': lambda value: isinstance(value, list)}
+    bad = {'advice': 'Observe the file field focus.', 'needed_evidence': ['Open'],
+           'goal_targets': [{'quote': 'Import at default scale', 'status': 'requested'},
+                            {'quote': 'sample.png on the desktop', 'status': 'requested'}]}
+    original = deepcopy(bad)
+    with pytest.raises(ValueError) as error:
+        validate_planner_report(bad, **args)
+    feedback = json.loads(str(error.value).split('claim: ', 1)[1])
+    rejected = feedback['invalid_goal_targets']
+    assert len(rejected) == 1 and rejected[0]['candidate_index'] == 1
+    assert rejected[0]['reasons'] == ['quote_not_exact_original_task_substring']
+    assert rejected[0]['provided_target'] == bad['goal_targets'][1]
+    assert 'optional' in feedback['repair'] and 'backticks' in feedback['repair']
+    assert bad == original
+    for candidate in ({k: v for k, v in bad.items() if k != 'goal_targets'},
+                      {**bad, 'goal_targets': [{'quote': '`sample.png` on the desktop',
+                                               'status': 'requested'}]}):
+        validate_planner_report(candidate, **args)
+
+
+@pytest.mark.parametrize('target,reason', [
+    ({'quote': 'Save', 'status': 'observed'}, 'status_must_be_requested'),
+    ({'quote': 'Save', 'status': 'requested', 'source': 'image'}, 'fields_must_be_exactly_quote_status'),
+    ({'status': 'requested'}, 'quote_must_be_string'),
+    (['Save'], 'target_must_be_object')])
+def test_planner_goal_feedback_preserves_strict_schema_and_exact_sources(target, reason):
+    from ui_kobe.osworld.taskviews_feedback import validate_planner_report
+    report = {'advice': 'Check dialog.', 'needed_evidence': [], 'goal_targets': [target]}
+    with pytest.raises(ValueError) as error:
+        validate_planner_report(report, visible_texts=['Save'], original_task='Save the document.',
+                                string_list=lambda value: isinstance(value, list))
+    payload = json.loads(str(error.value).split('claim: ', 1)[1])
+    assert reason in payload['invalid_goal_targets'][0]['reasons']
+    assert payload['invalid_goal_targets'][0]['provided_target'] == target
+
+
+def test_planner_goal_error_wholly_omits_large_malformed_target_with_full_digest():
+    from ui_kobe.osworld.taskviews_feedback import validate_planner_report
+    target = {'quote': 'Save', 'status': 'requested', 'extra': '秘密' * 350}
+    encoded = dumps(target).encode()
+    with pytest.raises(ValueError) as error:
+        validate_planner_report({'advice': '', 'needed_evidence': [], 'goal_targets': [target]},
+                                visible_texts=[], original_task='Save',
+                                string_list=lambda value: isinstance(value, list))
+    row = json.loads(str(error.value).split('claim: ', 1)[1])['invalid_goal_targets'][0]
+    assert row['provided_target'] is None and row['whole_target_omitted'] is True
+    assert row['original_target_bytes'] == len(encoded)
+    assert row['original_target_sha256'] == hashlib.sha256(encoded).hexdigest()
+    assert len(str(error.value).encode()) < 6000 and '秘密' not in str(error.value)
+
+
 def test_repeated_unconfirmed_strategy_detects_interleaved_input_submit_cycle():
     from types import SimpleNamespace
     module = ExecutionModules.__new__(ExecutionModules)
