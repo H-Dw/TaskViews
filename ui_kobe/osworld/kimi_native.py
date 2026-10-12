@@ -245,7 +245,8 @@ class KimiNativeAgent:
                 telemetry.emit("semantic_regeneration", role=role, generation_attempt=candidate,
                     parent_request_id=parent, reason=exc.code, action_executed=False,
                     step_tokens=ledger.snapshot())
-                request = repair_messages(request, observed, exc, role=role)
+                request = repair_messages(request, observed, exc, role=role,
+                    compact_executor_feedback=bool(getattr(self, 'feedback_v10', False)))
 
     def close(self):
         telemetry.record_transition(self, 'close')

@@ -19,6 +19,69 @@ from test_native_task_experiment import Transport, response, launch_sandbox as l
 ARMS = (KimiNativeAgent, KimiTransitionNativeAgent, KimiTaskViewsNativeAgent)
 
 
+def test_taskviews_repair_preserves_full_rejected_candidate_and_tool_feedback_once():
+    original = {'messages': [{'role': 'user', 'content': [{'type': 'text', 'text': 'literal goal'}]}]}
+    observed = response({'content': 'Original model intent', 'tool_calls': [
+        {'id': 'real-call-a', 'type': 'function', 'function': {'name': 'computer_use', 'arguments': '{}'}},
+        {'id': 'real-call-b', 'type': 'function', 'function': {'name': 'computer_use', 'arguments': '{"action":"key"}'}}
+    ]}, 'tool_calls').model_dump()
+    error = 'Original validation evidence ' * 60
+    before = deepcopy([original, observed])
+    compact = repair_messages(original, observed, error, role='executor', compact_executor_feedback=True)
+    legacy = repair_messages(original, observed, error, role='executor')
+    assert [original, observed] == before
+    assert compact['messages'][:-1] == legacy['messages'][:-1]
+    assert compact['messages'][1] == observed['choices'][0]['message']
+    for message, identity in zip(compact['messages'][2:4], ('real-call-a', 'real-call-b')):
+        assert message['tool_call_id'] == identity and json.loads(message['content']) == {'error': error}
+    assert error in legacy['messages'][-1]['content'][0]['text']
+    assert error not in compact['messages'][-1]['content'][0]['text']
+
+
+def test_taskviews_compact_repair_retains_current_packet_within_same_input_limit():
+    from ui_kobe.osworld.native_history import context_size
+    contract = CUAContract(context_max_text_chars=32000, taskviews_context_bytes=8000)
+    original = {'messages': [{'role': 'user', 'content': [{'type': 'text', 'text': 'G' * 22900}]}]}
+    observed = response({'content': 'literal rejected intent', 'tool_calls': [
+        {'id': 'real-call', 'type': 'function', 'function': {'name': 'computer_use', 'arguments': '{}'}}
+    ]}, 'tool_calls').model_dump()
+    error = 'E' * 700
+    legacy = repair_messages(original, observed, error, role='executor')
+    compact = repair_messages(original, observed, error, role='executor', compact_executor_feedback=True)
+    packet = 'P' * 7950
+    assert supplement(legacy['messages'], packet, label='TaskViews', contract=contract) is legacy['messages']
+    prepared = supplement(compact['messages'], packet, label='TaskViews', contract=contract)
+    assert prepared is not compact['messages'] and context_size(prepared)[1] <= 32000
+    assert prepared[-1]['content'][-1]['text'] == 'TaskViews\n' + packet
+    assert prepared[:-1] == compact['messages'][:-1]
+
+
+@pytest.mark.parametrize('role', ['executor', 'perception'])
+def test_compact_repair_without_complete_tool_replies_keeps_the_only_error(role):
+    original = {'messages': [{'role': 'user', 'content': [{'type': 'text', 'text': 'literal goal'}]}]}
+    result = repair_messages(original, None, 'Original error must remain', role=role,
+                             compact_executor_feedback=True)
+    assert 'Original error must remain' in result['messages'][-1]['content'][0]['text']
+
+
+@pytest.mark.parametrize('checkpoint', [False, True])
+def test_unadmitted_feedback_pauses_checkpoint_taskviews_before_supplier(checkpoint):
+    from ui_kobe.osworld.checkpoints import ReadAnomaly
+    owner = SimpleNamespace(cached_context='P' * 200, context_label='TaskViews',
+                            contract=CUAContract(taskviews_context_bytes=100), feedback_v10=True,
+                            checkpoint_reads=checkpoint, context_delivered=lambda: None)
+    wire = Transport()
+    client = ContextClient(owner, wire)
+    messages = [{'role': 'user', 'content': [{'type': 'text', 'text': 'literal goal'}]}]
+    if checkpoint:
+        with pytest.raises(ReadAnomaly, match='before actor dispatch'):
+            client.create(messages=messages)
+        assert not wire.requests
+    else:
+        client.create(messages=messages)
+        assert wire.requests[0]['messages'] == messages
+
+
 def install_environment(monkeypatch, path, cls):
     """Exercise the actual passive wrappers and their raw controller returns."""
     class Controller:

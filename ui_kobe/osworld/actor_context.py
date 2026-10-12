@@ -65,13 +65,14 @@ def _declared_native_actions(request):
     return list(values)
 
 
-def repair_messages(request, observed, error, *, role):
+def repair_messages(request, observed, error, *, role, compact_executor_feedback=False):
     """Keep a complete rejected native candidate and resolve its tool IDs.
 
 Truncated or structurally malformed calls remain raw evidence, never valid
 assistant/tool history. No rejected call is submitted to env.step.
 """
     result = deepcopy(request)
+    complete_tool_feedback = False
     if role == 'executor' and observed:
         choice = observed.get('choices', [{}])[0]
         message = choice.get('message', {})
@@ -88,6 +89,7 @@ assistant/tool history. No rejected call is submitted to env.step.
             result['messages'].append(deepcopy(message))
             result['messages'].extend({'role': 'tool', 'tool_call_id': identifier,
                 'content': json.dumps({'error': str(error)}, ensure_ascii=False)} for identifier in ids)
+            complete_tool_feedback = True
     elif observed:
         choice = observed.get('choices', [{}])[0]
         message = choice.get('message', {})
@@ -101,6 +103,11 @@ assistant/tool history. No rejected call is submitted to env.step.
     target = 'native tool call with all required parameters' if role == 'executor' else 'JSON object'
     feedback = (f'Your previous computer_use response could not execute: {error}.' if role == 'executor'
                 else f'Your previous {role} JSON was rejected: {error}.')
+    if compact_executor_feedback and complete_tool_feedback:
+        # The original full error is already bound to every original tool ID.
+        # Repeating it here can evict the current TaskViews evidence on repair.
+        feedback = ('Your previous computer_use response was rejected. '
+                    'The original tool replies above contain the complete validation error.')
     result['messages'].append({'role': 'user', 'content': [{'type': 'text', 'text':
         f'{feedback} Return a corrected complete {target}.'}]})
     if role == 'executor' and str(getattr(error, 'code', '')).startswith('unsupported_tool_action:'):
@@ -168,6 +175,11 @@ class ContextClient:
         except TypeError:
             telemetry.emit('optional_context_omitted', reason='invalid_provider_type', provider=owner.context_label)
             prepared['messages'] = request['messages']
+        if (owner.cached_context and prepared['messages'] is request['messages']
+                and getattr(owner, 'feedback_v10', False) and getattr(owner, 'checkpoint_reads', False)):
+            from .checkpoints import ReadAnomaly
+            raise ReadAnomaly('Current TaskViews evidence cannot fit this native request; '
+                              'preserve checkpoint before actor dispatch')
         response = self.transport.create(**prepared)
         if owner.cached_context and prepared['messages'] is not request['messages']:
             owner.context_delivered()
