@@ -1857,6 +1857,53 @@ def test_execution_admission_does_not_convert_unrelated_module_errors_to_label_o
                                   8000, strategy_review=False)
 
 
+def test_reference_floor_uses_compact_own_policy_before_dropping_actual_evidence():
+    import hashlib
+    from kobe_views.execution_modules import ExecutionPacketBudgetError
+    from ui_kobe.osworld.taskviews_feedback import _admit_execution_feedback, LOCAL_EXECUTION, LOCAL_EXECUTION_COMPACT
+    module, base = duplicated_local_reference_module(), local_feedback_base()
+    module.unresolved[0].update(transition_id='different', raw_ref=module.unresolved[0]['raw_ref']+'-other',
+                                controller_receipt_ref=module.unresolved[0]['raw_ref']+'-other')
+    base['execution_boundary'] = LOCAL_EXECUTION
+    base['stalled_pointer_actions'] = [{'parameters': {'action': 'left_click', 'coordinate': [20, 30]},
+                                       'transition_ids': ['edge', 'different'], 'assessment': 'unknown'}]
+    original = deepcopy([base, module.recent, module.unresolved])
+    with pytest.raises(ExecutionPacketBudgetError) as raised:
+        module.packet(max_bytes=1, include_modules=False, share_duplicate_refs=True, share_exact_refs=True)
+    fixed = {**base, 'current_visible_evidence': None,
+             'role_evidence': {'execution_modules': raised.value.projection, 'strategy_review': True},
+             'context_gaps': []}
+    limit = len(dumps(fixed).encode()) - 300
+    packet = _admit_execution_feedback(base, [], module, limit, strategy_review=True)
+    assert len(dumps(packet).encode()) <= limit
+    assert packet['execution_boundary'] == LOCAL_EXECUTION_COMPACT
+    assert packet['execution_boundary_original_sha256'] == hashlib.sha256(LOCAL_EXECUTION.encode()).hexdigest()
+    for key in ('last_action_feedback', 'active_subgoal', 'next_strategy', 'stalled_pointer_actions'):
+        assert packet[key] == base[key]
+    projected = packet['role_evidence']['execution_modules']
+    decoded = resolve_projection_value(projected, projected)
+    for key, records in zip(('recent_transitions', 'unresolved_failures'), original[1:], strict=True):
+        for field in ('transition_id', 'raw_ref', 'controller_receipt_ref', 'before_image', 'after_image', 'effect_status'):
+            assert decoded[key][0][field] == records[0][field]
+    assert [base, module.recent, module.unresolved] == original
+
+
+def test_execution_boundary_wide_packet_keeps_original_policy_and_no_variant():
+    from ui_kobe.osworld.taskviews_feedback import _admit_execution_feedback, LOCAL_EXECUTION
+    module, base = duplicated_local_reference_module(), local_feedback_base()
+    base['execution_boundary'] = LOCAL_EXECUTION
+    packet = _admit_execution_feedback(base, [], module, 20000, strategy_review=False)
+    assert packet['execution_boundary'] == LOCAL_EXECUTION and 'execution_boundary_variant' not in packet
+
+
+def test_execution_admission_never_compacts_arbitrary_instruction_or_warning():
+    from ui_kobe.osworld.taskviews_feedback import _admit_execution_feedback
+    module, base = duplicated_local_reference_module(), local_feedback_base()
+    base['execution_boundary'] = 'Original unrecognized instruction' * 300
+    with pytest.raises(ValueError, match='latest action and unresolved failure'):
+        _admit_execution_feedback(base, [], module, 4000, strategy_review=False)
+
+
 def test_exact_value_refs_keep_distinct_latest_and_failure_edges_under_budget():
     module = duplicated_local_reference_module()
     failure = module.unresolved[0]

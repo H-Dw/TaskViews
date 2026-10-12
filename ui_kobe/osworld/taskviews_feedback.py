@@ -214,6 +214,22 @@ prior_action_evidence is earlier application feedback, not the current screensho
 Dismissal or an empty current dialog does not validate the earlier rejected input;
 reassess that evidence before repeating a submission. It does not choose an action."""
 
+LOCAL_EXECUTION_COMPACT = """Locate controls only in the current original image.
+Use the task/image/recent operations and effects; re-ground native parameters.
+Classifications, observer text and old parameters are fallible, not locators or
+plans. Keep long classification/graph reasoning outside this loop. Distinguish
+app controls from the launcher. Tooltip/window returns do not prove focus,
+menus or earlier destination effects. Observe uncertain focus/state before
+dependent operations. Only the native actor acts/ends. Preserve every original
+requirement including first preparation; never claim unseen success or let
+failed preparation indefinitely delay accessible deliverables.
+Intent prose <=1200 UTF-8 bytes; longer stays in history, wholly omitted from
+verification, so intent is unknown. Original tool arguments stay unchanged.
+In execution_modules, {value_ref:'#/...'} resolves an identical value within
+that object; operation IDs stay distinct. prior_action_evidence is historical,
+not current image/math, verified facts or an action choice. Dismissing a dialog
+does not validate rejected input; reassess before repeating."""
+
 
 def feedback_analysis_triggers(modules, raw, feedback, pointer_recovery):
     """A single unobserved action stays in the local actor/effect loop.
@@ -365,6 +381,15 @@ def _admit_execution_feedback(protected, optional, modules, limit, *, strategy_r
         visible.update(elements=[], omitted_elements=original['omitted_elements'] + len(original['elements']),
                        summary_omitted=True)
         if len(dumps(visible).encode()) > visible_budget:
+            if protected.get('execution_boundary') == LOCAL_EXECUTION:
+                # Compact our fixed policy, never user/model evidence. Retain
+                # complete warnings/advice and the real reference floor before
+                # asking the actor to consume a redundant verbose instruction.
+                return _admit_execution_feedback({**protected,
+                    'execution_boundary': LOCAL_EXECUTION_COMPACT,
+                    'execution_boundary_variant': 'compact_same_policy',
+                    'execution_boundary_original_sha256': hashlib.sha256(LOCAL_EXECUTION.encode()).hexdigest()},
+                    optional, modules, limit, strategy_review=strategy_review)
             raise
         for label in original['elements']:
             candidate = {**visible, 'elements': [*visible['elements'], plain(label)],
