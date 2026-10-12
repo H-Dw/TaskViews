@@ -676,7 +676,10 @@ class ExecutionModules:
         return digest(parameters) if parameters is not None else record.get('action_fingerprint')
 
     def stalled_pointer_actions(self):
-        return self._with_returned_page_failures({'left_click', 'right_click', 'double_click'})
+        actions = {'left_click', 'right_click', 'double_click'}
+        if getattr(self, 'returned_page_pointer_review_v12', False):
+            actions.add('triple_click')
+        return self._with_returned_page_failures(actions)
 
     def stalled_keyboard_actions(self):
         return self._with_returned_page_failures({'key'})
@@ -851,6 +854,9 @@ class ExecutionModules:
             return None
         reviewed = getattr(self, 'uncertainty_reviews', {}).get(self.active)
         identities, fields = [], None
+        interactions = {'left_click', 'right_click', 'double_click', 'key', 'type', 'scroll', 'drag'}
+        if getattr(self, 'returned_page_pointer_review_v12', False):
+            interactions.add('triple_click')
         for record in reversed(self.recent[-8:]):
             if record.get('module_id') != self.active or record['transition_id'] == reviewed:
                 break
@@ -859,7 +865,7 @@ class ExecutionModules:
                 break
             if parameters.get('action') in {'wait', 'screenshot'}:
                 continue
-            if parameters.get('action') not in {'left_click', 'right_click', 'double_click', 'key', 'type', 'scroll', 'drag'}:
+            if parameters.get('action') not in interactions:
                 break
             effect = self.effects.get(record['transition_id'], {})
             comparison = effect.get('state_comparison', {})

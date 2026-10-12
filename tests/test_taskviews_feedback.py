@@ -844,6 +844,66 @@ def varying_state_history():
     return module
 
 
+@pytest.mark.parametrize('assessment', ['unknown', 'not_observed'])
+def test_native_triple_click_has_exact_existing_pointer_guard_when_opted_in(assessment):
+    from ui_kobe.osworld.pointer_grounding import validate_pointer_strategy
+    from ui_kobe.api.kimi_stream import StreamProtocolError
+    parameters = {'action': 'triple_click', 'coordinate': [20, 30]}
+    module = pointer_history([parameters] * 3, [assessment] * 3)
+    original = deepcopy([module.recent, module.effects])
+    assert module.stalled_pointer_actions() == []
+    module.returned_page_pointer_review_v12 = True
+    stalled = module.stalled_pointer_actions()
+    assert stalled[0]['parameters'] == parameters
+    assert stalled[0]['transition_ids'] == ['edge-2', 'edge-1', 'edge-0']
+    assert stalled[0]['assessments'] == [assessment] * 3
+    with pytest.raises(StreamProtocolError) as caught:
+        validate_pointer_strategy([parameters], stalled, frame_id='current', keyboard_recovery=True)
+    assert caught.value.code == 'repeated_unconfirmed_pointer'
+    assert [module.recent, module.effects] == original
+
+
+@pytest.mark.parametrize('boundary', ['observed', 'changed', 'uncomparable'])
+def test_native_triple_guard_keeps_existing_effect_boundaries(boundary):
+    parameters = {'action': 'triple_click', 'coordinate': [20, 30]}
+    module = pointer_history([parameters] * 3)
+    module.returned_page_pointer_review_v12 = True
+    if boundary == 'observed':
+        module.effects['edge-2']['assessment'] = 'observed'
+    elif boundary == 'changed':
+        module.effects['edge-2']['state_comparison']['changed_field_keys'] = ['input']
+    else:
+        for report in module.effects.values():
+            report['state_comparison']['shared_field_keys'] = []
+    assert module.stalled_pointer_actions() == []
+
+
+def test_native_triple_groups_do_not_alias_other_click_counts_or_positions():
+    from ui_kobe.osworld.pointer_grounding import validate_pointer_strategy
+    first = {'action': 'triple_click', 'coordinate': [20, 30]}
+    second = {'action': 'triple_click', 'coordinate': [50, 60]}
+    module = pointer_history([first, first, second])
+    module.returned_page_pointer_review_v12 = True
+    stalled = module.stalled_pointer_actions()
+    assert len(stalled) == 1 and stalled[0]['parameters'] == first
+    for action in [second, {'action': 'left_click', 'coordinate': [20, 30]},
+                   {'action': 'double_click', 'coordinate': [20, 30]}, {'action': 'key', 'keys': ['tab']}]:
+        validate_pointer_strategy([action], stalled, frame_id='current', keyboard_recovery=True)
+
+
+def test_native_triple_is_a_real_interaction_in_existing_continuous_review():
+    module = varying_state_history()
+    module.recent = module.recent[:3]
+    prior = module.event
+    module.event = lambda identity: {'tool': {'arguments': {'action': 'triple_click', 'coordinate': [20, 30]}}}
+    assert module.unconfirmed_state_review() is None
+    module.returned_page_pointer_review_v12 = True
+    review = module.unconfirmed_state_review()
+    assert review['transition_ids'] == ['edge-2', 'edge-1', 'edge-0']
+    assert review['unconfirmed_operation_count'] == 3 and 'reason' not in review
+    module.event = prior
+
+
 def test_varying_parameters_request_state_review_without_merging_exact_pointer_guard():
     from ui_kobe.osworld.taskviews_feedback import feedback_analysis_triggers
     module = varying_state_history()
