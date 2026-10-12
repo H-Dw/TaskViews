@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import closing
+from copy import deepcopy
 import json
 from pathlib import Path
 import subprocess
@@ -74,13 +75,37 @@ def inspect_stage(stage):
     return result
 
 
-def resume(stage, validation, reason, checkpoint=None, provider_ready=False, controls_view=False):
+def configure_qwen_transport_retry(plan, manifest, attempts):
+    """Explicit transport-only migration; never rewrite completed GUI commands."""
+    from ui_kobe.api.qwen_native import QwenTransportBudget, transport_policy
+    if manifest.get('agent_interface') != 'qwen-native' or plan.get('agent_interface') != 'qwen-native':
+        raise ValueError('Qwen retry migration requires the Qwen native provider')
+    budget = QwenTransportBudget(attempts=attempts)
+    args = list(manifest['official_arguments'])
+    if args.count('--max_api_retries') != 1:
+        raise RuntimeError('Original retry argument is missing or duplicated')
+    args[args.index('--max_api_retries') + 1] = str(attempts)
+    for flag, value in (('--retry_sleep_base', '3'), ('--retry_sleep_cap', '60' if attempts > 2 else '15')):
+        if args.count(flag) > 1:
+            raise RuntimeError('Original backoff argument is duplicated')
+        if flag in args:
+            args[args.index(flag) + 1] = value
+        else:
+            args.extend([flag, value])
+    plan['stream_budget'] = budget.__dict__
+    plan['qwen_transport_policy'] = manifest['qwen_transport_policy'] = transport_policy(budget)
+    manifest['official_arguments'] = args
+
+
+def resume(stage, validation, reason, checkpoint=None, provider_ready=False, controls_view=False,
+           qwen_transport_attempts=None):
     import docker
     from scripts.native_resource_accounting import sample, reserve_ok
     from scripts.osworld_task035_background import cgroup
     from ui_kobe.osworld.checkpoints import Checkpoints, QMP, require_running_checkpoint_container
     from ui_kobe.osworld.taskviews_profiles import MINI_PROFILE, FULL_PROFILE, checkpoint_profile
     manifest = load(stage/'manifest.json')
+    previous_manifest = deepcopy(manifest)
     if manifest.get('taskviews_profile', FULL_PROFILE) == MINI_PROFILE:
         from scripts.osworld_native_experiment import require_mini_branch
         require_mini_branch()
@@ -131,6 +156,8 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False, con
     revision.mkdir(parents=True)
     plan = {**old_plan, 'repair': {'reason':reason, 'parent_plan':str(old),
                                  'checkpoint':saved['tag'], 'time':time.time()}}
+    if qwen_transport_attempts is not None:
+        configure_qwen_transport_retry(plan, manifest, qwen_transport_attempts)
     if repair_commit:
         plan['source_commit'] = repair_commit
     if controls_view:
@@ -142,7 +169,7 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False, con
     write(revision/'osworld-source-planned.json', source_snapshot(REPO))
     write(revision/'preparation.json', {'plan_sha256':digest(revision/'plan.json')})
     write(revision/'validation.json', checked)
-    write(revision/'previous-manifest.json', manifest)
+    write(revision/'previous-manifest.json', previous_manifest)
     continuation_output(manifest, revision.name)
     manifest['plan_root'] = str(revision)
     if repair_commit:
@@ -211,12 +238,15 @@ def main():
     p.add_argument('--checkpoint', help='Exact retained checkpoint tag; default is last safe boundary')
     p.add_argument('--provider-ready', action='store_true', help='Only after the user confirms provider billing/quota recovery')
     p.add_argument('--controls-view', action='store_true', help='Explicitly enable the checkpoint-compatible Mini controls view')
+    p.add_argument('--qwen-transport-attempts', type=int, choices=range(1, 7),
+                   help='Explicitly migrate Qwen transport retries within the unchanged output/time budgets')
     args=p.parse_args()
     require_scope(128*1024**2)
     if args.action == 'resume':
         if not args.validation or not args.reason:
             p.error('Resume requires validation and a specific repair/cooldown reason')
-        result=resume(args.stage,args.validation,args.reason,args.checkpoint,args.provider_ready,args.controls_view)
+        result=resume(args.stage,args.validation,args.reason,args.checkpoint,args.provider_ready,args.controls_view,
+                      args.qwen_transport_attempts)
     elif args.action == 'pause':
         if not args.reason:
             p.error('Pause requires a specific anomaly reason')

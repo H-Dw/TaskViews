@@ -17,11 +17,30 @@ import uuid
 import httpx
 
 from .kimi_stream import (Completion, OutputTokenLimitError, ProviderQuotaBlocked,
-                          RateLimitDeferred, StreamProtocolError, retry_after_seconds, safe_error_body)
+                          RateLimitDeferred, StreamBudget, StreamProtocolError, retry_after_seconds, safe_error_body)
 
 BASE_URL = 'https://pjfdspqowq.a.pinggy.link'
 MODEL = 'qwen3.8-max'
 PROTOCOL = 'qwen3.8-max-native-tools-official-cua-checkpoints-v9'
+
+
+@dataclass(frozen=True)
+class QwenTransportBudget(StreamBudget):
+    """More network attempts within the existing time/output admission bounds."""
+    attempts: int = 6
+
+    def __post_init__(self):
+        if type(self.attempts) is not int or not 1 <= self.attempts <= 6:
+            raise ValueError('Qwen supports at most six transport attempts')
+        StreamBudget(**{**self.__dict__, 'attempts': min(2, self.attempts)})
+
+
+def transport_policy(budget=None):
+    budget = budget or QwenTransportBudget()
+    return {'version': 'qwen-bounded-retry-v1', 'budget': budget.__dict__,
+            'backoff': 'exponential 3s, capped at 60s; 429 respects Retry-After >=60s',
+            'idle_connection_reuse': False, 'unknown_usage': 'NULL; reservation remains charged',
+            'output_admission': 'first original cap; retry shares remaining role output across remaining attempts'}
 
 
 @dataclass(frozen=True)
@@ -66,7 +85,8 @@ class QwenNativeClient:
         self.budget, self.profile, self.emit = budget, profile, emit
         self.response_dir = Path(response_dir)
         self.response_dir.mkdir(parents=True, exist_ok=True)
-        self.client = client or httpx.Client(headers={'Authorization': 'Bearer ' + self.key}, follow_redirects=False)
+        self.client = client or httpx.Client(headers={'Authorization': 'Bearer ' + self.key}, follow_redirects=False,
+                                             limits=httpx.Limits(max_keepalive_connections=0))
         self.sleep = sleep
         self.last_timing, self.last_request_id = {}, None
 
@@ -75,14 +95,24 @@ class QwenNativeClient:
             raise ValueError('Qwen requires its exact model and Qwen generation fields')
         payload = deepcopy(payload)
         payload.update(temperature=0, top_p=0.9, enable_thinking=False, stream=False)
-        cap = payload['max_tokens']
-        if type(cap) is not int or not 0 < cap <= step_ledger.allowance(budget_role):
+        requested_cap = payload['max_tokens']
+        if type(requested_cap) is not int or not 0 < requested_cap <= step_ledger.allowance(budget_role):
             raise ValueError('Request exceeds its declared role output admission')
         overall = min(deadline, time.monotonic() + self.budget.total_s)
         for attempt in range(1, self.budget.attempts + 1):
             remaining = min(overall - time.monotonic(), self.budget.generation_s)
             if remaining <= self.budget.connect_s:
                 raise TimeoutError('Qwen role deadline has insufficient request time')
+            cap = requested_cap
+            if attempt > 1:
+                available = step_ledger.profile.step_output_tokens - step_ledger.charged_output
+                if budget_role != 'executor':
+                    available -= step_ledger.profile.executor_reserve_tokens
+                cap = min(requested_cap, step_ledger.allowance(budget_role),
+                          available // (self.budget.attempts - attempt + 1))
+            if cap <= 0:
+                raise ValueError('Insufficient output admission for remaining Qwen transport attempts')
+            payload['max_tokens'] = cap
             rid = self.last_request_id = 'qwens-' + uuid.uuid4().hex
             step_ledger.reserve(rid, budget_role, cap)
             self.emit('api_request', request_id=rid, endpoint=BASE_URL, attempt=attempt,
@@ -161,11 +191,11 @@ class QwenNativeClient:
                 # during its body. No candidate is returned or executed until
                 # the complete response passes validation. Keep this retry in
                 # the same attempt/time/output bounds and settle unknown usage.
-                transport_retry = isinstance(failure, (httpx.ConnectError, httpx.ReadTimeout,
+                transport_retry = isinstance(failure, (httpx.NetworkError, httpx.TimeoutException,
                                                         httpx.RemoteProtocolError))
                 if isinstance(failure, httpx.HTTPStatusError) and not isinstance(failure, ProviderQuotaBlocked):
                     transport_retry = status == 429 or status in [502, 503, 504]
-                delay = retry_delay if retry_delay is not None else min(15, 3 * attempt)
+                delay = retry_delay if retry_delay is not None else min(60, 3 * 2**(attempt - 1))
                 if not transport_retry or attempt >= self.budget.attempts or time.monotonic() + delay + self.budget.connect_s >= overall:
                     raise
             finally:

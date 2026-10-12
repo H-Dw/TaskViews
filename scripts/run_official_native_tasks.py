@@ -89,8 +89,20 @@ def main():
     profile = manifest['generation_profile']
     qwen = manifest['agent_interface'] == 'qwen-native'
     if qwen:
-        from ui_kobe.api.qwen_native import QwenGenerationProfile
+        from ui_kobe.api.qwen_native import QwenGenerationProfile, QwenTransportBudget, transport_policy
         expected_profile = QwenGenerationProfile().__dict__
+        if 'qwen_transport_policy' in plan:
+            retry = plan['qwen_transport_policy']
+            arguments = manifest['official_arguments']
+            if (manifest.get('qwen_transport_policy') != retry
+                    or arguments.count('--max_api_retries') != 1
+                    or retry != transport_policy(QwenTransportBudget(**plan['stream_budget']))
+                    or arguments[arguments.index('--max_api_retries') + 1] != str(retry['budget']['attempts'])):
+                raise RuntimeError('Manifest Qwen retry policy differs from frozen plan/arguments')
+            for flag, value in (('--retry_sleep_base', '3'),
+                                ('--retry_sleep_cap', '60' if retry['budget']['attempts'] > 2 else '15')):
+                if arguments.count(flag) != 1 or arguments[arguments.index(flag) + 1] != value:
+                    raise RuntimeError('Manifest Qwen backoff differs from frozen retry policy')
     else:
         from ui_kobe.api.kimi import generation_profile
         expected_profile = generation_profile(profile['name']).__dict__

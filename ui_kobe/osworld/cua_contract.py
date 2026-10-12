@@ -121,12 +121,18 @@ def options_contract(options, *, provider='kimi'):
                       "endless_min_chars", "endless_retry_limit")
     inactive = {name: values.pop(name) for name in inactive_names if name in values}
     api_key = values.pop("api_key", None)
-    budget = StreamBudget(attempts=values.pop("max_api_retries", 2),
+    if provider == 'qwen':
+        from ui_kobe.api.qwen_native import QwenTransportBudget
+        budget_class = QwenTransportBudget
+    else:
+        budget_class = StreamBudget
+    budget = budget_class(attempts=values.pop("max_api_retries", 6 if provider == 'qwen' else 2),
                           generation_s=values.pop("generation_timeout", 600),
                           total_s=values.pop("request_timeout", 900))
-    retry_base, retry_cap = values.pop("retry_sleep_base", 3.0), values.pop("retry_sleep_cap", 15.0)
-    if (retry_base, retry_cap) != (3.0, 15.0):
-        raise ValueError("Native transport currently supports retry_sleep_base=3 / cap=15")
+    expected_retry_cap = 60.0 if provider == 'qwen' and budget.attempts > 2 else 15.0
+    retry_base, retry_cap = values.pop("retry_sleep_base", 3.0), values.pop("retry_sleep_cap", expected_retry_cap)
+    if (retry_base, retry_cap) != (3.0, expected_retry_cap):
+        raise ValueError(f"Native transport supports retry_sleep_base=3 / cap={expected_retry_cap:g}")
     if values:
         raise ValueError("Unknown native options: " + ", ".join(sorted(values)))
     return CUAContract(**selected), budget, api_key, inactive

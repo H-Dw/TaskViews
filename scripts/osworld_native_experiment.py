@@ -139,6 +139,11 @@ def check_interface(plan):
                 or not plan.get('provider_compatibility', {}).get('compatible')
                 or not plan.get('checkpoint_policy', {}).get('enabled')):
             raise RuntimeError('Use a fresh Qwen Task059 TaskViews checkpoint plan with passing provider evidence')
+        if 'qwen_transport_policy' in plan:
+            from ui_kobe.api.qwen_native import QwenTransportBudget, transport_policy
+            budget = QwenTransportBudget(**plan['stream_budget'])
+            if plan['qwen_transport_policy'] != transport_policy(budget):
+                raise RuntimeError('Qwen retry policy differs from its frozen budget')
         return
     if (plan.get('implementation_version') != 7 or plan.get('arms') != list(ARMS)
             or plan.get('agent_interface') not in ('official-xml', 'k3-native')
@@ -288,6 +293,9 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         "taskviews_variant": "optional context provider consumes experimental passive execution graph and task modules; same selected actor interface"}
     plan["purpose"] = purpose
     if qwen:
+        from ui_kobe.api.qwen_native import QwenTransportBudget, transport_policy
+        plan['stream_budget'] = QwenTransportBudget().__dict__
+        plan['qwen_transport_policy'] = transport_policy()
         plan['provider_compatibility'] = proof
         plan['provider_compatibility_ref'] = {'path': str(compatibility.resolve()), 'sha256': digest(compatibility)}
         plan['provider_request'] = {'stream': False, 'enable_thinking': False, 'temperature': 0, 'top_p': 0.9,
@@ -383,7 +391,8 @@ def official_arguments(task, output, profile=None, contract=None, max_steps=500,
         "--no-terminal_status_judge", "--temperature", "0" if qwen else "1", "--top_p", "0.9" if qwen else "0.95",
         "--max_tokens", str((profile or {}).get("max_completion_tokens", 16000)), "--max_steps", str(max_steps), "--sleep_after_execution", "3", "--num_envs", "1",
         "--eval_version", "v2", "--domain", "tasks", "--specific_task_id", task,
-        "--client_password", "osworld-public-evaluation", "--max_api_retries", "2", "--request_timeout", "900",
+        "--client_password", "osworld-public-evaluation", "--max_api_retries", "6" if qwen else "2", "--request_timeout", "900",
+        *(["--retry_sleep_base", "3", "--retry_sleep_cap", "60"] if qwen else []),
         "--generation_timeout", "600", "--cache_dir", str(output.parent / "cache"), "--result_dir", str(output),
         "--save_model_eval_raw_info"]
 
@@ -446,6 +455,8 @@ def launch(root, arm):
     manifest['taskviews_feedback'] = plan.get('taskviews_feedback', False)
     manifest['source_commit'] = plan.get('source_commit')
     manifest['taskviews_profile'] = plan.get('taskviews_profile', 'full_checkpoint')
+    if 'qwen_transport_policy' in plan:
+        manifest['qwen_transport_policy'] = plan['qwen_transport_policy']
     if mini:
         manifest['mini_profile'] = plan['mini_profile']
         manifest['source_branch'] = plan['source_branch']
