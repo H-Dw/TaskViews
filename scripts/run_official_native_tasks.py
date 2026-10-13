@@ -89,8 +89,17 @@ def main():
     profile = manifest['generation_profile']
     qwen = manifest['agent_interface'] == 'qwen-native'
     if qwen:
-        from ui_kobe.api.qwen_native import QwenGenerationProfile, QwenTransportBudget, transport_policy
-        expected_profile = QwenGenerationProfile().__dict__
+        from ui_kobe.api.qwen_native import generation_profile, QwenTransportBudget, transport_policy
+        expected_profile = generation_profile(profile['name']).__dict__
+        if profile != plan['generation_profile']:
+            raise RuntimeError('Manifest Qwen generation profile differs from frozen plan')
+        thinking_flag = '--enable_thinking' if profile['reasoning_effort'] != 'disabled' else '--no-enable_thinking'
+        if (manifest['official_arguments'].count(thinking_flag) != 1
+                or ('--no-enable_thinking' if thinking_flag == '--enable_thinking' else '--enable_thinking')
+                in manifest['official_arguments']):
+            raise RuntimeError('Official thinking flag differs from frozen Qwen generation profile')
+        if manifest.get('qwen_reasoning_migration') != plan.get('qwen_reasoning_migration'):
+            raise RuntimeError('Manifest Qwen reasoning migration differs from frozen plan')
         if 'qwen_transport_policy' in plan:
             retry = plan['qwen_transport_policy']
             arguments = manifest['official_arguments']

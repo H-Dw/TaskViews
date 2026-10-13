@@ -129,13 +129,13 @@ def check_interface(plan):
     from ui_kobe.osworld.taskviews_profiles import MINI_PROFILE, validate_profile
     mini = validate_profile(plan) == MINI_PROFILE
     if plan.get('agent_interface') == 'qwen-native':
-        from ui_kobe.api.qwen_native import BASE_URL, MODEL, PROTOCOL, QwenGenerationProfile
+        from ui_kobe.api.qwen_native import BASE_URL, MODEL, PROTOCOL, generation_profile
         if (plan.get('implementation_version') != (10 if mini else 9)
                 or (not mini and plan.get('arms') != ['taskviews'])
                 or plan.get('protocols') != [PROTOCOL] or plan.get('task_id') != '059'
                 or plan.get('model') != MODEL or plan.get('base_url') != BASE_URL
                 or plan.get('api_key_env') != 'QWEN_API_KEY'
-                or plan.get('generation_profile') != QwenGenerationProfile().__dict__
+                or plan.get('generation_profile') != generation_profile(plan.get('generation_profile', {}).get('name')).__dict__
                 or not plan.get('provider_compatibility', {}).get('compatible')
                 or not plan.get('checkpoint_policy', {}).get('enabled')):
             raise RuntimeError('Use a fresh Qwen Task059 TaskViews checkpoint plan with passing provider evidence')
@@ -378,7 +378,8 @@ def official_arguments(task, output, profile=None, contract=None, max_steps=500,
     return ["--headless", "--provider_name", "docker", "--path_to_vm", str(ROOT / "images/osworld-v2-ubuntu-x86.qcow2"),
         "--screen_width", "1920", "--screen_height", "1080", "--observation_type", "screenshot",
         "--action_space", "pyautogui", "--model", MODEL if qwen else "kimi-k3", "--base_url", BASE_URL if qwen else "https://api.moonshot.ai/v1",
-        *(["--no-enable_thinking", "--no-stream"] if qwen else ["--enable_thinking", "--stream"]), "--batch_actions",
+        *(["--enable_thinking" if (profile or {}).get('reasoning_effort', 'disabled') != 'disabled'
+           else "--no-enable_thinking", "--no-stream"] if qwen else ["--enable_thinking", "--stream"]), "--batch_actions",
         "--coord", cua.coordinate_type,
         *([] if cua.model_screen_width is None else ["--model_screen_width", str(cua.model_screen_width),
                                                     "--model_screen_height", str(cua.model_screen_height)]),

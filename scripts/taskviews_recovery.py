@@ -97,8 +97,36 @@ def configure_qwen_transport_retry(plan, manifest, attempts):
     manifest['official_arguments'] = args
 
 
+def configure_qwen_reasoning(plan, manifest, saved, effort):
+    """Explicit human-authorized UI-KOBE-like migration, with no history replay."""
+    from ui_kobe.api.qwen_native import generation_profile, generation_request_fields, reasoning_migration_matches
+    from ui_kobe.osworld.taskviews_profiles import UI_KOBE_PROFILE, checkpoint_profile
+    if (plan.get('agent_interface') != 'qwen-native' or manifest.get('agent_interface') != 'qwen-native'
+            or checkpoint_profile(manifest) != UI_KOBE_PROFILE
+            or saved.get('checkpoint_actor_profile') != UI_KOBE_PROFILE
+            or plan['generation_profile'] != manifest['generation_profile']
+            or saved['generation_profile'] != manifest['generation_profile']):
+        raise ValueError('Reasoning migration needs the exact current Qwen UI-KOBE-like checkpoint profile')
+    profile = generation_profile(f'qwen-native-{effort}-16k').__dict__
+    migration = {'version': 'qwen-reasoning-migration-v1', 'checkpoint': saved['tag'],
+                 'before': saved['generation_profile'], 'after': profile}
+    if not reasoning_migration_matches(migration, tag=saved['tag'],
+                                      before=saved['generation_profile'], after=profile):
+        raise ValueError('Reasoning migration may only change reasoning within frozen generation bounds')
+    arguments = list(manifest['official_arguments'])
+    flags = ('--enable_thinking', '--no-enable_thinking')
+    if sum(arguments.count(flag) for flag in flags) != 1:
+        raise ValueError('Original thinking flag is missing or duplicated')
+    arguments[arguments.index(next(flag for flag in flags if flag in arguments))] = '--enable_thinking'
+    plan['generation_profile'] = manifest['generation_profile'] = profile
+    plan['qwen_reasoning_migration'] = manifest['qwen_reasoning_migration'] = migration
+    plan['provider_request'] = {**plan['provider_request'],
+                               **generation_request_fields(generation_profile(profile['name']))}
+    manifest['official_arguments'] = arguments
+
+
 def resume(stage, validation, reason, checkpoint=None, provider_ready=False, controls_view=False,
-           qwen_transport_attempts=None):
+           qwen_transport_attempts=None, qwen_reasoning_effort=None):
     import docker
     from scripts.native_resource_accounting import sample, reserve_ok
     from scripts.osworld_task035_background import cgroup
@@ -158,6 +186,8 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False, con
                                  'checkpoint':saved['tag'], 'time':time.time()}}
     if qwen_transport_attempts is not None:
         configure_qwen_transport_retry(plan, manifest, qwen_transport_attempts)
+    if qwen_reasoning_effort is not None:
+        configure_qwen_reasoning(plan, manifest, saved, qwen_reasoning_effort)
     if repair_commit:
         plan['source_commit'] = repair_commit
     if controls_view:
@@ -240,13 +270,15 @@ def main():
     p.add_argument('--controls-view', action='store_true', help='Explicitly enable the checkpoint-compatible Mini controls view')
     p.add_argument('--qwen-transport-attempts', type=int, choices=range(1, 7),
                    help='Explicitly migrate Qwen transport retries within the unchanged output/time budgets')
+    p.add_argument('--qwen-reasoning-effort', choices=('low', 'medium', 'xhigh'),
+                   help='Explicitly migrate the same UI-KOBE-like checkpoint to Qwen reasoning')
     args=p.parse_args()
     require_scope(128*1024**2)
     if args.action == 'resume':
         if not args.validation or not args.reason:
             p.error('Resume requires validation and a specific repair/cooldown reason')
         result=resume(args.stage,args.validation,args.reason,args.checkpoint,args.provider_ready,args.controls_view,
-                      args.qwen_transport_attempts)
+                      args.qwen_transport_attempts, args.qwen_reasoning_effort)
     elif args.action == 'pause':
         if not args.reason:
             p.error('Pause requires a specific anomaly reason')

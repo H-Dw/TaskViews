@@ -92,7 +92,7 @@ class CUAFrame:
                 "The declared unit never changes in response to a candidate. Old geometry must be re-grounded.")
 
 
-def options_contract(options, *, provider='kimi'):
+def options_contract(options, *, provider='kimi', generation_profile=None):
     """Honor official runner options; reject features that lack a native implementation."""
     values = dict(options)
     contract_fields = CUAContract.__dataclass_fields__
@@ -105,7 +105,9 @@ def options_contract(options, *, provider='kimi'):
                 "enable_thinking": True, "action_space": "pyautogui", "observation_type": "screenshot",
                 "top_p": 0.95, "top_k": None}
     if provider == 'qwen':
-        required.update(stream=False, enable_thinking=False, top_p=0.9)
+        from ui_kobe.api.qwen_native import QwenGenerationProfile, generation_request_fields
+        thinking = generation_request_fields(generation_profile or QwenGenerationProfile())['enable_thinking']
+        required.update(stream=False, enable_thinking=thinking, top_p=0.9)
     elif provider != 'kimi':
         raise ValueError('Unknown native provider')
     for name, expected in required.items():

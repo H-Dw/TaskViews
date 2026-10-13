@@ -54,6 +54,39 @@ class QwenGenerationProfile:
     semantic_regenerations: int = 2
 
 
+def generation_profile(name='qwen-native-16k'):
+    """Explicit reasoning selection; all existing output/repair bounds stay fixed."""
+    if name == 'qwen-native-16k':
+        return QwenGenerationProfile()
+    for effort in ('low', 'medium', 'xhigh'):
+        if name == f'qwen-native-{effort}-16k':
+            return QwenGenerationProfile(name=name, reasoning_effort=effort)
+    raise ValueError('Unknown frozen Qwen generation profile')
+
+
+def generation_request_fields(profile):
+    if profile.__dict__ != generation_profile(profile.name).__dict__:
+        raise ValueError('Qwen generation profile changed its frozen bounds')
+    fields = {'enable_thinking': profile.reasoning_effort != 'disabled'}
+    if fields['enable_thinking']:
+        fields.update(reasoning_effort=profile.reasoning_effort, preserve_thinking=True)
+    return fields
+
+
+def reasoning_migration_matches(migration, *, tag, before, after):
+    """Permit only the declared checkpoint's exact generation-only migration."""
+    if not isinstance(migration, dict) or migration != {
+            'version': 'qwen-reasoning-migration-v1', 'checkpoint': tag,
+            'before': before, 'after': after}:
+        return False
+    try:
+        return (before == generation_profile(before['name']).__dict__
+                and after == generation_profile(after['name']).__dict__
+                and before != after)
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
 class GatewayRequestError(RuntimeError):
     def __init__(self, code):
         self.code = code
@@ -91,10 +124,14 @@ class QwenNativeClient:
         self.last_timing, self.last_request_id = {}, None
 
     def create(self, *, deadline, step_ledger, budget_role, generation_attempt=1, parent_request_id=None, **payload):
-        if payload.get('model') != MODEL or any(k in payload for k in ['reasoning_effort', 'max_completion_tokens']):
+        if payload.get('model') != MODEL or 'max_completion_tokens' in payload:
             raise ValueError('Qwen requires its exact model and Qwen generation fields')
         payload = deepcopy(payload)
-        payload.update(temperature=0, top_p=0.9, enable_thinking=False, stream=False)
+        fields = generation_request_fields(self.profile)
+        for key in ('enable_thinking', 'reasoning_effort', 'preserve_thinking', 'thinking_budget'):
+            if key in payload and (key not in fields or payload[key] != fields[key]):
+                raise ValueError('Request differs from frozen Qwen reasoning fields: ' + key)
+        payload.update(temperature=0, top_p=0.9, stream=False, **fields)
         requested_cap = payload['max_tokens']
         if type(requested_cap) is not int or not 0 < requested_cap <= step_ledger.allowance(budget_role):
             raise ValueError('Request exceeds its declared role output admission')

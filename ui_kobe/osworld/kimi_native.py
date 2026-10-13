@@ -102,7 +102,8 @@ class KimiNativeAgent:
                 if name in options and options[name] != value:
                     raise ValueError("Official runner option differs from frozen CUA contract: " + name)
             options = {**expected, **options}
-        self.contract, self.budget, api_key, inactive = options_contract(options, provider=self.provider_name)
+        self.contract, self.budget, api_key, inactive = options_contract(
+            options, provider=self.provider_name, generation_profile=self.profile)
         self.tool_repair_retries = self.contract.tool_repair_retries
         trace = Path(os.environ["UI_KOBE_TELEMETRY_DIR"])
         self.transport = self.provider_transport(api_key, trace)

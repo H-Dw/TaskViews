@@ -1,5 +1,7 @@
 """Frozen Qwen provider on the shared native loop, independent of TaskViews."""
-from ui_kobe.api.qwen_native import BASE_URL, MODEL, PROTOCOL, QwenGenerationProfile, QwenNativeClient
+import os
+
+from ui_kobe.api.qwen_native import BASE_URL, MODEL, PROTOCOL, generation_profile, QwenNativeClient
 from . import telemetry
 from .kimi_native import KimiNativeAgent
 from .kimi_transition_native import KimiTransitionNativeAgent
@@ -12,7 +14,7 @@ class QwenNativeProvider:
     protocol = PROTOCOL
 
     def provider_profile(self, model, base_url, temperature, max_tokens):
-        profile = QwenGenerationProfile()
+        profile = generation_profile(os.environ.get('UI_KOBE_GENERATION_PROFILE', 'qwen-native-16k'))
         if (model != MODEL or base_url != BASE_URL or temperature != 0 or max_tokens != profile.max_completion_tokens):
             raise ValueError('Qwen requires its frozen model, endpoint and 16000-token native profile')
         return profile

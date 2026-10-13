@@ -402,7 +402,18 @@ class Checkpoints:
                 or expected != checkpoint_profile(self.manifest)
                 or (expected != FULL_PROFILE and ('profile_state' not in state or state.get('control')))):
             raise ReadAnomaly('Checkpoint profile cannot be switched between full, Mini and UI-KOBE-like')
-        if state['generation_profile'] != agent.profile.__dict__ or state['cua_contract'] != agent.contract.snapshot():
+        generation_matches = state['generation_profile'] == agent.profile.__dict__
+        if not generation_matches and self.manifest.get('agent_interface') == 'qwen-native':
+            from ui_kobe.api.qwen_native import reasoning_migration_matches
+            from .taskviews_profiles import UI_KOBE_PROFILE
+            generation_matches = expected == UI_KOBE_PROFILE and reasoning_migration_matches(
+                self.manifest.get('qwen_reasoning_migration'), tag=state['tag'],
+                before=state['generation_profile'], after=agent.profile.__dict__)
+            if generation_matches:
+                from . import telemetry
+                telemetry.emit('qwen_reasoning_checkpoint_migration',
+                               **self.manifest['qwen_reasoning_migration'])
+        if not generation_matches or state['cua_contract'] != agent.contract.snapshot():
             raise ValueError('Checkpoint actor contract changed')
         self.require_no_replay(state)
         for key in ACTOR_FIELDS:
