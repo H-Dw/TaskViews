@@ -144,6 +144,14 @@ def check_interface(plan):
             budget = QwenTransportBudget(**plan['stream_budget'])
             if plan['qwen_transport_policy'] != transport_policy(budget):
                 raise RuntimeError('Qwen retry policy differs from its frozen budget')
+        from ui_kobe.api.qwen_native import request_policy
+        wire = request_policy(generation_profile(plan['generation_profile']['name']))
+        if wire['stream']:
+            request = plan.get('provider_request', {})
+            if (plan.get('qwen_request_policy') != wire or request.get('stream') is not True
+                    or request.get('stream_options') != {'include_usage': True}
+                    or request.get('output_field') != 'max_completion_tokens'):
+                raise RuntimeError('Qwen SSE request policy differs from its frozen profile')
         return
     if (plan.get('implementation_version') != 7 or plan.get('arms') != list(ARMS)
             or plan.get('agent_interface') not in ('official-xml', 'k3-native')
@@ -373,13 +381,14 @@ def official_arguments(task, output, profile=None, contract=None, max_steps=500,
     cua = CUAContract(**contract) if contract else CUAContract()
     if provider not in ('kimi', 'qwen'):
         raise ValueError('Unknown official runner provider')
-    from ui_kobe.api.qwen_native import BASE_URL, MODEL
+    from ui_kobe.api.qwen_native import BASE_URL, MODEL, generation_profile, request_policy
     qwen = provider == 'qwen'
+    stream = qwen and request_policy(generation_profile((profile or {}).get('name', 'qwen-native-16k')))['stream']
     return ["--headless", "--provider_name", "docker", "--path_to_vm", str(ROOT / "images/osworld-v2-ubuntu-x86.qcow2"),
         "--screen_width", "1920", "--screen_height", "1080", "--observation_type", "screenshot",
         "--action_space", "pyautogui", "--model", MODEL if qwen else "kimi-k3", "--base_url", BASE_URL if qwen else "https://api.moonshot.ai/v1",
         *(["--enable_thinking" if (profile or {}).get('reasoning_effort', 'disabled') != 'disabled'
-           else "--no-enable_thinking", "--no-stream"] if qwen else ["--enable_thinking", "--stream"]), "--batch_actions",
+           else "--no-enable_thinking", "--stream" if stream else "--no-stream"] if qwen else ["--enable_thinking", "--stream"]), "--batch_actions",
         "--coord", cua.coordinate_type,
         *([] if cua.model_screen_width is None else ["--model_screen_width", str(cua.model_screen_width),
                                                     "--model_screen_height", str(cua.model_screen_height)]),

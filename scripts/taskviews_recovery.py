@@ -125,8 +125,37 @@ def configure_qwen_reasoning(plan, manifest, saved, effort):
     manifest['official_arguments'] = arguments
 
 
+def configure_qwen_streaming(plan, manifest, saved):
+    """Declare an exact safe-checkpoint switch to SSE and a total output cap."""
+    from ui_kobe.api.qwen_native import generation_profile, request_policy, streaming_migration_matches
+    from ui_kobe.osworld.taskviews_profiles import UI_KOBE_PROFILE, checkpoint_profile
+    if (plan.get('agent_interface') != 'qwen-native' or manifest.get('agent_interface') != 'qwen-native'
+            or checkpoint_profile(manifest) != UI_KOBE_PROFILE
+            or saved.get('checkpoint_actor_profile') != UI_KOBE_PROFILE
+            or plan['generation_profile'] != manifest['generation_profile']
+            or saved['generation_profile'] != manifest['generation_profile']):
+        raise ValueError('Streaming migration requires the exact current Qwen UI-KOBE-like checkpoint')
+    profile = generation_profile('qwen-sse-xhigh-total16k')
+    migration = {'version': 'qwen-streaming-migration-v1', 'checkpoint': saved['tag'],
+                 'before': saved['generation_profile'], 'after': profile.__dict__}
+    if not streaming_migration_matches(migration, tag=saved['tag'], before=saved['generation_profile'], after=profile.__dict__):
+        raise ValueError('Streaming migration must retain current xhigh and all numerical budgets')
+    arguments = list(manifest['official_arguments'])
+    if (arguments.count('--no-stream') != 1 or '--stream' in arguments
+            or arguments.count('--enable_thinking') != 1 or '--no-enable_thinking' in arguments):
+        raise ValueError('Original xhigh/nonstream arguments missing or duplicated')
+    arguments[arguments.index('--no-stream')] = '--stream'
+    plan['generation_profile'] = manifest['generation_profile'] = profile.__dict__
+    plan['qwen_streaming_migration'] = manifest['qwen_streaming_migration'] = migration
+    plan['qwen_request_policy'] = manifest['qwen_request_policy'] = request_policy(profile)
+    plan['provider_request'] = {**plan['provider_request'], 'stream': True,
+                               'stream_options': {'include_usage': True}, 'output_field': 'max_completion_tokens',
+                               'transport': 'real SSE; preserve full raw bytes, DONE, canonical completion and actual usage'}
+    manifest['official_arguments'] = arguments
+
+
 def resume(stage, validation, reason, checkpoint=None, provider_ready=False, controls_view=False,
-           qwen_transport_attempts=None, qwen_reasoning_effort=None):
+           qwen_transport_attempts=None, qwen_reasoning_effort=None, qwen_stream=False):
     import docker
     from scripts.native_resource_accounting import sample, reserve_ok
     from scripts.osworld_task035_background import cgroup
@@ -188,6 +217,10 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False, con
         configure_qwen_transport_retry(plan, manifest, qwen_transport_attempts)
     if qwen_reasoning_effort is not None:
         configure_qwen_reasoning(plan, manifest, saved, qwen_reasoning_effort)
+    if qwen_stream:
+        if qwen_reasoning_effort is not None:
+            raise ValueError('Migrate streaming only from the existing xhigh checkpoint')
+        configure_qwen_streaming(plan, manifest, saved)
     if repair_commit:
         plan['source_commit'] = repair_commit
     if controls_view:
@@ -272,13 +305,14 @@ def main():
                    help='Explicitly migrate Qwen transport retries within the unchanged output/time budgets')
     p.add_argument('--qwen-reasoning-effort', choices=('low', 'medium', 'xhigh'),
                    help='Explicitly migrate the same UI-KOBE-like checkpoint to Qwen reasoning')
+    p.add_argument('--qwen-stream', action='store_true', help='Migrate the current xhigh checkpoint to bounded SSE')
     args=p.parse_args()
     require_scope(128*1024**2)
     if args.action == 'resume':
         if not args.validation or not args.reason:
             p.error('Resume requires validation and a specific repair/cooldown reason')
         result=resume(args.stage,args.validation,args.reason,args.checkpoint,args.provider_ready,args.controls_view,
-                      args.qwen_transport_attempts, args.qwen_reasoning_effort)
+                      args.qwen_transport_attempts, args.qwen_reasoning_effort, args.qwen_stream)
     elif args.action == 'pause':
         if not args.reason:
             p.error('Pause requires a specific anomaly reason')

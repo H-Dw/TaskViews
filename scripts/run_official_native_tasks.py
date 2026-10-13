@@ -89,7 +89,7 @@ def main():
     profile = manifest['generation_profile']
     qwen = manifest['agent_interface'] == 'qwen-native'
     if qwen:
-        from ui_kobe.api.qwen_native import generation_profile, QwenTransportBudget, transport_policy
+        from ui_kobe.api.qwen_native import generation_profile, QwenTransportBudget, transport_policy, request_policy
         expected_profile = generation_profile(profile['name']).__dict__
         if profile != plan['generation_profile']:
             raise RuntimeError('Manifest Qwen generation profile differs from frozen plan')
@@ -100,6 +100,14 @@ def main():
             raise RuntimeError('Official thinking flag differs from frozen Qwen generation profile')
         if manifest.get('qwen_reasoning_migration') != plan.get('qwen_reasoning_migration'):
             raise RuntimeError('Manifest Qwen reasoning migration differs from frozen plan')
+        wire = request_policy(generation_profile(profile['name']))
+        stream_flag = '--stream' if wire['stream'] else '--no-stream'
+        if (manifest['official_arguments'].count(stream_flag) != 1
+                or ('--no-stream' if wire['stream'] else '--stream') in manifest['official_arguments']):
+            raise RuntimeError('Official stream flag differs from frozen Qwen profile')
+        if wire['stream'] and (manifest.get('qwen_request_policy') != wire or plan.get('qwen_request_policy') != wire
+                or manifest.get('qwen_streaming_migration') != plan.get('qwen_streaming_migration')):
+            raise RuntimeError('Qwen SSE request policy/migration differs from frozen plan')
         if 'qwen_transport_policy' in plan:
             retry = plan['qwen_transport_policy']
             arguments = manifest['official_arguments']

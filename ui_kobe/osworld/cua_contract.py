@@ -105,9 +105,10 @@ def options_contract(options, *, provider='kimi', generation_profile=None):
                 "enable_thinking": True, "action_space": "pyautogui", "observation_type": "screenshot",
                 "top_p": 0.95, "top_k": None}
     if provider == 'qwen':
-        from ui_kobe.api.qwen_native import QwenGenerationProfile, generation_request_fields
-        thinking = generation_request_fields(generation_profile or QwenGenerationProfile())['enable_thinking']
-        required.update(stream=False, enable_thinking=thinking, top_p=0.9)
+        from ui_kobe.api.qwen_native import QwenGenerationProfile, generation_request_fields, request_policy
+        selected_profile = generation_profile or QwenGenerationProfile()
+        thinking = generation_request_fields(selected_profile)['enable_thinking']
+        required.update(stream=request_policy(selected_profile)['stream'], enable_thinking=thinking, top_p=0.9)
     elif provider != 'kimi':
         raise ValueError('Unknown native provider')
     for name, expected in required.items():

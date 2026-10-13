@@ -1,7 +1,7 @@
 """Frozen Qwen provider on the shared native loop, independent of TaskViews."""
 import os
 
-from ui_kobe.api.qwen_native import BASE_URL, MODEL, PROTOCOL, generation_profile, QwenNativeClient
+from ui_kobe.api.qwen_native import BASE_URL, MODEL, PROTOCOL, generation_profile, QwenNativeClient, request_policy
 from . import telemetry
 from .kimi_native import KimiNativeAgent
 from .kimi_transition_native import KimiTransitionNativeAgent
@@ -24,7 +24,8 @@ class QwenNativeProvider:
                                 emit=telemetry.emit, response_dir=trace / 'responses')
 
     def generation_fields(self, ledger, role):
-        return {'max_tokens': ledger.allowance(role)}
+        profile = getattr(self, 'profile', generation_profile())
+        return {request_policy(profile)['output_field']: ledger.allowance(role)}
 
 
 class QwenNativeAgent(QwenNativeProvider, KimiNativeAgent):
