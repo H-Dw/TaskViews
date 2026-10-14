@@ -157,6 +157,19 @@ def test_prepared_mini_override_is_explicit_and_hash_checked(declared):
         pipeline.active_plan(cfg, state, 'taskviews')
 
 
+def test_queued_ui_override_cannot_replace_an_existing_episode(declared):
+    root, cfg = declared
+    replacement = root / 'replacement-ui'
+    write(replacement / 'plan.json', {'new_frozen_source': True})
+    write(replacement / 'validation.json', {'exit_code': 0})
+    state = {'plan_overrides': {'ui_kobe_like': {'root': str(replacement),
+        'plan_sha256': digest(replacement / 'plan.json'), 'validation_sha256': digest(replacement / 'validation.json')}}}
+    assert pipeline.active_plan(cfg, state, 'ui_kobe_like') == replacement
+    (Path(cfg['plans']['ui_kobe_like']) / 'ui_kobe_like').mkdir(parents=True)
+    with pytest.raises(ValueError, match='existing UI episode'):
+        pipeline.active_plan(cfg, state, 'ui_kobe_like')
+
+
 @pytest.mark.parametrize('verified', [False, True])
 def test_reused_ports_require_a_prior_verified_immutable_cleanup_receipt(declared, monkeypatch, verified):
     import docker

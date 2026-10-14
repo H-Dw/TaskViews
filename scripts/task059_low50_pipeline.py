@@ -95,7 +95,7 @@ def active_plan(cfg, state, arm):
     override = state.get('plan_overrides', {}).get(arm)
     if override is None:
         return Path(cfg['plans'][arm]).resolve()
-    if arm != 'taskviews':
+    if arm != 'taskviews' and (Path(cfg['plans'][arm]) / arm).exists():
         raise ValueError('The existing UI episode must keep its original stage')
     root = Path(override['root']).resolve()
     if (digest(root / 'plan.json') != override['plan_sha256']

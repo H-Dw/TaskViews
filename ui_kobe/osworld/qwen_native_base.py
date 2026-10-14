@@ -27,6 +27,21 @@ class QwenNativeProvider:
         profile = getattr(self, 'profile', generation_profile())
         return {request_policy(profile)['output_field']: ledger.allowance(role)}
 
+    def current_frame_content(self):
+        from ui_kobe.api.qwen_png_transport import recompress
+        content = super().current_frame_content()
+        result = []
+        for part in content:
+            if part.get('type') != 'image_url':
+                result.append(part)
+                continue
+            url, record = recompress(part['image_url']['url'],
+                                    (self.frame.screenshot.model_width, self.frame.screenshot.model_height))
+            result.append({**part, 'image_url': {**part['image_url'], 'url': url}})
+            telemetry.emit('qwen_image_transport', frame_id=self.frame.metadata['frame_id'],
+                           source_screenshot_sha256=self.frame.original_sha256, **record)
+        return result
+
 
 class QwenNativeAgent(QwenNativeProvider, KimiNativeAgent):
     """No graph, roles, pointer workflow or TaskViews control initialization."""

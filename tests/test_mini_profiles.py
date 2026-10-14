@@ -104,6 +104,8 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
                        qwen_generation_profile=f'qwen-sse-{effort}-total16k' if low50 else None,
                        evaluation_steps=[15, 30, 50] if low50 else None)
     plan = experiment.load(root / 'plan.json')
+    from ui_kobe.api.qwen_png_transport import policy as image_policy
+    assert plan['qwen_image_transport_policy'] == image_policy()
     assert plan['arms'] == [arm] and plan['implementation_version'] == 10
     assert plan['mini_profile'] == frozen_profile(arm) and plan['taskviews_feedback'] is False
     assert plan['source_branch'] == 'mini' and plan['iteration_commit_required']
@@ -129,6 +131,7 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
     assert manifest['mini_profile'] == plan['mini_profile'] and manifest['taskviews_profile'] == PROFILE
     assert manifest['source_branch'] == 'mini' and manifest['checkpoint_policy'] == plan['checkpoint_policy']
     assert manifest['qwen_request_policy'] == plan['qwen_request_policy']
+    assert manifest['qwen_image_transport_policy'] == plan['qwen_image_transport_policy']
     assert manifest['official_arguments'][manifest['official_arguments'].index('--max_steps') + 1] == str(50 if low50 else 500)
     if low50:
         assert manifest['evaluation_policy'] == plan['evaluation_policy']

@@ -147,6 +147,9 @@ def check_interface(plan):
             if plan['qwen_transport_policy'] != transport_policy(budget):
                 raise RuntimeError('Qwen retry policy differs from its frozen budget')
         from ui_kobe.api.qwen_native import request_policy
+        from ui_kobe.api.qwen_png_transport import policy as image_policy
+        if plan.get('qwen_image_transport_policy', image_policy()) != image_policy():
+            raise RuntimeError('Qwen image transport differs from its frozen policy')
         wire = request_policy(generation_profile(plan['generation_profile']['name']))
         if wire['stream']:
             request = plan.get('provider_request', {})
@@ -326,6 +329,8 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
             plan['completion_pipeline'] = str(Path(completion_pipeline).resolve())
     if qwen:
         from ui_kobe.api.qwen_native import QwenTransportBudget, transport_policy
+        from ui_kobe.api.qwen_png_transport import policy as image_policy
+        plan['qwen_image_transport_policy'] = image_policy()
         plan['stream_budget'] = QwenTransportBudget().__dict__
         plan['qwen_transport_policy'] = transport_policy()
         plan['provider_compatibility'] = proof
@@ -506,6 +511,8 @@ def launch(root, arm):
         manifest['qwen_transport_policy'] = plan['qwen_transport_policy']
     if 'qwen_request_policy' in plan:
         manifest['qwen_request_policy'] = plan['qwen_request_policy']
+    if 'qwen_image_transport_policy' in plan:
+        manifest['qwen_image_transport_policy'] = plan['qwen_image_transport_policy']
     if mini:
         manifest['mini_profile'] = plan['mini_profile']
         manifest['source_branch'] = plan['source_branch']

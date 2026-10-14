@@ -215,6 +215,9 @@ def resume(stage, validation, reason, checkpoint=None, provider_ready=False, con
                                  'checkpoint':saved['tag'], 'time':time.time()}}
     if qwen_transport_attempts is not None:
         configure_qwen_transport_retry(plan, manifest, qwen_transport_attempts)
+    if plan.get('agent_interface') == 'qwen-native':
+        from ui_kobe.api.qwen_png_transport import policy as image_policy
+        plan['qwen_image_transport_policy'] = manifest['qwen_image_transport_policy'] = image_policy()
     if qwen_reasoning_effort is not None:
         configure_qwen_reasoning(plan, manifest, saved, qwen_reasoning_effort)
     if qwen_stream:
