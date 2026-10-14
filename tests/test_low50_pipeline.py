@@ -127,3 +127,26 @@ def test_cleanup_never_deletes_parent_or_unrelated_paths(tmp_path):
     assert unrelated.exists() and stage.exists() and not (stage / 'checkpoints').exists()
     assert (stage / 'retired-checkpoint-metadata/tv-original/manifest.json').exists()
     assert not (stage / 'retired-checkpoint-metadata/tv-original/actor.json').exists()
+
+
+def test_diagnostic_authorization_does_not_resume_or_launch_an_episode(declared, monkeypatch):
+    root, _ = declared
+    state = pipeline.load(root / 'state.json')
+    state.update(phase='interface_repair_ready_waiting_formal_resume_authorization', formal_actor_resume_authorized=False)
+    write(root / 'state.json', state)
+    monkeypatch.setattr(pipeline, 'launch', lambda *_: pytest.fail('API diagnostics are separate from actor resume'))
+    assert pipeline.advance(root)['phase'] == state['phase']
+
+
+def test_prepared_mini_override_is_explicit_and_hash_checked(declared):
+    root, cfg = declared
+    replacement = root / 'repair/mini-new-source'
+    write(replacement / 'plan.json', {'preserve_old_plan': True})
+    write(replacement / 'validation.json', {'exit_code': 0})
+    state = {'plan_overrides': {'taskviews': {'root': str(replacement),
+        'plan_sha256': digest(replacement / 'plan.json'), 'validation_sha256': digest(replacement / 'validation.json')}}}
+    assert pipeline.active_plan(cfg, state, 'taskviews') == replacement
+    assert pipeline.active_plan(cfg, state, 'ui_kobe_like') == Path(cfg['plans']['ui_kobe_like'])
+    write(replacement / 'plan.json', {'tampered': True})
+    with pytest.raises(RuntimeError, match='plan/proof changed'):
+        pipeline.active_plan(cfg, state, 'taskviews')

@@ -89,6 +89,20 @@ def settled_requests(stage):
     return requests, outcomes
 
 
+def active_plan(cfg, state, arm):
+    """A validated replacement plan can be prepared without editing old plans."""
+    override = state.get('plan_overrides', {}).get(arm)
+    if override is None:
+        return Path(cfg['plans'][arm]).resolve()
+    if arm != 'taskviews':
+        raise ValueError('The existing UI episode must keep its original stage')
+    root = Path(override['root']).resolve()
+    if (digest(root / 'plan.json') != override['plan_sha256']
+            or digest(root / 'validation.json') != override['validation_sha256']):
+        raise RuntimeError('Replacement Mini plan/proof changed')
+    return root
+
+
 def advance(root):
     root = Path(root).resolve()
     cfg = load(root / 'pipeline.json')
@@ -101,8 +115,10 @@ def advance(root):
         raise ValueError('Both arms require the same frozen low reasoning profile')
     if state.get('phase') == 'complete':
         return state
+    if state.get('formal_actor_resume_authorized') is False:
+        return state  # Independent API diagnostics/source repair do not authorize actor continuation.
     for arm in cfg['order']:
-        plan_root = Path(cfg['plans'][arm]).resolve()
+        plan_root = active_plan(cfg, state, arm)
         if not plan_root.is_relative_to(root):
             raise ValueError('Arm plan escaped its pipeline')
         stage = plan_root / arm
