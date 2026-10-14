@@ -59,8 +59,9 @@ def generation_profile(name='qwen-native-16k'):
     """Explicit reasoning selection; all existing output/repair bounds stay fixed."""
     if name == 'qwen-native-16k':
         return QwenGenerationProfile()
-    if name == 'qwen-sse-xhigh-total16k':
-        return QwenGenerationProfile(name=name, reasoning_effort='xhigh')
+    for effort in ('low', 'xhigh'):
+        if name == f'qwen-sse-{effort}-total16k':
+            return QwenGenerationProfile(name=name, reasoning_effort=effort)
     for effort in ('low', 'medium', 'xhigh'):
         if name == f'qwen-native-{effort}-16k':
             return QwenGenerationProfile(name=name, reasoning_effort=effort)
@@ -68,7 +69,7 @@ def generation_profile(name='qwen-native-16k'):
 
 
 def request_policy(profile):
-    streaming = profile.name == 'qwen-sse-xhigh-total16k'
+    streaming = profile.name in ('qwen-sse-low-total16k', 'qwen-sse-xhigh-total16k')
     return {'version': 'qwen-request-policy-v1', 'stream': streaming,
             'output_field': 'max_completion_tokens' if streaming else 'max_tokens',
             'include_usage': streaming, 'trust_env': not streaming}

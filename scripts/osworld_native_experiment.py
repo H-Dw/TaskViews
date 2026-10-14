@@ -127,6 +127,8 @@ def interface_protocols(interface):
 
 def check_interface(plan):
     from ui_kobe.osworld.taskviews_profiles import MINI_PROFILE, validate_profile
+    from ui_kobe.osworld.evaluation_milestones import validate_evaluation_policy
+    validate_evaluation_policy(plan)
     mini = validate_profile(plan) == MINI_PROFILE
     if plan.get('agent_interface') == 'qwen-native':
         from ui_kobe.api.qwen_native import BASE_URL, MODEL, PROTOCOL, generation_profile
@@ -162,6 +164,10 @@ def check_interface(plan):
 
 
 def trial_max_steps(purpose, max_steps=None):
+    if purpose == 'checkpoint_evaluation':
+        if type(max_steps) is not int or not 1 <= max_steps <= 500:
+            raise ValueError('Checkpoint evaluations require an explicit 1..500 decision limit')
+        return max_steps
     if purpose == 'cua_smoke':
         if type(max_steps) is not int or not 1 <= max_steps <= 10:
             raise ValueError('Declare 1..10 official decisions for a CUA smoke trial before freezing')
@@ -199,13 +205,14 @@ def require_mini_branch():
 def prepare(root, task, validation, purpose="evaluation", admission=None, profile_name="low-16k", cua_config=None,
             agent_interface='official-xml', compatibility=None, max_steps=None, checkpoints=False,
             taskviews_feedback=False, taskviews_profile='full_checkpoint', qwen_arm='taskviews',
-            inspection_minutes=None):
+            inspection_minutes=None, qwen_generation_profile=None, evaluation_steps=None, completion_pipeline=None):
     from examples.osworld2_eval import official_identity
     from ui_kobe.osworld.task_examples import task_example
     from ui_kobe.osworld.runner import source_snapshot
     from ui_kobe.api.kimi_stream import StreamBudget
     from ui_kobe.api.kimi import generation_profile
-    from ui_kobe.api.qwen_native import BASE_URL as QWEN_URL, MODEL as QWEN_MODEL, PROTOCOL as QWEN_PROTOCOL, QwenGenerationProfile
+    from ui_kobe.api.qwen_native import (BASE_URL as QWEN_URL, MODEL as QWEN_MODEL, PROTOCOL as QWEN_PROTOCOL,
+        generation_profile as qwen_profile, generation_request_fields, request_policy)
     from ui_kobe.osworld.taskviews_profiles import FULL_PROFILE, MINI_PROFILE, frozen_profile, mini_cua_contract
     mini = taskviews_profile == MINI_PROFILE
     qwen = agent_interface == 'qwen-native'
@@ -220,9 +227,11 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
             raise ValueError('Mini requires one Qwen native arm without full feedback')
     elif qwen_arm != 'taskviews':
         raise ValueError('Explicit UI-KOBE-like Qwen comparison requires the Mini profile')
-    if qwen and (task != '059' or not checkpoints or purpose != 'evaluation'):
+    if qwen and (task != '059' or not checkpoints or purpose not in ('evaluation', 'checkpoint_evaluation')):
         raise ValueError('Qwen native runs require isolated Task059 TaskViews checkpoints')
-    profile = QwenGenerationProfile() if qwen else generation_profile(profile_name)
+    if not qwen and qwen_generation_profile is not None:
+        raise ValueError('A Qwen generation profile requires the Qwen native provider')
+    profile = qwen_profile(qwen_generation_profile or 'qwen-native-16k') if qwen else generation_profile(profile_name)
     from ui_kobe.osworld.cua_contract import CUAContract
     from ui_kobe.osworld.official_base import verify_official_base, OFFICIAL_COMMIT
     verify_official_base(REPO)
@@ -230,6 +239,16 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     if mini and contract.snapshot() != mini_cua_contract():
         raise ValueError('Mini comparisons retain the frozen geometry/history/input/repair contract')
     decisions = trial_max_steps(purpose, max_steps)
+    milestone_policy = None
+    if purpose == 'checkpoint_evaluation':
+        from ui_kobe.osworld.evaluation_milestones import evaluation_policy
+        if not qwen or not mini or task != '059':
+            raise ValueError('Checkpoint evaluation currently supports the isolated Qwen Task059 Mini comparison')
+        milestone_policy = evaluation_policy(decisions, evaluation_steps)
+    elif evaluation_steps is not None:
+        raise ValueError('Evaluation milestones require the explicit checkpoint_evaluation purpose')
+    if completion_pipeline is not None and milestone_policy is None:
+        raise ValueError('Completion pipeline requires explicit milestone evaluation')
     if purpose == 'cua_smoke' and (task != '059' or agent_interface != 'k3-native'):
         raise ValueError('This CUA smoke trial uses Task059 with the preselected K3 native interface')
     from scripts.native_resource_accounting import POLICY, STARTUP_AVAILABLE_GIB, RUNTIME_AVAILABLE_GIB
@@ -300,15 +319,27 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         "user_authorization": "User requested a shared official CUA interface and source commit; preparing this plan does not authorize a new evaluation episode. Launch requires experiment authorization; generation profiles and resource protections remain declared in this plan",
         "taskviews_variant": "optional context provider consumes experimental passive execution graph and task modules; same selected actor interface"}
     plan["purpose"] = purpose
+    if milestone_policy is not None:
+        plan['evaluation_policy'] = milestone_policy
+        plan['benchmark_comparable'] = False
+        if completion_pipeline is not None:
+            plan['completion_pipeline'] = str(Path(completion_pipeline).resolve())
     if qwen:
         from ui_kobe.api.qwen_native import QwenTransportBudget, transport_policy
         plan['stream_budget'] = QwenTransportBudget().__dict__
         plan['qwen_transport_policy'] = transport_policy()
         plan['provider_compatibility'] = proof
         plan['provider_compatibility_ref'] = {'path': str(compatibility.resolve()), 'sha256': digest(compatibility)}
-        plan['provider_request'] = {'stream': False, 'enable_thinking': False, 'temperature': 0, 'top_p': 0.9,
-            'actor_max_tokens': 16000, 'advisory_max_tokens': 4000, 'response_format': 'native tools / advisory JSON',
-            'transport': 'non-stream HTTP JSON; preserve actual raw response and usage; no synthetic SSE'}
+        wire = request_policy(profile)
+        plan['qwen_request_policy'] = wire
+        plan['provider_request'] = {'stream': wire['stream'], **generation_request_fields(profile),
+            'temperature': 0, 'top_p': 0.9, 'output_field': wire['output_field'],
+            'actor_' + wire['output_field']: 16000, 'advisory_' + wire['output_field']: 4000,
+            'response_format': 'native tools / advisory JSON',
+            'transport': 'full raw SSE and canonical JSON with DONE/usage' if wire['stream'] else
+                         'non-stream HTTP JSON; preserve actual raw response and usage; no synthetic SSE'}
+        if wire['stream']:
+            plan['provider_request']['stream_options'] = {'include_usage': True}
         plan['k3_compatibility'] = None
         plan['actor_policy']['shared_entry'] = 'Qwen native actor using original official CUA compiler and common native history'
     if checkpoints:
@@ -328,7 +359,7 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         plan['user_authorization'] = 'User authorized TaskViews fixes, a new Task059 run, checkpoints and 60-minute inspection on 2026-10-09'
         if qwen:
             plan['user_authorization'] += '; explicitly requested qwen3.8-max Task059 TaskViews execution and real-time debugging'
-            plan['comparison_limit'] = 'New Qwen native-tools, non-stream, thinking-disabled protocol; not the original Qwen XML agent or the completed Kimi comparison conditions'
+            plan['comparison_limit'] = 'Explicit frozen Qwen native generation/request policy; not the original Qwen XML or completed Kimi comparison conditions'
     plan['taskviews_feedback'] = taskviews_feedback
     plan['taskviews_profile'] = taskviews_profile
     if mini:
@@ -357,6 +388,10 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     if purpose == 'cua_smoke':
         plan['benchmark_comparable'] = False
         plan['user_authorization'] = 'The predeclared short official decision limit is a compatibility smoke trial, not a benchmark rerun. Preparation does not authorize a new evaluation episode'
+    if milestone_policy is not None:
+        plan['user_authorization'] = ('2026-10-14: user cancelled the unfinished predecessor and authorized new serial '
+            'UI-KOBE-like then TaskViews-mini Task059 evaluations, Qwen-3.8-max low reasoning, 50 decisions, '
+            'original official evaluation after decisions15/30/50')
     if task == "046":
         from scripts.native_task046_web import deployment_snapshot, validate_admission
         plan["native_web_deployment"] = deployment_snapshot()
@@ -364,7 +399,7 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
             if admission is None:
                 raise RuntimeError("Task046 requires a completed official setup/resource proof before evaluation")
             plan["setup_admission"] = validate_admission(admission, project_snapshot())
-    elif purpose not in ("evaluation", 'cua_smoke'):
+    elif purpose not in ("evaluation", 'cua_smoke', 'checkpoint_evaluation'):
         raise RuntimeError("Setup validation is only supported for Task046")
     root.mkdir(parents=True, exist_ok=False)
     write(root / "plan.json", plan)
@@ -463,10 +498,14 @@ def launch(root, arm):
         'benchmark_comparable': plan.get('benchmark_comparable', True),
         "runtime_paths": [], "created_utc": now()}
     manifest['taskviews_feedback'] = plan.get('taskviews_feedback', False)
+    if 'evaluation_policy' in plan:
+        manifest['evaluation_policy'] = plan['evaluation_policy']
     manifest['source_commit'] = plan.get('source_commit')
     manifest['taskviews_profile'] = plan.get('taskviews_profile', 'full_checkpoint')
     if 'qwen_transport_policy' in plan:
         manifest['qwen_transport_policy'] = plan['qwen_transport_policy']
+    if 'qwen_request_policy' in plan:
+        manifest['qwen_request_policy'] = plan['qwen_request_policy']
     if mini:
         manifest['mini_profile'] = plan['mini_profile']
         manifest['source_branch'] = plan['source_branch']
@@ -485,6 +524,10 @@ def launch(root, arm):
         "OOMPolicy=stop\nKillMode=control-group\nTimeoutStopSec=120\nRestart=no\nCPUQuota=100%\n"
         "CPUWeight=50\nIOWeight=50\nNice=10\nEnvironment=PYTHONDONTWRITEBYTECODE=1\nEnvironment=PYTHONUNBUFFERED=1\n")
     service = Path.home() / ".config/systemd/user" / unit
+    if plan.get('completion_pipeline'):
+        from scripts.task059_low50_pipeline import completion_hook
+        hook = completion_hook(Path(plan['completion_pipeline']), run_id, service.parent)
+        text = text.replace('[Unit]\n', f'[Unit]\nOnSuccess={hook}\nOnFailure={hook}\n', 1)
     service.write_text(text)
     (stage / "service.unit").write_text(text)
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
@@ -790,10 +833,23 @@ def audit(stage):
         "traj_files": [str(p) for p in trajectories],
         "sse_files": sum(1 for _ in (stage / "telemetry/streams").glob("*.jsonl")),
         "evidence_index": str(index), "source_audit": str(output / "source-audit.json")}
+    if manifest.get('evaluation_policy'):
+        milestones = []
+        for path in sorted((stage / 'evaluation-milestones').glob('*/result.json')):
+            record = load(path)
+            milestones.append({key: record.get(key) for key in
+                               ('completed_decisions', 'intermediate', 'score', 'status', 'original_evaluator_called')}
+                              | {'path': str(path), 'sha256': digest(path)})
+        result['evaluation_milestones'] = milestones
+        result['evaluation_policy'] = manifest['evaluation_policy']
+        result['all_requested_milestones_scored'] = all(
+            any(r['completed_decisions'] == step and r['status'] == 'returned'
+                and r['original_evaluator_called'] and r['score'] is not None for r in milestones)
+            for step in manifest['evaluation_policy']['completed_decisions'])
     write(stage / "audit.json", result)
     report = [f"# Task{manifest['task_id']} / {manifest['arm']}", "", f"协议：`{manifest['agent_protocol']}`。",
         f"有效官方分数：{score if valid_score else '无有效成绩（不能使用 summary 占位 0）'}。",
-        f"决策 {counters['decisions']}/500；动作 {counters['actions']}；墙钟 {result['wall_seconds']:.1f} 秒。",
+        f"决策 {counters['decisions']}/{manifest.get('max_steps', 500)}；动作 {counters['actions']}；墙钟 {result['wall_seconds']:.1f} 秒。",
         f"请求成功 {counters['api_success']}；传输重试 {counters['transport_retries']}；usage `{usage}`。",
         f"原生 terminal：`{terminals}`。", f"SSE 时序：`{timing}`。",
         f"资源采样峰值 {state.get('peak_aggregate_bytes', 0) / GIB:.3f} GiB；service memory.peak {state.get('service_memory_peak', 0) / GIB:.3f} GiB。",
@@ -803,9 +859,12 @@ def audit(stage):
         "原始证据：manifest.json、resources.jsonl、console.log、telemetry/events-*.jsonl、telemetry/streams/*.jsonl、",
         "evidence-index.jsonl、audit.json；完整截图/轨迹/评分文件见 manifest.official_results。",
         "本地保留既有 K3 裁判/用户模拟器兼容配置；059 为程序化评分，046 含图像与网站检查，不能称为公开榜单同条件复现。",
-        "本版本不使用旧 XML 恢复上限自动 DONE；仅接受原生模型 terminate，或达到 500 决策上限后官方评分。",
+        f"本版本不使用旧 XML 恢复上限自动 DONE；原生 terminate 或预定{manifest.get('max_steps', 500)}步上限后官方最终评分；额外分点评估以冻结evaluation_policy为准。",
         "TaskViews 组使用同一原生执行端，增加完整 SSE 的观察、语义视图与 adviser 调用；无自动补偿动作。", "",
         f"错误索引：`{errors}`。", f"异常控制器回执：`{receipt_errors}`。"]
+    if 'evaluation_milestones' in result:
+        report += ['', f"官方分点评分：`{result['evaluation_milestones']}`。",
+                   f"全部预定节点评分完成：{result['all_requested_milestones_scored']}。"]
     (stage / "report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
     print(json.dumps({k: result[k] for k in ("task_id", "arm", "score", "valid_score", "source_unchanged", "cleanup_ok", "counters")}), flush=True)
 
@@ -830,8 +889,8 @@ def main():
     parser.add_argument("--task", choices=("059", "046"))
     parser.add_argument("--arm", choices=ARMS)
     parser.add_argument("--validation", type=Path)
-    parser.add_argument("--purpose", choices=("evaluation", "setup_validation", "cua_smoke"), default="evaluation")
-    parser.add_argument('--max-steps', type=int, help='Predeclare a short official decision limit for cua_smoke only')
+    parser.add_argument("--purpose", choices=("evaluation", "setup_validation", "cua_smoke", "checkpoint_evaluation"), default="evaluation")
+    parser.add_argument('--max-steps', type=int, help='Explicit decision limit for smoke or checkpoint_evaluation trials')
     parser.add_argument("--admission", type=Path)
     parser.add_argument("--profile", choices=("low-16k", "max-16k", "max-32k"), default="low-16k")
     parser.add_argument("--cua-config", type=Path)
@@ -842,13 +901,17 @@ def main():
     parser.add_argument('--taskviews-profile', choices=('full_checkpoint', 'mini_fixed_v1'), default='full_checkpoint')
     parser.add_argument('--qwen-arm', choices=('taskviews', 'ui_kobe_like'), default='taskviews')
     parser.add_argument('--inspection-minutes', type=int, help='Freeze the requested checkpoint inspection interval')
+    parser.add_argument('--qwen-generation-profile', help='Explicit Qwen generation profile; legacy default remains disabled')
+    parser.add_argument('--evaluation-steps', type=int, nargs='+', help='Official evaluation after these completed decisions; last equals max-steps')
+    parser.add_argument('--completion-pipeline', type=Path, help='Serial milestone evaluation controller root')
     args = parser.parse_args()
     require_scope(2 * GIB if args.action == "supervise" else 128 * 1024**2)
     root = args.root.resolve()
     if args.action == "prepare":
         prepare(root, args.task, args.validation, args.purpose, args.admission, args.profile, args.cua_config,
                 args.agent_interface, args.k3_compatibility, args.max_steps, args.checkpoints, args.taskviews_feedback,
-                args.taskviews_profile, args.qwen_arm, args.inspection_minutes)
+                args.taskviews_profile, args.qwen_arm, args.inspection_minutes,
+                args.qwen_generation_profile, args.evaluation_steps, args.completion_pipeline)
     elif args.action == "launch":
         lock = Path.home() / ".cache/ui-kobe-osworld-experiment.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)

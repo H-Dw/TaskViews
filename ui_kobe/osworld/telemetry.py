@@ -308,22 +308,27 @@ def install(root: Path) -> None:
     @functools.wraps(original_evaluate)
     def evaluate(self, *args, **kwargs):
         _context.phase = "judge"
+        intermediate = getattr(_context, 'intermediate_evaluation', False)
+        prefix = 'milestone_evaluation' if intermediate else 'evaluation'
         from .lifecycle import write_phase
-        if _root is not None:
+        if _root is not None and not intermediate:
             write_phase(_root.parent, "evaluating")
-        emit("evaluation_start")
-        record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_start')
+        emit(prefix + '_start')
+        if not intermediate:
+            record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_start')
         started = time.monotonic()
         try:
             score = original_evaluate(self, *args, **kwargs)
-            emit("evaluation_result", score=score, duration_s=round(time.monotonic()-started, 3))
-            record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_result', score=score)
-            if _root is not None:
+            emit(prefix + '_result', score=score, duration_s=round(time.monotonic()-started, 3))
+            if not intermediate:
+                record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_result', score=score)
+            if _root is not None and not intermediate:
                 write_phase(_root.parent, "evaluation_returned", evaluation_returned=True, raw_official_score=safe(score))
             return score
         except Exception as exc:
-            emit("evaluation_error", error_type=type(exc).__name__, error=str(exc))
-            record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_error', error=str(exc))
+            emit(prefix + '_error', error_type=type(exc).__name__, error=str(exc))
+            if not intermediate:
+                record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_error', error=str(exc))
             raise
     DesktopEnv.evaluate = evaluate
     original_close = DesktopEnv.close

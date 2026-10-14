@@ -72,6 +72,8 @@ def main():
     official_base = verify_official_base(repo)
     from ui_kobe.osworld.cua_contract import CUAContract
     plan = json.loads((Path(manifest["plan_root"]) / "plan.json").read_text())
+    from ui_kobe.osworld.evaluation_milestones import validate_evaluation_policy
+    validate_evaluation_policy(plan, manifest)
     check_interface(plan)
     actor_profile = configure_profile(plan, manifest)
     if manifest.get('taskviews_feedback', False) != plan.get('taskviews_feedback', False):

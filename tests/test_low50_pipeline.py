@@ -1,0 +1,129 @@
+from copy import deepcopy
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+from scripts import task059_low50_pipeline as pipeline
+from scripts.osworld_native_experiment import digest, write
+
+
+@pytest.fixture
+def declared(tmp_path):
+    cfg = {'order': ['ui_kobe_like', 'taskviews'], 'max_steps': 50, 'evaluation_steps': [15, 30, 50],
+           'generation_profile': 'qwen-sse-low-total16k', 'validation': str(tmp_path / 'proof.json'),
+           'plans': {a: str(tmp_path / a) for a in ('ui_kobe_like', 'taskviews')}}
+    write(tmp_path / 'pipeline.json', cfg)
+    write(tmp_path / 'state.json', {'phase': 'prepared', 'config_sha256': digest(tmp_path / 'pipeline.json')})
+    return tmp_path, cfg
+
+
+def paused_stage(root, cfg, kind='ConnectError'):
+    stage = Path(cfg['plans']['ui_kobe_like']) / 'ui_kobe_like'
+    write(stage / 'manifest.json', {'unit': 'offline-owned.service'})
+    write(stage / 'paused.json', {'error_type': kind, 'error': 'original failed transport'})
+    return stage
+
+
+def test_pipeline_initial_launch_submits_only_ui_and_never_creates_mini(declared, monkeypatch):
+    root, cfg = declared
+    calls = []
+    monkeypatch.setattr(pipeline, 'frozen_check', lambda path: calls.append(('freeze', path)))
+    monkeypatch.setattr(pipeline, 'launch', lambda path, arm: calls.append(('launch', arm)))
+    state = pipeline.advance(root)
+    assert calls == [('freeze', Path(cfg['plans']['ui_kobe_like'])), ('launch', 'ui_kobe_like')]
+    assert state['phase'] == 'ui_kobe_like_launch_submitted'
+    assert not (root / 'taskviews').exists()
+
+
+@pytest.mark.parametrize('active', [True, False])
+def test_provider_pause_never_auto_retries_or_advances_mini(declared, monkeypatch, active):
+    root, cfg = declared
+    paused_stage(root, cfg)
+    monkeypatch.setattr(pipeline, 'unit_state', lambda *_: {'ControlPID': '0', 'MainPID': '7' if active else '0',
+                         'ActiveState': 'active' if active else 'inactive'})
+    monkeypatch.setattr(pipeline, 'settled_requests', lambda *_: ({'one', 'two'}, {'one', 'two'}))
+    monkeypatch.setattr(pipeline, 'launch', lambda *_: pytest.fail('No next episode before completion'))
+    state = pipeline.advance(root)
+    if not active:
+        assert state['phase'] == 'ui_kobe_like_paused'
+        assert state['pause']['requires_new_human_retry_authorization']
+    assert not (root / 'taskviews').exists()
+
+
+def test_startup_probe_permits_one_same_vm_resume_and_never_infinite_retries(declared, monkeypatch):
+    from scripts import taskviews_recovery
+    root, cfg = declared
+    stage = paused_stage(root, cfg, 'StartupRecoveryProbe')
+    monkeypatch.setattr(pipeline, 'unit_state', lambda *_: {'ControlPID': '0', 'MainPID': '0', 'ActiveState': 'inactive'})
+    monkeypatch.setattr(pipeline, 'settled_requests', lambda *_: (set(), set()))
+    calls = []
+    monkeypatch.setattr(taskviews_recovery, 'resume', lambda s, v, r: calls.append((s, v)) or {'status': 'resuming'})
+    state = pipeline.advance(root)
+    assert state['ui_kobe_like_startup_resumed'] and calls == [(stage, Path(cfg['validation']))]
+    assert pipeline.advance(root)['phase'] == 'ui_kobe_like_paused'
+    assert len(calls) == 1
+
+
+def test_bad_predecessor_audit_prevents_next_vm(declared, monkeypatch):
+    root, cfg = declared
+    stage = paused_stage(root, cfg)
+    (stage / 'paused.json').unlink()
+    write(stage / 'audit.json', {'valid_score': True, 'source_unchanged': True, 'cleanup_ok': False})
+    monkeypatch.setattr(pipeline, 'unit_state', lambda *_: {'ControlPID': '0', 'MainPID': '0', 'ActiveState': 'inactive'})
+    monkeypatch.setattr(pipeline, 'launch', lambda *_: pytest.fail('Owned overlay cleanup is required'))
+    assert pipeline.advance(root)['phase'] == 'ui_kobe_like_audit_failed'
+
+
+def test_valid_zero_score_and_owned_cleanup_allow_only_the_next_mini(declared, monkeypatch):
+    import docker
+    root, cfg = declared
+    stage = paused_stage(root, cfg)
+    (stage / 'paused.json').unlink()
+    write(stage / 'manifest.json', {'unit': 'owned-ui.service', 'run_id': 'owned-ui', 'runtime_paths': []})
+    write(stage / 'audit.json', {'valid_score': True, 'source_unchanged': True, 'cleanup_ok': True,
+                               'score': 0.0, 'counters': {'decisions': 50}, 'evaluation_milestones': []})
+    monkeypatch.setattr(pipeline, 'unit_state', lambda *_: {'ControlPID': '0', 'MainPID': '0', 'ActiveState': 'inactive'})
+    monkeypatch.setattr(pipeline, 'settled_requests', lambda *_: ({'original'}, {'original'}))
+    monkeypatch.setattr(docker, 'from_env', lambda **_: SimpleNamespace(
+        containers=SimpleNamespace(list=lambda **_: []), close=lambda: None))
+    calls = []
+    monkeypatch.setattr(pipeline, 'frozen_check', lambda p: calls.append(('freeze', p)))
+    monkeypatch.setattr(pipeline, 'launch', lambda p, a: calls.append(('launch', a)))
+    state = pipeline.advance(root)
+    assert state['ui_kobe_like_completed']['score'] == 0.0
+    assert state['phase'] == 'taskviews_launch_submitted'
+    assert calls == [('freeze', Path(cfg['plans']['taskviews'])), ('launch', 'taskviews')]
+
+
+def test_completion_handler_is_event_driven_and_bounded(declared, tmp_path):
+    root, _ = declared
+    units = tmp_path / 'units'
+    units.mkdir()
+    name = pipeline.completion_hook(root, 'original-run', units)
+    text = (units / name).read_text()
+    assert 'systemd-run --user --scope' in text and '--property=MemoryMax=128M' in text
+    assert '--property=MemorySwapMax=0' in text and 'advance --root' in text
+    assert 'Restart=no' in text and 'Timer' not in text
+    assert pipeline.completion_hook(root, 'original-run', units) == name
+
+
+def test_mismatched_pipeline_configuration_rejected(declared):
+    root, cfg = declared
+    cfg = deepcopy(cfg)
+    cfg['max_steps'] = 500
+    write(root / 'pipeline.json', cfg)
+    with pytest.raises(RuntimeError, match='configuration changed'):
+        pipeline.advance(root)
+
+
+def test_cleanup_never_deletes_parent_or_unrelated_paths(tmp_path):
+    stage = tmp_path / 'stage'
+    write(stage / 'checkpoints/tv-original/manifest.json', {'files': {}})
+    (stage / 'checkpoints/tv-original/actor.json').write_text('private history')
+    unrelated = tmp_path / 'unrelated'
+    unrelated.mkdir()
+    pipeline.retire_checkpoint_payloads(stage)
+    assert unrelated.exists() and stage.exists() and not (stage / 'checkpoints').exists()
+    assert (stage / 'retired-checkpoint-metadata/tv-original/manifest.json').exists()
+    assert not (stage / 'retired-checkpoint-metadata/tv-original/actor.json').exists()

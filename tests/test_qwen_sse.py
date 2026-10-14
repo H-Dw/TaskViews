@@ -40,8 +40,8 @@ def valid_stream(finish='tool_calls', done=True, usage=True):
             + (b'data: [DONE]\r\n\r\n' if done else b''))
 
 
-def client_for(tmp_path, handler, attempts=6):
-    profile = generation_profile('qwen-sse-xhigh-total16k')
+def client_for(tmp_path, handler, attempts=6, effort='xhigh'):
+    profile = generation_profile(f'qwen-sse-{effort}-total16k')
     events, waits = [], []
     ledger = StepLedger(profile, time.monotonic()+930, lambda *a, **k: None)
     client = QwenNativeClient(api_key='offline-key', profile=profile, budget=QwenTransportBudget(attempts=attempts),
@@ -55,7 +55,8 @@ def invoke(client, ledger, messages=None):
                          step_ledger=ledger, budget_role='executor', deadline=ledger.deadline)
 
 
-def test_fragmented_utf8_tools_reasoning_usage_and_exact_raw_archive(tmp_path):
+@pytest.mark.parametrize('effort', ['low', 'xhigh'])
+def test_fragmented_utf8_tools_reasoning_usage_and_exact_raw_archive(tmp_path, effort):
     raw = valid_stream()
     class Bytes(httpx.SyncByteStream):
         def __iter__(self):
@@ -64,7 +65,7 @@ def test_fragmented_utf8_tools_reasoning_usage_and_exact_raw_archive(tmp_path):
     def handler(request):
         requests.append(json.loads(request.content))
         return httpx.Response(200, headers={'content-type': 'text/event-stream;charset=UTF-8'}, stream=Bytes())
-    client, ledger, events, waits = client_for(tmp_path, handler)
+    client, ledger, events, waits = client_for(tmp_path, handler, effort=effort)
     history = [{'role': 'assistant', 'content': 'original', 'reasoning_content': 'separate private',
                 'tool_calls': [{'id': 'old-id', 'type': 'function', 'function': {'name': 'computer_use', 'arguments': '{}'}}]},
                {'role': 'tool', 'tool_call_id': 'old-id', 'content': 'original error'}]
@@ -76,7 +77,7 @@ def test_fragmented_utf8_tools_reasoning_usage_and_exact_raw_archive(tmp_path):
         assert body['usage'] == USAGE and ledger.snapshot()['known_usage']['completion_tokens'] == 8
         assert requests[0]['messages'] == history and 'max_tokens' not in requests[0]
         assert requests[0]['max_completion_tokens'] == 16000 and requests[0]['stream'] is True
-        assert requests[0]['reasoning_effort'] == 'xhigh' and requests[0]['preserve_thinking'] is True
+        assert requests[0]['reasoning_effort'] == effort and requests[0]['preserve_thinking'] is True
         assert requests[0]['stream_options'] == {'include_usage': True} and not waits
         assert next(tmp_path.glob('*.sse')).read_bytes() == raw
         outcome = next(e for e in events if e['event'] == 'request_outcome')

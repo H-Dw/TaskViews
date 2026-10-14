@@ -77,7 +77,8 @@ def test_runner_contract_cannot_mix_manifest_and_plan(monkeypatch):
 
 @pytest.mark.parametrize('arm', ['taskviews', 'ui_kobe_like'])
 @pytest.mark.parametrize('inspection', [None, 10])
-def test_offline_preparation_and_launch_freeze_one_profile_without_starting_services(tmp_path, monkeypatch, arm, inspection):
+@pytest.mark.parametrize('low50', [False, True])
+def test_offline_preparation_and_launch_freeze_one_profile_without_starting_services(tmp_path, monkeypatch, arm, inspection, low50):
     from examples import osworld2_eval
     from ui_kobe.osworld import official_base, task_examples, runner
     monkeypatch.setattr(official_base, 'verify_official_base', lambda *a: None)
@@ -97,14 +98,25 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
     experiment.write(validation, {'exit_code': 0, 'project_source': {}})
     root = tmp_path / 'offline-plan'
     experiment.prepare(root, '059', validation, agent_interface='qwen-native', compatibility=proof,
-                       checkpoints=True, taskviews_profile=PROFILE, qwen_arm=arm, inspection_minutes=inspection)
+                       checkpoints=True, taskviews_profile=PROFILE, qwen_arm=arm, inspection_minutes=inspection,
+                       purpose='checkpoint_evaluation' if low50 else 'evaluation', max_steps=50 if low50 else None,
+                       qwen_generation_profile='qwen-sse-low-total16k' if low50 else None,
+                       evaluation_steps=[15, 30, 50] if low50 else None)
     plan = experiment.load(root / 'plan.json')
     assert plan['arms'] == [arm] and plan['implementation_version'] == 10
     assert plan['mini_profile'] == frozen_profile(arm) and plan['taskviews_feedback'] is False
     assert plan['source_branch'] == 'mini' and plan['iteration_commit_required']
-    assert plan['cua_contract'] == mini_cua_contract() and plan['max_steps'] == 500
+    assert plan['cua_contract'] == mini_cua_contract() and plan['max_steps'] == (50 if low50 else 500)
     assert plan['checkpoint_policy']['inspection_minutes'] == (30 if inspection is None else inspection)
-    assert 'does not authorize' in plan['user_authorization']
+    if low50:
+        assert plan['generation_profile']['reasoning_effort'] == 'low'
+        assert plan['provider_request']['enable_thinking'] is True and plan['provider_request']['stream'] is True
+        assert plan['provider_request']['output_field'] == 'max_completion_tokens'
+        assert plan['provider_request']['stream_options'] == {'include_usage': True}
+        assert plan['evaluation_policy']['completed_decisions'] == [15, 30, 50]
+    else:
+        assert 'does not authorize' in plan['user_authorization']
+        assert plan['provider_request']['enable_thinking'] is False
     home = tmp_path / 'home'
     (home / '.config/systemd/user').mkdir(parents=True)
     monkeypatch.setattr(experiment.Path, 'home', lambda: home)
@@ -115,6 +127,12 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
     manifest = experiment.load(root / arm / 'manifest.json')
     assert manifest['mini_profile'] == plan['mini_profile'] and manifest['taskviews_profile'] == PROFILE
     assert manifest['source_branch'] == 'mini' and manifest['checkpoint_policy'] == plan['checkpoint_policy']
+    assert manifest['qwen_request_policy'] == plan['qwen_request_policy']
+    assert manifest['official_arguments'][manifest['official_arguments'].index('--max_steps') + 1] == str(50 if low50 else 500)
+    if low50:
+        assert manifest['evaluation_policy'] == plan['evaluation_policy']
+        assert manifest['generation_profile'] == plan['generation_profile']
+        assert '--enable_thinking' in manifest['official_arguments'] and '--stream' in manifest['official_arguments']
     assert checks == ['branch', 'branch', 'resources']
     assert commands[-1][-2:] == ['start', manifest['unit']]
 

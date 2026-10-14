@@ -661,7 +661,11 @@ def install(stage, manifest, *, agent_type=None):
         raise CheckpointPaused(str(exc))
     signal.signal(signal.SIGUSR1, interrupt)
     official_source = inspect.getsourcefile(lib_run_single.run_single_example)
-    lib_run_single.run_single_example = resume_loop(lib_run_single.run_single_example)
+    # Install inline evaluation hooks before the official globals are copied.
+    # The final max_steps evaluation remains the original loop's final call.
+    from .evaluation_milestones import install as install_evaluation_milestones
+    wrap_evaluation_loop = install_evaluation_milestones(stage, manifest, lib_run_single)
+    lib_run_single.run_single_example = wrap_evaluation_loop(resume_loop(lib_run_single.run_single_example))
     atomic(Path(stage)/'runner-checkpoint-contract.json', {
         'official_function': 'lib_run_single.run_single_example',
         'official_source_sha256': sha(official_source),
