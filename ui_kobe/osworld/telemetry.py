@@ -309,25 +309,26 @@ def install(root: Path) -> None:
     def evaluate(self, *args, **kwargs):
         _context.phase = "judge"
         intermediate = getattr(_context, 'intermediate_evaluation', False)
+        graph_enabled = not intermediate and not getattr(_context, 'evaluation_audit_only', False)
         prefix = 'milestone_evaluation' if intermediate else 'evaluation'
         from .lifecycle import write_phase
         if _root is not None and not intermediate:
             write_phase(_root.parent, "evaluating")
         emit(prefix + '_start')
-        if not intermediate:
+        if graph_enabled:
             record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_start')
         started = time.monotonic()
         try:
             score = original_evaluate(self, *args, **kwargs)
             emit(prefix + '_result', score=score, duration_s=round(time.monotonic()-started, 3))
-            if not intermediate:
+            if graph_enabled:
                 record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_result', score=score)
             if _root is not None and not intermediate:
                 write_phase(_root.parent, "evaluation_returned", evaluation_returned=True, raw_official_score=safe(score))
             return score
         except Exception as exc:
             emit(prefix + '_error', error_type=type(exc).__name__, error=str(exc))
-            if not intermediate:
+            if graph_enabled:
                 record_transition(getattr(_context, 'agent', None), 'phase', 'evaluation_error', error=str(exc))
             raise
     DesktopEnv.evaluate = evaluate

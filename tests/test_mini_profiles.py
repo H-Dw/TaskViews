@@ -77,8 +77,9 @@ def test_runner_contract_cannot_mix_manifest_and_plan(monkeypatch):
 
 @pytest.mark.parametrize('arm', ['taskviews', 'ui_kobe_like'])
 @pytest.mark.parametrize('inspection', [None, 10])
-@pytest.mark.parametrize('low50', [False, True])
-def test_offline_preparation_and_launch_freeze_one_profile_without_starting_services(tmp_path, monkeypatch, arm, inspection, low50):
+@pytest.mark.parametrize('effort', [None, 'low', 'high', 'xhigh'])
+def test_offline_preparation_and_launch_freeze_one_profile_without_starting_services(tmp_path, monkeypatch, arm, inspection, effort):
+    low50 = effort is not None
     from examples import osworld2_eval
     from ui_kobe.osworld import official_base, task_examples, runner
     monkeypatch.setattr(official_base, 'verify_official_base', lambda *a: None)
@@ -100,7 +101,7 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
     experiment.prepare(root, '059', validation, agent_interface='qwen-native', compatibility=proof,
                        checkpoints=True, taskviews_profile=PROFILE, qwen_arm=arm, inspection_minutes=inspection,
                        purpose='checkpoint_evaluation' if low50 else 'evaluation', max_steps=50 if low50 else None,
-                       qwen_generation_profile='qwen-sse-low-total16k' if low50 else None,
+                       qwen_generation_profile=f'qwen-sse-{effort}-total16k' if low50 else None,
                        evaluation_steps=[15, 30, 50] if low50 else None)
     plan = experiment.load(root / 'plan.json')
     assert plan['arms'] == [arm] and plan['implementation_version'] == 10
@@ -109,7 +110,7 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
     assert plan['cua_contract'] == mini_cua_contract() and plan['max_steps'] == (50 if low50 else 500)
     assert plan['checkpoint_policy']['inspection_minutes'] == (30 if inspection is None else inspection)
     if low50:
-        assert plan['generation_profile']['reasoning_effort'] == 'low'
+        assert plan['generation_profile']['reasoning_effort'] == effort
         assert plan['provider_request']['enable_thinking'] is True and plan['provider_request']['stream'] is True
         assert plan['provider_request']['output_field'] == 'max_completion_tokens'
         assert plan['provider_request']['stream_options'] == {'include_usage': True}

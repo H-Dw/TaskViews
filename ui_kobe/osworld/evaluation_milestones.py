@@ -123,6 +123,8 @@ def install(stage, manifest, official_module, env_type=None):
             record['journal'] = {'path': str(journal.path), 'episode_id': journal.episode_id,
                                  'seq': journal.db.execute('SELECT coalesce(max(seq),0) FROM events').fetchone()[0]}
         atomic(folder / 'started.json', record)
+        previous_audit_only = getattr(telemetry._context, 'evaluation_audit_only', False)
+        telemetry._context.evaluation_audit_only = True
         try:
             record['original_evaluator_called'] = True
             result = old_evaluate(env, *args, **kwargs)
@@ -135,6 +137,7 @@ def install(stage, manifest, official_module, env_type=None):
             record.update(status='error', error_type=type(exc).__name__, error=str(exc)[:1000])
             raise
         finally:
+            telemetry._context.evaluation_audit_only = previous_audit_only
             record['official_analysis_output'] = capture_file(env,
                 '/home/user/.local/share/task059data/task059_result.json', folder / 'task059_result.json')
             record['ended_time'] = time.time()

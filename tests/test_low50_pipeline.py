@@ -20,7 +20,8 @@ def declared(tmp_path):
 
 def paused_stage(root, cfg, kind='ConnectError'):
     stage = Path(cfg['plans']['ui_kobe_like']) / 'ui_kobe_like'
-    write(stage / 'manifest.json', {'unit': 'offline-owned.service', 'plan_root': str(stage.parent)})
+    write(stage / 'manifest.json', {'unit': 'offline-owned.service', 'plan_root': str(stage.parent),
+                                  'generation_profile': {'name': cfg['generation_profile']}})
     write(stage / 'paused.json', {'error_type': kind, 'error': 'original failed transport'})
     return stage
 
@@ -83,7 +84,8 @@ def test_valid_zero_score_and_owned_cleanup_allow_only_the_next_mini(declared, m
     root, cfg = declared
     stage = paused_stage(root, cfg)
     (stage / 'paused.json').unlink()
-    write(stage / 'manifest.json', {'unit': 'owned-ui.service', 'run_id': 'owned-ui', 'runtime_paths': []})
+    write(stage / 'manifest.json', {'unit': 'owned-ui.service', 'run_id': 'owned-ui', 'runtime_paths': [],
+                                  'generation_profile': {'name': cfg['generation_profile']}})
     write(stage / 'audit.json', {'valid_score': True, 'source_unchanged': True, 'cleanup_ok': True,
                                'score': 0.0, 'counters': {'decisions': 50}, 'evaluation_milestones': []})
     monkeypatch.setattr(pipeline, 'unit_state', lambda *_: {'ControlPID': '0', 'MainPID': '0', 'ActiveState': 'inactive'})
@@ -161,7 +163,8 @@ def test_reused_ports_require_a_prior_verified_immutable_cleanup_receipt(declare
     root, cfg = declared
     stage = paused_stage(root, cfg)
     (stage / 'paused.json').unlink()
-    write(stage / 'manifest.json', {'unit': 'owned-ui.service', 'run_id': 'owned-ui', 'runtime_paths': []})
+    write(stage / 'manifest.json', {'unit': 'owned-ui.service', 'run_id': 'owned-ui', 'runtime_paths': [],
+                                  'generation_profile': {'name': cfg['generation_profile']}})
     write(stage / 'audit.json', {'valid_score': True, 'source_unchanged': True, 'cleanup_ok': True,
                                'score': 0.0, 'counters': {'decisions': 50}, 'evaluation_milestones': []})
     write(stage / 'checkpoint-vm.json', {'ports': {'vnc': 8006}})
@@ -203,7 +206,8 @@ def test_initial_checkpoint_resume_uses_actual_manifest_repair_proof(declared, m
     stage = paused_stage(root, cfg, 'StartupRecoveryProbe')
     repair = stage / 'repair-plans/new-source'
     write(repair / 'validation.json', {'actual_source': True})
-    write(stage / 'manifest.json', {'unit': 'offline-owned.service', 'plan_root': str(repair)})
+    write(stage / 'manifest.json', {'unit': 'offline-owned.service', 'plan_root': str(repair),
+                                  'generation_profile': {'name': cfg['generation_profile']}})
     monkeypatch.setattr(pipeline, 'unit_state', lambda *_: {'ControlPID': '0', 'MainPID': '0', 'ActiveState': 'inactive'})
     monkeypatch.setattr(pipeline, 'settled_requests', lambda *_: (set(), set()))
     calls = []

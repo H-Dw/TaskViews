@@ -55,7 +55,7 @@ def invoke(client, ledger, messages=None):
                          step_ledger=ledger, budget_role='executor', deadline=ledger.deadline)
 
 
-@pytest.mark.parametrize('effort', ['low', 'xhigh'])
+@pytest.mark.parametrize('effort', ['low', 'high', 'xhigh'])
 def test_fragmented_utf8_tools_reasoning_usage_and_exact_raw_archive(tmp_path, effort):
     raw = valid_stream()
     class Bytes(httpx.SyncByteStream):

@@ -29,8 +29,9 @@ def completion_hook(root, run_id, directory):
     if not (root / 'pipeline.json').is_file() or not (root / 'state.json').is_file():
         raise ValueError('Completion controller must be prepared before launching')
     name = run_id + '-followup.service'
+    controller = 'task059_reasoning_matrix.py' if load(root / 'pipeline.json').get('version') == 'qwen-task059-reasoning-matrix-v1' else 'task059_low50_pipeline.py'
     command = ['systemd-run', '--user', '--scope', '--quiet', '--property=MemoryMax=128M',
-               '--property=MemorySwapMax=0', str(PYTHON), str(Path(__file__).resolve()),
+               '--property=MemorySwapMax=0', str(PYTHON), str(PROJECT / 'scripts' / controller),
                'advance', '--root', str(root)]
     text = ('[Unit]\nDescription=Serial Task059 completion dispatch\n\n[Service]\nType=oneshot\n'
             f'WorkingDirectory={PROJECT}\nExecStart={shlex.join(command)}\n'
@@ -111,8 +112,8 @@ def advance(root):
         raise RuntimeError('Pipeline configuration changed')
     if cfg['order'] != ['ui_kobe_like', 'taskviews'] or cfg['max_steps'] != 50 or cfg['evaluation_steps'] != [15, 30, 50]:
         raise ValueError('Not the authorized Task059 low50 pipeline')
-    if cfg['generation_profile'] != 'qwen-sse-low-total16k':
-        raise ValueError('Both arms require the same frozen low reasoning profile')
+    if cfg['generation_profile'] not in ('qwen-sse-low-total16k', 'qwen-sse-high-total16k', 'qwen-sse-xhigh-total16k'):
+        raise ValueError('Both arms require one explicit frozen SSE reasoning profile')
     if state.get('phase') == 'complete':
         return state
     if state.get('formal_actor_resume_authorized') is False:
@@ -128,6 +129,8 @@ def advance(root):
             launch(plan_root, arm)
             return state
         m = load(stage / 'manifest.json')
+        if m['generation_profile']['name'] != cfg['generation_profile']:
+            raise RuntimeError('Actual arm reasoning profile differs from its serial pair')
         current = unit_state(m['unit'])
         if current['ControlPID'] != '0' or current['MainPID'] != '0' or current['ActiveState'] in ('active', 'activating', 'deactivating'):
             return state

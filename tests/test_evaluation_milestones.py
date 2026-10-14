@@ -39,7 +39,7 @@ def test_explicit_short_evaluation_and_unknown_profiles_are_not_silent_defaults(
         with pytest.raises(ValueError):
             trial_max_steps('checkpoint_evaluation', bad)
     with pytest.raises(ValueError):
-        generation_profile('qwen-sse-high-total16k')
+        generation_profile('qwen-sse-unknown-total16k')
     p = plan()
     assert milestones.validate_evaluation_policy(p, p) == p['evaluation_policy']
     for field, value in [('max_steps', 500), ('evaluation_policy', None), ('official_arguments', ['--max_steps', '500'])]:
@@ -99,6 +99,7 @@ def test_real_official_loop_scores_completed_decisions_and_never_advances_past50
             observations.append((agent.total_steps, action))
             return self._get_obs(), 0, self.action_count == terminate_at, {}
         def evaluate(self):
+            assert telemetry._context.evaluation_audit_only is True
             calls.append((agent.total_steps, telemetry._context.intermediate_evaluation))
             return agent.total_steps / 100
     original_evaluate = Env.evaluate
@@ -132,6 +133,7 @@ def test_real_official_loop_scores_completed_decisions_and_never_advances_past50
             assert record['intermediate'] == intermediate
         assert len(captures) == len(calls) * 2
         assert telemetry._context.phase == 'action' and not telemetry._context.intermediate_evaluation
+        assert not telemetry._context.evaluation_audit_only
     finally:
         Env.evaluate = original_evaluate
 
@@ -151,3 +153,32 @@ def test_intermediate_telemetry_does_not_enter_terminal_lifecycle_or_journal(tmp
     assert namespace['evaluate'](object()) == .2
     assert events == ['milestone_evaluation_start', 'milestone_evaluation_result'] and not graph
     assert not list(tmp_path.glob('*.json'))
+
+
+@pytest.mark.parametrize('failure', [False, True])
+def test_final_milestone_telemetry_preserves_audit_but_never_scores_the_graph(tmp_path, monkeypatch, failure):
+    from ui_kobe.osworld import lifecycle
+    source = Path(telemetry.__file__)
+    tree = ast.parse(source.read_text())
+    install = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'install')
+    evaluate = next(n for n in install.body if isinstance(n, ast.FunctionDef) and n.name == 'evaluate')
+    events, graph, phases = [], [], []
+    def original(*_):
+        if failure:
+            raise RuntimeError('original evaluator failed')
+        return .2
+    monkeypatch.setattr(lifecycle, 'write_phase', lambda path, phase, **kw: phases.append((phase, kw)))
+    monkeypatch.setattr(telemetry._context, 'intermediate_evaluation', False, raising=False)
+    monkeypatch.setattr(telemetry._context, 'evaluation_audit_only', True, raising=False)
+    namespace = {**telemetry.__dict__, '_root': tmp_path / 'telemetry', 'original_evaluate': original,
+        'emit': lambda kind, **v: events.append(kind), 'record_transition': lambda *a, **k: graph.append(a)}
+    exec(compile(ast.Module(body=[evaluate], type_ignores=[]), str(source), 'exec'), namespace)
+    if failure:
+        with pytest.raises(RuntimeError, match='original evaluator failed'):
+            namespace['evaluate'](object())
+        assert events == ['evaluation_start', 'evaluation_error']
+    else:
+        assert namespace['evaluate'](object()) == .2
+        assert events == ['evaluation_start', 'evaluation_result']
+        assert phases[-1] == ('evaluation_returned', {'evaluation_returned': True, 'raw_official_score': .2})
+    assert phases[0][0] == 'evaluating' and not graph
