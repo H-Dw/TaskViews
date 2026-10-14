@@ -137,7 +137,7 @@ def advance(root):
             if (paused.get('error_type') == 'StartupRecoveryProbe' and not requests
                     and not state.get(arm + '_startup_resumed')):
                 from scripts.taskviews_recovery import resume
-                result = resume(stage, Path(cfg['validation']), 'Verify the authorized new episode initial checkpoint in the same VM')
+                result = resume(stage, plan_root / 'validation.json', 'Verify the authorized new episode initial checkpoint in the same VM')
                 if result['status'] == 'resuming':
                     record(root, state, phase=arm + '_initial_checkpoint_resume_submitted', current_arm=arm,
                            **{arm + '_startup_resumed': True}, last_resume=result)

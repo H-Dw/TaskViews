@@ -55,12 +55,15 @@ def test_startup_probe_permits_one_same_vm_resume_and_never_infinite_retries(dec
     from scripts import taskviews_recovery
     root, cfg = declared
     stage = paused_stage(root, cfg, 'StartupRecoveryProbe')
+    write(stage.parent / 'validation.json', {'source': 'current replacement plan'})
+    write(Path(cfg['validation']), {'source': 'old pipeline preparation'})
     monkeypatch.setattr(pipeline, 'unit_state', lambda *_: {'ControlPID': '0', 'MainPID': '0', 'ActiveState': 'inactive'})
     monkeypatch.setattr(pipeline, 'settled_requests', lambda *_: (set(), set()))
     calls = []
     monkeypatch.setattr(taskviews_recovery, 'resume', lambda s, v, r: calls.append((s, v)) or {'status': 'resuming'})
     state = pipeline.advance(root)
-    assert state['ui_kobe_like_startup_resumed'] and calls == [(stage, Path(cfg['validation']))]
+    assert state['ui_kobe_like_startup_resumed'] and calls == [(stage, stage.parent / 'validation.json')]
+    assert pipeline.load(calls[0][1])['source'] == 'current replacement plan'
     assert pipeline.advance(root)['phase'] == 'ui_kobe_like_paused'
     assert len(calls) == 1
 
