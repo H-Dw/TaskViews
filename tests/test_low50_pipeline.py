@@ -20,7 +20,7 @@ def declared(tmp_path):
 
 def paused_stage(root, cfg, kind='ConnectError'):
     stage = Path(cfg['plans']['ui_kobe_like']) / 'ui_kobe_like'
-    write(stage / 'manifest.json', {'unit': 'offline-owned.service'})
+    write(stage / 'manifest.json', {'unit': 'offline-owned.service', 'plan_root': str(stage.parent)})
     write(stage / 'paused.json', {'error_type': kind, 'error': 'original failed transport'})
     return stage
 
@@ -153,3 +153,60 @@ def test_prepared_mini_override_is_explicit_and_hash_checked(declared):
     write(replacement / 'plan.json', {'tampered': True})
     with pytest.raises(RuntimeError, match='plan/proof changed'):
         pipeline.active_plan(cfg, state, 'taskviews')
+
+
+@pytest.mark.parametrize('verified', [False, True])
+def test_reused_ports_require_a_prior_verified_immutable_cleanup_receipt(declared, monkeypatch, verified):
+    import docker
+    root, cfg = declared
+    stage = paused_stage(root, cfg)
+    (stage / 'paused.json').unlink()
+    write(stage / 'manifest.json', {'unit': 'owned-ui.service', 'run_id': 'owned-ui', 'runtime_paths': []})
+    write(stage / 'audit.json', {'valid_score': True, 'source_unchanged': True, 'cleanup_ok': True,
+                               'score': 0.0, 'counters': {'decisions': 50}, 'evaluation_milestones': []})
+    write(stage / 'checkpoint-vm.json', {'ports': {'vnc': 8006}})
+    if verified:
+        state = pipeline.load(root / 'state.json')
+        state['ui_kobe_like_completed'] = {'audit': str(stage / 'audit.json'),
+            'audit_sha256': digest(stage / 'audit.json'), 'cleanup_verified': True}
+        write(root / 'state.json', state)
+    monkeypatch.setattr(pipeline, 'unit_state', lambda *_: {'ControlPID': '0', 'MainPID': '0', 'ActiveState': 'inactive'})
+    monkeypatch.setattr(pipeline, 'settled_requests', lambda *_: ({'original'}, {'original'}))
+    monkeypatch.setattr(docker, 'from_env', lambda **_: SimpleNamespace(
+        containers=SimpleNamespace(list=lambda **_: []), close=lambda: None))
+    class BoundSocket:
+        def __enter__(self):
+            return self
+        def __exit__(self, *_):
+            pass
+        def settimeout(self, _):
+            pass
+        def connect_ex(self, _):
+            return 0
+    monkeypatch.setattr(pipeline.socket, 'socket', BoundSocket)
+    monkeypatch.setattr(pipeline, 'frozen_check', lambda *_: None)
+    monkeypatch.setattr(pipeline, 'launch', lambda *_: None)
+    if not verified:
+        with pytest.raises(RuntimeError, match='port still bound'):
+            pipeline.advance(root)
+    else:
+        assert pipeline.advance(root)['phase'] == 'taskviews_launch_submitted'
+        write(stage / 'audit.json', {'valid_score': True, 'source_unchanged': True, 'cleanup_ok': True,
+                                   'score': 1.0, 'counters': {'decisions': 50}})
+        with pytest.raises(RuntimeError, match='cleanup receipt changed'):
+            pipeline.advance(root)
+
+
+def test_initial_checkpoint_resume_uses_actual_manifest_repair_proof(declared, monkeypatch):
+    from scripts import taskviews_recovery
+    root, cfg = declared
+    stage = paused_stage(root, cfg, 'StartupRecoveryProbe')
+    repair = stage / 'repair-plans/new-source'
+    write(repair / 'validation.json', {'actual_source': True})
+    write(stage / 'manifest.json', {'unit': 'offline-owned.service', 'plan_root': str(repair)})
+    monkeypatch.setattr(pipeline, 'unit_state', lambda *_: {'ControlPID': '0', 'MainPID': '0', 'ActiveState': 'inactive'})
+    monkeypatch.setattr(pipeline, 'settled_requests', lambda *_: (set(), set()))
+    calls = []
+    monkeypatch.setattr(taskviews_recovery, 'resume', lambda s, v, r: calls.append(v) or {'status': 'resuming'})
+    pipeline.advance(root)
+    assert calls == [repair / 'validation.json']

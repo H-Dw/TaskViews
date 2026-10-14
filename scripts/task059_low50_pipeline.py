@@ -137,7 +137,7 @@ def advance(root):
             if (paused.get('error_type') == 'StartupRecoveryProbe' and not requests
                     and not state.get(arm + '_startup_resumed')):
                 from scripts.taskviews_recovery import resume
-                result = resume(stage, plan_root / 'validation.json', 'Verify the authorized new episode initial checkpoint in the same VM')
+                result = resume(stage, Path(m['plan_root']) / 'validation.json', 'Verify the authorized new episode initial checkpoint in the same VM')
                 if result['status'] == 'resuming':
                     record(root, state, phase=arm + '_initial_checkpoint_resume_submitted', current_arm=arm,
                            **{arm + '_startup_resumed': True}, last_resume=result)
@@ -157,6 +157,11 @@ def advance(root):
             record(root, state, phase=arm + '_audit_failed', current_arm=arm,
                    audit_checks={k: audit.get(k) for k in ('valid_score', 'source_unchanged', 'cleanup_ok')})
             return state
+        completed = state.get(arm + '_completed')
+        if completed and (completed.get('audit') != str(stage / 'audit.json')
+                          or completed.get('audit_sha256') != digest(stage / 'audit.json')
+                          or completed.get('cleanup_verified') is not True):
+            raise RuntimeError('Completed predecessor cleanup receipt changed')
         requests, outcomes = settled_requests(stage)
         if requests != outcomes:
             raise RuntimeError('An API request is unsettled; cannot advance the serial pipeline')
@@ -169,7 +174,9 @@ def advance(root):
         for runtime in m.get('runtime_paths', []):
             if Path(runtime).exists():
                 raise RuntimeError('Owned predecessor overlay remains')
-        if (stage / 'checkpoint-vm.json').exists():
+        # Ports were checked before recording completion. A successor may now
+        # legitimately reuse them; continue checking the old VM/overlay identity.
+        if not completed and (stage / 'checkpoint-vm.json').exists():
             for port in load(stage / 'checkpoint-vm.json')['ports'].values():
                 with socket.socket() as s:
                     s.settimeout(1)
