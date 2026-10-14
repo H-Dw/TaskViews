@@ -19,6 +19,7 @@ import httpx
 
 from .kimi_stream import (Completion, OutputTokenLimitError, ProviderQuotaBlocked,
                           RateLimitDeferred, StreamBudget, StreamProtocolError, retry_after_seconds, safe_error_body)
+from .qwen_connection import ConnectionTrace, QwenConnectionUnavailable, exception_chain
 
 BASE_URL = 'https://pjfdspqowq.a.pinggy.link'
 MODEL = 'qwen3.8-max'
@@ -29,19 +30,27 @@ PROTOCOL = 'qwen3.8-max-native-tools-official-cua-checkpoints-v9'
 class QwenTransportBudget(StreamBudget):
     """More network attempts within the existing time/output admission bounds."""
     attempts: int = 6
+    connect_reset_limit: int = 3
 
     def __post_init__(self):
         if type(self.attempts) is not int or not 1 <= self.attempts <= 6:
             raise ValueError('Qwen supports at most six transport attempts')
-        StreamBudget(**{**self.__dict__, 'attempts': min(2, self.attempts)})
+        if type(self.connect_reset_limit) is not int or not 0 <= self.connect_reset_limit <= 6:
+            raise ValueError('Qwen connection reset limit must be 0..6')
+        StreamBudget(**{**{k: v for k, v in self.__dict__.items() if k != 'connect_reset_limit'},
+                        'attempts': min(2, self.attempts)})
 
 
 def transport_policy(budget=None):
     budget = budget or QwenTransportBudget()
-    return {'version': 'qwen-bounded-retry-v1', 'budget': budget.__dict__,
+    return {'version': 'qwen-phase-aware-retry-v2', 'budget': budget.__dict__,
             'backoff': 'exponential 3s, capped at 60s; 429 respects Retry-After >=60s',
             'idle_connection_reuse': False, 'unknown_usage': 'NULL; reservation remains charged',
-            'output_admission': 'first original cap; retry shares remaining role output across remaining attempts'}
+            'output_admission': 'first original cap; retry shares remaining role output across remaining attempts',
+            'connection_reset_circuit': {'consecutive_limit': budget.connect_reset_limit,
+                'requires': 'ConnectError reset plus trace-confirmed failure before origin HTTP dispatch',
+                'state': 'per original create call; no automatic recovery probe or route change'},
+            'phase_trace': 'bounded credential-free TCP/TLS/upload/headers/body trace and original exception chain'}
 
 
 @dataclass(frozen=True)
@@ -161,6 +170,7 @@ class QwenNativeClient:
         if type(requested_cap) is not int or not 0 < requested_cap <= step_ledger.allowance(budget_role):
             raise ValueError('Request exceeds its declared role output admission')
         overall = min(deadline, time.monotonic() + self.budget.total_s)
+        pre_http_resets = 0
         for attempt in range(1, self.budget.attempts + 1):
             remaining = min(overall - time.monotonic(), self.budget.generation_s)
             if remaining <= self.budget.connect_s:
@@ -181,6 +191,7 @@ class QwenNativeClient:
                 generation_attempt=generation_attempt, parent_request_id=parent_request_id,
                 budget_role=budget_role, payload=payload)
             started = time.monotonic()
+            trace = ConnectionTrace(self.key, started)
             self.last_timing = {'stream': streaming, 'first_sse_s': None, 'stream_done_s': None}
             usage, body, error, response_path, raw_sha, status = None, None, None, None, None, None
             sse_path = None
@@ -197,7 +208,7 @@ class QwenNativeClient:
                     is_sse = False
                     last_chunk = None
                     for kind, value in response_events(self.client, BASE_URL + '/chat/completions', payload,
-                                                       timeout, min(overall, started + self.budget.generation_s)):
+                                                       timeout, min(overall, started + self.budget.generation_s), trace=trace):
                         elapsed = round(time.monotonic() - started, 4)
                         if kind == 'headers':
                             response = value
@@ -257,11 +268,13 @@ class QwenNativeClient:
                     body = accumulator.complete()
                     if usage is not None and usage['completion_tokens'] > cap:
                         raise OutputTokenLimitError(body)
+                    self.last_timing['transport'] = trace.snapshot()
                     self.emit('api_response', request_id=rid, response=body, timings=self.last_timing,
                               raw_response_sha256=raw_sha, raw_sse_path=str(sse_path), raw_response_path=str(response_path),
                               canonical_response_sha256=hashlib.sha256(response_path.read_bytes()).hexdigest())
                     return Completion(body)
-                with self.client.stream('POST', BASE_URL + '/chat/completions', json=payload, timeout=timeout) as response:
+                with self.client.stream('POST', BASE_URL + '/chat/completions', json=payload,
+                                        timeout=timeout, extensions={'trace': trace}) as response:
                     status = response.status_code
                     self.last_timing = {'headers_s': round(time.monotonic() - started, 4), 'stream': False,
                                         'first_sse_s': None, 'stream_done_s': None}
@@ -308,6 +321,7 @@ class QwenNativeClient:
                     if (choice.get('finish_reason') not in ['stop', 'tool_calls']
                             or not isinstance(choice.get('message'), dict)):
                         raise StreamProtocolError('Incomplete Qwen completion', code='invalid_finish', observed_response=body, retryable=True)
+                    self.last_timing['transport'] = trace.snapshot()
                     self.emit('api_response', request_id=rid, response=body, timings=self.last_timing,
                               raw_response_sha256=raw_sha, raw_response_path=str(response_path))
                     return Completion(body)
@@ -332,7 +346,17 @@ class QwenNativeClient:
                         saved.write(safe_error_body(raw.decode('utf-8', errors='replace'), self.key))
                 self.emit('api_error', request_id=rid, error_type=type(failure).__name__,
                           error=safe_error_body(str(failure), self.key), error_code=getattr(failure, 'code', None),
-                          status_code=status, observed_response=body if usage is not None else None)
+                          status_code=status, observed_response=body if usage is not None else None,
+                          error_causes=exception_chain(failure, self.key), transport=trace.snapshot())
+                pre_http_resets = pre_http_resets + 1 if trace.confirmed_pre_http_reset(failure) else 0
+                reset_limit = getattr(self.budget, 'connect_reset_limit', 3)
+                if reset_limit and pre_http_resets >= reset_limit:
+                    phase = trace.snapshot()['failure_phase']
+                    self.emit('connection_circuit_open', request_id=rid, consecutive_resets=pre_http_resets,
+                              failure_phase=phase, automatic_recovery_probe=False)
+                    unavailable = QwenConnectionUnavailable(pre_http_resets, phase)
+                    unavailable.request_id = rid
+                    raise unavailable from failure
                 # A reused gateway connection can close before headers, or
                 # during its body. No candidate is returned or executed until
                 # the complete response passes validation. Keep this retry in
@@ -348,13 +372,30 @@ class QwenNativeClient:
                     raise
             finally:
                 self.last_timing['complete_s'] = round(time.monotonic() - started, 4)
+                transport = trace.snapshot()
+                transport['exception_chain'] = exception_chain(error, self.key) if error else []
+                trace_path = self.response_dir / (rid + '.transport.json')
+                archive_error = None
+                try:
+                    with trace_path.open('x', encoding='utf-8') as saved:
+                        json.dump(transport, saved, ensure_ascii=False, indent=2)
+                        saved.write('\n')
+                except Exception as failure:
+                    archive_error = failure
+                    self.emit('transport_trace_archive_error', request_id=rid,
+                              error_type=type(failure).__name__, error=safe_error_body(str(failure), self.key))
+                self.last_timing['transport'] = transport
                 step_ledger.settle(rid, usage)
                 self.emit('request_outcome', request_id=rid, attempt=attempt, generation_attempt=generation_attempt,
                     parent_request_id=parent_request_id, outcome='error' if error else 'complete',
                     usage=usage, observed_response=body if usage is not None else None, stream=streaming,
                     stream_done=accumulator.done if accumulator is not None else False,
                     raw_sse_path=str(sse_path) if sse_path else None, raw_response_path=str(response_path) if response_path else None,
-                    raw_response_sha256=raw_sha, duration_s=self.last_timing['complete_s'], executable=False)
+                    raw_response_sha256=raw_sha, duration_s=self.last_timing['complete_s'], executable=False,
+                    transport=transport, transport_trace_path=str(trace_path) if archive_error is None else None,
+                    transport_trace_sha256=hashlib.sha256(trace_path.read_bytes()).hexdigest() if archive_error is None else None)
+                if archive_error is not None:
+                    raise archive_error from error
             self.emit('transport_retry', request_id=rid, next_attempt=attempt + 1, sleep_s=delay)
             self.sleep(delay)
         raise RuntimeError('Qwen transport attempts exhausted')

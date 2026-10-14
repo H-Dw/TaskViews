@@ -9,7 +9,7 @@ import time
 from .kimi_stream import OutputTokenLimitError, StreamProtocolError
 
 
-def response_events(client, url, payload, timeout, end):
+def response_events(client, url, payload, timeout, end, *, trace=None):
     """Bound wall time even while the socket is waiting for its next bytes.
 
     A wall deadline is not retried: the sole reader may need its bounded socket
@@ -27,7 +27,8 @@ def response_events(client, url, payload, timeout, end):
 
     def read():
         try:
-            with client.stream('POST', url, json=payload, timeout=timeout) as response:
+            extensions = {'trace': trace} if trace is not None else {}
+            with client.stream('POST', url, json=payload, timeout=timeout, extensions=extensions) as response:
                 put('headers', response)
                 for chunk in response.iter_bytes():
                     if cancel.is_set():
