@@ -9,13 +9,45 @@ from scripts.osworld_native_experiment import digest, write
 
 
 @pytest.fixture
-def declared(tmp_path):
+def declared(tmp_path, monkeypatch):
+    read_text = Path.read_text
+
+    def controlled_host(path, *args, **kwargs):
+        if path == Path('/proc/swaps'):
+            return 'Filename\tType\tSize\tUsed\tPriority\n'
+        return read_text(path, *args, **kwargs)
+
+    # These unit tests simulate a ready host; do not depend on the test machine's swap.
+    monkeypatch.setattr(Path, 'read_text', controlled_host)
     cfg = {'order': ['ui_kobe_like', 'taskviews'], 'max_steps': 50, 'evaluation_steps': [15, 30, 50],
            'generation_profile': 'qwen-sse-low-total16k', 'validation': str(tmp_path / 'proof.json'),
            'plans': {a: str(tmp_path / a) for a in ('ui_kobe_like', 'taskviews')}}
     write(tmp_path / 'pipeline.json', cfg)
     write(tmp_path / 'state.json', {'phase': 'prepared', 'config_sha256': digest(tmp_path / 'pipeline.json')})
     return tmp_path, cfg
+
+
+def test_swap_enabled_still_blocks_successor_launch(declared, monkeypatch):
+    root, cfg = declared
+    stage = paused_stage(root, cfg)
+    (stage / 'paused.json').unlink()
+    write(stage / 'manifest.json', {'unit': 'offline-owned.service', 'run_id': 'offline-owned',
+        'runtime_paths': [], 'generation_profile': {'name': cfg['generation_profile']}})
+    write(stage / 'audit.json', {'valid_score': True, 'source_unchanged': True, 'cleanup_ok': True,
+        'score': 0.0, 'counters': {'decisions': 50}, 'evaluation_milestones': []})
+    monkeypatch.setattr(pipeline, 'unit_state', lambda *_: {'ControlPID': '0', 'MainPID': '0', 'ActiveState': 'inactive'})
+    monkeypatch.setattr(pipeline, 'settled_requests', lambda *_: ({'one'}, {'one'}))
+    monkeypatch.setattr(pipeline, 'launch', lambda *_: pytest.fail('Swap must block the next VM'))
+    read_text = Path.read_text
+
+    def host_with_swap(path, *args, **kwargs):
+        if path == Path('/proc/swaps'):
+            return 'Filename\tType\tSize\tUsed\tPriority\n/dev/offline-test partition 1024 0 -2\n'
+        return read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'read_text', host_with_swap)
+    with pytest.raises(RuntimeError, match='Swap is enabled'):
+        pipeline.advance(root)
 
 
 def paused_stage(root, cfg, kind='ConnectError'):

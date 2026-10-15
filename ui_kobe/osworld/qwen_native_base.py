@@ -35,8 +35,12 @@ class QwenNativeProvider:
             if part.get('type') != 'image_url':
                 result.append(part)
                 continue
+            contract = getattr(self, 'contract', None)
+            target = (max(0, contract.context_max_payload_chars - contract.context_max_text_chars
+                          - contract.context_reserve_chars) if contract is not None else None)
             url, record = recompress(part['image_url']['url'],
-                                    (self.frame.screenshot.model_width, self.frame.screenshot.model_height))
+                                    (self.frame.screenshot.model_width, self.frame.screenshot.model_height),
+                                    target_data_url_chars=target)
             result.append({**part, 'image_url': {**part['image_url'], 'url': url}})
             telemetry.emit('qwen_image_transport', frame_id=self.frame.metadata['frame_id'],
                            source_screenshot_sha256=self.frame.original_sha256, **record)

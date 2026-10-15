@@ -185,10 +185,17 @@ def test_checkpoint_fails_closed_on_corruption_and_incomplete_vm_save(tmp_path):
 
 
 def test_checkpoint_retains_three_and_does_not_delete_original_evidence(tmp_path):
+    import os
+
     manager = Checkpoints(tmp_path/'stage', {}, qmp=VM())
     manager.vm = {}
     agent = agent_at_boundary(tmp_path)
-    tags = [manager.save(agent, 'Original user goal', {'screenshot':b's'}) for _ in range(4)]
+    tags = []
+    for index in range(4):
+        tag = manager.save(agent, 'Original user goal', {'screenshot':b's'})
+        tags.append(tag)
+        # Model strictly successive snapshots even on filesystems with coarse mtimes.
+        os.utime(manager.root / tag, (index + 1, index + 1))
     assert (manager.root/tags[0]/'expired.json').exists()
     assert not (manager.root/tags[0]/'actor.json').exists()
     assert agent.execution_journal.path.exists()

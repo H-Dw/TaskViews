@@ -131,3 +131,43 @@ def test_real_history_admission_preserves_native_ids_and_feedback():
     compact(turns, step=2, folded=0, contract=contract, system={'role': 'system', 'content': 'same system'}, current=current)
     assert turns == [saved] and turns[0][1]['tool_calls'][0]['id'] == turns[0][2]['tool_call_id'] == 'same-id'
     assert context_size([{'role': 'system', 'content': 'same system'}, *turns[0], current])[0] + 10000 < len(url)
+
+
+def test_fast_path_avoids_refilter_work_when_image_already_has_room(monkeypatch):
+    url, _, pixels = picture()
+    monkeypatch.setattr(png, '_refilter_candidates', lambda *a: pytest.fail('Unexpected expensive search'))
+    wire, audit = png.recompress(url, (240, 120), target_data_url_chars=len(url))
+    with Image.open(BytesIO(base64.b64decode(wire[len(png.PREFIX):]))) as image:
+        assert image.tobytes() == pixels
+    assert not audit['refilter_search_used'] and audit['candidate_count'] == 1
+
+
+def test_refilter_preserves_chunks_and_all_pixels_and_has_bounded_candidates():
+    url, blob, pixels = picture(noise=True, level=9)
+    # Ancillary data and the IHDR are preserved exactly while IDAT/filtering may change.
+    blob = blob[:33] + png._chunk(b'tEXt', b'origin\0unchanged') + blob[33:]
+    wire, audit = png.recompress(png.PREFIX + base64.b64encode(blob).decode(), (240, 120), target_data_url_chars=0)
+    encoded = base64.b64decode(wire[len(png.PREFIX):])
+    assert png._chunk(b'tEXt', b'origin\0unchanged') in encoded and encoded[:33] == blob[:33]
+    with Image.open(BytesIO(encoded)) as image:
+        assert image.mode == 'RGB' and image.tobytes() == pixels
+    assert len(encoded) <= len(blob) and audit['candidate_count'] <= png.policy()['max_compression_candidates']
+    assert audit['refilter_search_used']
+
+
+def test_deadline_discards_partial_candidate_and_retains_a_valid_png(monkeypatch):
+    url, blob, pixels = picture(noise=True)
+    monkeypatch.setattr(png, 'SEARCH_SECONDS', 0)
+    wire, audit = png.recompress(url, (240, 120), target_data_url_chars=0)
+    encoded = base64.b64decode(wire[len(png.PREFIX):])
+    with Image.open(BytesIO(encoded)) as image:
+        assert image.tobytes() == pixels
+    assert len(encoded) <= len(blob) and not audit['refilter_search_complete']
+
+
+def test_bad_smaller_refilter_candidate_fails_before_dispatch(monkeypatch):
+    url, _, _ = picture(noise=True)
+    _, wrong, _ = picture(level=9)
+    monkeypatch.setattr(png, '_refilter_candidates', lambda *a: iter([('bad', wrong, 'wrong', [120, 0, 0, 0, 0])]))
+    with pytest.raises(ValueError, match='pixel verification'):
+        png.recompress(url, (240, 120), target_data_url_chars=0)

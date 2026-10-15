@@ -13,7 +13,7 @@ dependencies = []
 authors = [{ name = "Yuxiang Chai (original UI-KOBE)" }]
 
 [project.optional-dependencies]
-native = ["httpx>=0.27", "pillow>=10", "docker>=7", "requests>=2.32"]
+native = ["httpx>=0.27", "pillow>=10", "numpy>=1.26", "docker>=7", "requests>=2.32"]
 runtime = [
     "networkx",
     "openai",
@@ -24,7 +24,7 @@ runtime = [
     "pyvis>=0.3.2",
     "matplotlib",
 ]
-dev = ["pytest>=8", "ruff>=0.11", "networkx", "openai", "pyyaml", "pillow", "rich", "requests>=2.32", "httpx", "docker"]
+dev = ["pytest>=8", "ruff>=0.11", "networkx", "openai", "pyyaml", "pillow", "numpy>=1.26", "rich", "requests>=2.32", "httpx", "docker"]
 explore = []
 glm = ["openai>=2.26,<3", "pillow>=10"]
 
