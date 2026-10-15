@@ -132,6 +132,28 @@ def resource_guard(*, startup, audit_path=None, phase=None, decision=None):
     return record
 
 
+def cleanup_owned_run(plan, run_id):
+    """Launcher fallback after an arm exits; act only on exact owned guests."""
+    import docker
+    removed = []
+    with closing(docker.from_env(timeout=20)) as client:
+        items = client.containers.list(all=True, filters={'label': f'{LABEL}={run_id}'})
+        for item in items:
+            item.reload()
+            config = item.attrs['HostConfig']
+            if (item.labels.get(LABEL) != run_id or item.attrs['Config']['Image'] != plan['docker_image']
+                    or config['Memory'] != plan['vm_memory_bytes']
+                    or config['MemorySwap'] != plan['vm_memory_bytes']):
+                raise RuntimeError('Refuse cleanup: guest identity/caps differ from frozen run')
+        for item in items:
+            if item.attrs['State']['Running']:
+                item.stop(timeout=15)
+            item.remove()
+            removed.append(item.id)
+        remaining = client.containers.list(all=True, filters={'label': f'{LABEL}={run_id}'})
+    return {'run_id': run_id, 'removed_container_ids': removed, 'cleanup_ok': not remaining}
+
+
 def install_provider(plan):
     from desktop_env.providers.docker.provider import DockerProvider
     from desktop_env.controllers.setup import SetupController

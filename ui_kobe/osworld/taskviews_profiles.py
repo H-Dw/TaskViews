@@ -19,6 +19,10 @@ def frozen_profile(arm):
     if arm == 'ui_kobe_like':
         return {'profile': UI_KOBE_PROFILE, 'selector': 'recent_execution_edges',
                 'recent_edges': 8, 'extra_role_requests': 0}
+    if arm == 'baseline':
+        return {'profile': 'osworld_native_llm_baseline_v1', 'selector': None,
+                'extra_role_requests': 0, 'passive_transition_audit': True,
+                'mandatory_frame_guidance': False}
     raise ValueError('Mini comparison supports taskviews or ui_kobe_like only')
 
 

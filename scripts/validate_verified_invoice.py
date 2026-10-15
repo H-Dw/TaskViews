@@ -17,17 +17,18 @@ from unittest.mock import patch
 
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
-from scripts.verified_invoice import (ARMS, project_identity, specification, sources, verify_task, write)  # noqa: E402
+from scripts.verified_invoice import (ALL_ARMS, EXPERIMENTS, project_identity, specification, sources, verify_task, write)  # noqa: E402
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--arm', choices=ARMS, required=True)
+    parser.add_argument('--arm', choices=ALL_ARMS, required=True)
     parser.add_argument('--case', choices=('limit', 'terminate', 'empty'), default='limit')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--provider', choices=('qwen', 'tinker', 'openrouter', 'sx'), default='qwen')
     parser.add_argument('--sx-url-env', choices=('SX_URL', 'SX_URL_SB'), default='SX_URL')
     parser.add_argument('--coordinate-type', choices=('absolute', 'relative'), default='absolute')
+    parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
     parser.add_argument('--benchmark-repo', type=Path, default=Path.home() / 'osworld-verified/OSWorld')
     parser.add_argument('--compiler-repo', type=Path, default=Path.home() / 'osworld2/OSWorld-V2')
     args = parser.parse_args()
@@ -35,7 +36,9 @@ def main():
         raise FileExistsError('Keep prior validation evidence; use a new directory')
     args.output.mkdir(parents=True)
     before = sources(args.benchmark_repo, args.compiler_repo)
-    plan = specification(args.provider, args.sx_url_env, args.coordinate_type)
+    plan = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment)
+    if args.arm not in plan['arms']:
+        raise ValueError('Arm absent from the declared experiment')
     task = verify_task(args.benchmark_repo)
     from ui_kobe.osworld.verified_runtime import load_runtime, reset_compatible
     env_module, runner, qwen = load_runtime(args.benchmark_repo, args.compiler_repo)
@@ -100,7 +103,7 @@ def main():
         cap = plan['request_policy']['output_field']
         assert body[cap] == 16000
         assert ('max_tokens' if cap == 'max_completion_tokens' else 'max_completion_tokens') not in body
-        if args.provider in ('tinker', 'openrouter', 'sx'):
+        if args.provider in ('tinker', 'openrouter') or (args.provider == 'sx' and args.experiment=='legacy-low35'):
             assert 'enable_thinking' not in body and 'preserve_thinking' not in body
         if args.provider == 'openrouter':
             for message in body['messages']:
@@ -145,7 +148,7 @@ def main():
     def command(controller, text):
         counts['commands'] += 1
         assert text.startswith('pyautogui.moveTo(')
-        return {'status': 'success', 'returncode': 0, 'stdout': '', 'stderr': ''}
+        return {'status': 'success', 'returncode': 0, 'stdout': '', 'stderr': '', 'error': ''}
 
     def evaluate(env):
         counts['evaluations'] += 1
@@ -170,14 +173,18 @@ def main():
                          max_tokens=16000, api_key='offline-fixture-only')
         env = env_module.DesktopEnv.__new__(env_module.DesktopEnv)
         scores = []
-        runner.run_single_example(actor, env, task, 35, task['instruction'],
+        runner.run_single_example(actor, env, task, plan['max_steps'], task['instruction'],
             SimpleNamespace(sleep_after_execution=0, result_dir=str(args.output)), str(args.output), scores)
-        expected = 7 if args.case == 'terminate' else 35
+        expected = 7 if args.case == 'terminate' else plan['max_steps']
         assert actor.total_steps == expected == counts['requests']
         assert counts['resets'] == counts['evaluations'] == 1 and scores == [0.125]
-        assert counts['commands'] == (0 if args.case == 'empty' else 12 if args.case == 'terminate' else 70)
+        assert counts['commands'] == (0 if args.case == 'empty' else 12 if args.case == 'terminate' else 2*plan['max_steps'])
         assert bool(view_sets) == (args.arm == 'taskviews')
         assert all(views == ['attempts', 'current', 'lessons'] for views in view_sets)
+        if args.arm=='baseline':
+            from ui_kobe.osworld.kimi_native import KimiNativeAgent
+            assert actor.optional_context.__func__ is KimiNativeAgent.optional_context
+            assert actor.cached_context is None and not hasattr(actor,'mini_context') and not hasattr(actor,'context_provider')
         journal = actor.execution_journal
         assert journal and not journal.closed
         transitions = journal.db.execute("SELECT count(*) FROM events WHERE json_extract(payload,'$.kind')='transition'").fetchone()[0]
@@ -186,8 +193,10 @@ def main():
     assert sources(args.benchmark_repo, args.compiler_repo) == before
     write(args.output / 'validation.json', {'passed': True, 'arm': args.arm, 'case': args.case, 'provider': args.provider,
         'base_url': plan['base_url'], 'cua_contract': plan['cua_contract'], 'large_frame_fixture': large_frame_fixture,
-        'counts': counts, 'round_limit': 35, 'view_sets': sorted(set(tuple(v) for v in view_sets)),
-        'mock_wire_reasoning_verified': 'low', 'live_reasoning_verified': False,
+        'counts': counts, 'round_limit': plan['max_steps'], 'view_sets': sorted(set(tuple(v) for v in view_sets)),
+        'model':plan['model'], 'generation_fields':plan['generation_fields'], 'max_steps':plan['max_steps'],
+        'experiment':plan['experiment'],
+        'mock_wire_reasoning_verified': plan['generation_profile']['reasoning_effort'], 'live_reasoning_verified': False,
         'source_unchanged': True, 'live_api_called': False,
         'vm_started': False, 'benchmark_score': None, 'mock_evaluator_sentinel': 0.125,
         'project_source': project_identity()})

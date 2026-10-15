@@ -13,8 +13,9 @@ def agent_class(interface, arm, taskviews_profile='full_checkpoint'):
     from ui_kobe.osworld.taskviews_profiles import FULL_PROFILE, MINI_PROFILE
     if taskviews_profile == MINI_PROFILE:
         if interface == 'sx-native':
-            from ui_kobe.osworld.sx_native import SXTransitionNativeAgent, SXMiniTaskViewsNativeAgent
-            return {'taskviews': SXMiniTaskViewsNativeAgent, 'ui_kobe_like': SXTransitionNativeAgent}[arm]
+            from ui_kobe.osworld.sx_native import SXTransitionNativeAgent, SXMiniTaskViewsNativeAgent, SXBaselineNativeAgent
+            return {'taskviews': SXMiniTaskViewsNativeAgent, 'ui_kobe_like': SXTransitionNativeAgent,
+                    'baseline': SXBaselineNativeAgent}[arm]
         if interface == 'openrouter-native':
             from ui_kobe.osworld.openrouter_native import OpenRouterTransitionNativeAgent, OpenRouterMiniTaskViewsNativeAgent
             return {'taskviews': OpenRouterMiniTaskViewsNativeAgent,

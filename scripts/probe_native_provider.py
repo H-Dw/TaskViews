@@ -17,7 +17,7 @@ import time
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
 
-from scripts.verified_invoice import project_identity, specification, validate_plan, write  # noqa: E402
+from scripts.verified_invoice import EXPERIMENTS, project_identity, specification, validate_plan, write  # noqa: E402
 from ui_kobe.api.kimi_budget import StepLedger  # noqa: E402
 from ui_kobe.api.qwen_native import QwenTransportBudget  # noqa: E402
 from ui_kobe.osworld import telemetry  # noqa: E402
@@ -49,11 +49,12 @@ def main(default_provider='tinker'):
     parser.add_argument('--provider', choices=('tinker', 'openrouter', 'sx'), default=default_provider)
     parser.add_argument('--sx-url-env', choices=('SX_URL', 'SX_URL_SB'), default='SX_URL')
     parser.add_argument('--coordinate-type', choices=('absolute', 'relative'), default='absolute')
+    parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
     parser.add_argument('--root', type=Path, help='Optional immutable comparison plan to qualify for launch')
     parser.add_argument('--benchmark-repo', type=Path, default=Path.home() / 'osworld-verified/OSWorld')
     parser.add_argument('--compiler-repo', type=Path, default=Path.home() / 'osworld2/OSWorld-V2')
     args = parser.parse_args()
-    plan = validate_plan(args.root) if args.root else specification(args.provider, args.sx_url_env, args.coordinate_type)
+    plan = validate_plan(args.root) if args.root else specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment)
     if plan['provider'] != args.provider:
         raise ValueError('Probe provider differs from frozen plan')
     if not os.environ.get(plan['api_key_env']):
@@ -77,7 +78,7 @@ def main(default_provider='tinker'):
         with events_path.open('a', encoding='utf-8') as saved:
             saved.write(json.dumps({'event': event, **telemetry.safe(fields)}, ensure_ascii=False) + '\n')
 
-    profile = generation_profile()
+    profile = generation_profile(plan['generation_profile']['name'])
     client = Client(profile=profile, budget=QwenTransportBudget(attempts=1),
                     emit=emit, response_dir=args.output / 'responses')
 

@@ -27,6 +27,8 @@ IMAGE_REVISION = 'a5d9c3eaae98eebf6e3a0beb84e7e47cf72ae133'
 IMAGE_ZIP_SHA256 = 'b795b6cd4c69b252c1b4f10150a347795555032501b60fd031751ed09b896712'
 DOCKER_IMAGE = 'happysixd/osworld-docker@sha256:0e6497a9295647cf05bf2b2af522fdd79bdeba2737595259cab310a3bcf6baa9'
 ARMS = ('ui_kobe_like', 'taskviews')
+ALL_ARMS = ('ui_kobe_like', 'baseline', 'taskviews')
+EXPERIMENTS = ('legacy-low35', 'sx-max-high40')
 GENERATION = 'qwen-sse-low-total16k'
 
 
@@ -88,7 +90,9 @@ def project_identity():
             for path in sorted((PROJECT / folder).rglob('*.py'))}
 
 
-def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolute'):
+def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolute', experiment='legacy-low35'):
+    if experiment not in EXPERIMENTS or (experiment == 'sx-max-high40' and provider != 'sx'):
+        raise ValueError('Unknown experiment or provider incompatible with frozen experiment')
     if coordinate_type not in ('absolute', 'relative'):
         raise ValueError('Coordinate type must be explicitly absolute or relative')
     if provider == 'qwen':
@@ -105,7 +109,11 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         generation, key_env = api.GENERATION, 'SX_QWEN_API_KEY'
     else:
         raise ValueError('Unknown invoice provider')
+    if experiment == 'sx-max-high40':
+        generation = api.MAX_HIGH_GENERATION
     profile = api.generation_profile(generation)
+    arms = ALL_ARMS if experiment == 'sx-max-high40' else ARMS
+    max_steps = 40 if experiment == 'sx-max-high40' else 35
     from ui_kobe.osworld.taskviews_profiles import frozen_profile, mini_cua_contract
     contract = mini_cua_contract()
     contract['coordinate_type'] = coordinate_type
@@ -115,11 +123,12 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         # image count, view bytes or output tokens in either comparison arm.
         contract['context_max_payload_chars'] = 12_000_000
     from ui_kobe.osworld.verified_resources import resource_policy
-    return {'version': 'osworld-verified-invoice-low35-v4', 'provider': provider,
+    return {'version': 'osworld-verified-invoice-v5', 'provider': provider, 'experiment': experiment,
         'interface': provider + '-native', 'benchmark': 'OSWorld-Verified (OSWorld-1)',
-        'task_id': TASK_ID, 'domain': 'multi_apps', 'arms': list(ARMS), 'max_steps': 35,
+        'task_id': TASK_ID, 'domain': 'multi_apps', 'arms': list(arms), 'max_steps': max_steps,
         'round_unit': 'actor.predict calls, including empty decisions; repair/API/GUI counts reported separately',
-        'model': api.MODEL, 'base_url': api.resolve_base_url(sx_url_env) if provider == 'sx' else api.BASE_URL,
+        'model': api.model_for_profile(profile) if provider == 'sx' else api.MODEL,
+        'base_url': api.resolve_base_url(sx_url_env) if provider == 'sx' else api.BASE_URL,
         'base_url_env': sx_url_env if provider == 'sx' else None, 'generation_profile': profile.__dict__,
         'request_policy': api.request_policy(profile),
         'generation_fields': api.generation_request_fields(profile),
@@ -127,10 +136,10 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         'live_provider_check_required': provider in ('tinker', 'openrouter', 'sx'),
         'mini_grounding_check_required': provider == 'sx', 'coordinate_type': coordinate_type,
         'cua_contract': contract, 'taskviews_profile': 'mini_fixed_v1',
-        'arm_profiles': {arm: frozen_profile(arm) for arm in ARMS},
+        'arm_profiles': {arm: frozen_profile(arm) for arm in arms},
         'controls_view': 'disabled', 'full_taskviews_feedback': False,
         'official_runner': 'lib_run_single.run_single_example', 'sleep_after_execution': 3,
-        'evaluation': 'original DesktopEnv.evaluate after explicit terminal action or 35 decisions',
+        'evaluation': f'original DesktopEnv.evaluate after explicit terminal action or {max_steps} decisions',
         'score_threshold': None, 'checkpoint_resume': False,
         'isolation': 'new process, new Docker writable layer, new agent and journal per arm',
         'docker_image': DOCKER_IMAGE, 'guest_ram': '2G', 'vm_memory_bytes': 3 * 1024**3,
@@ -156,12 +165,14 @@ def prepare(args):
     if root.exists():
         raise FileExistsError('Use a new plan directory; existing plans are immutable')
     task = verify_task(args.benchmark_repo)
-    spec = specification(args.provider, args.sx_url_env, args.coordinate_type)
-    evidence = validation_evidence(args.validation_dir, args.provider, spec['base_url'], spec['cua_contract'])
+    spec = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment)
+    evidence = validation_evidence(args.validation_dir, args.provider, spec['base_url'], spec['cua_contract'], spec)
     plan = spec | {'sources': sources(args.benchmark_repo, args.compiler_repo),
         'project_source': project_identity(), 'image': str(args.image.resolve()),
         'image_proof': str(args.image_proof.resolve()), 'assets': str(args.assets.resolve()),
-        'task_sha256': sha(args.benchmark_repo / TASK_PATH), 'validation': evidence}
+        'task_sha256': sha(args.benchmark_repo / TASK_PATH), 'validation': evidence,
+        'project_commit': subprocess.check_output(['git','-C',str(PROJECT),'rev-parse','HEAD'],text=True).strip(),
+        'run_ids': {arm: f'{root.name}-{arm}-{uuid.uuid4().hex}' for arm in spec['arms']}}
     if args.image_proof.is_file():
         proof = read(args.image_proof)
         if proof['archive_sha256'] != IMAGE_ZIP_SHA256 or proof['image_sha256'] != sha(args.image, release_cache=True):
@@ -174,7 +185,7 @@ def prepare(args):
     write(root / 'plan.sha256.json', {'sha256': sha(root / 'plan.json')})
     write(root / 'state.json', {'status': 'prepared_not_started', 'completed_arms': [],
                               'model_calls': 0, 'vm_starts': 0, 'evaluations': 0})
-    print(json.dumps({'status': 'prepared_not_started', 'root': str(root), 'max_steps': 35}))
+    print(json.dumps({'status': 'prepared_not_started', 'root': str(root), 'max_steps': spec['max_steps']}))
 
 
 def validate_plan(root):
@@ -182,13 +193,18 @@ def validate_plan(root):
     if sha(root / 'plan.json') != read(root / 'plan.sha256.json')['sha256']:
         raise ValueError('Plan changed after preparation')
     for key, value in specification(plan.get('provider', 'qwen'), plan.get('base_url_env') or 'SX_URL',
-                                    plan.get('coordinate_type', 'absolute')).items():
+                                    plan.get('coordinate_type', 'absolute'), plan.get('experiment','legacy-low35')).items():
         if plan.get(key) != value:
             raise ValueError('Frozen comparison differs from implementation: ' + key)
     if project_identity() != plan['project_source']:
         raise ValueError('Project code changed; revalidate and prepare a fresh plan')
+    run_ids = plan.get('run_ids')
+    if (not isinstance(run_ids,dict) or set(run_ids) != set(plan['arms'])
+            or any(not isinstance(v,str) or not v for v in run_ids.values())
+            or len(set(run_ids.values())) != len(run_ids)):
+        raise ValueError('Each arm requires a unique frozen run ownership label')
     if validation_evidence(Path(plan['validation']['directory']), plan['provider'], plan['base_url'],
-                           plan['cua_contract']) != plan['validation']:
+                           plan['cua_contract'], plan) != plan['validation']:
         raise ValueError('Offline validation evidence changed')
     actual = sources(plan['sources']['benchmark']['repo'], plan['sources']['actor_compiler']['repo'])
     if actual != plan['sources']:
@@ -201,13 +217,13 @@ def validate_plan(root):
     return plan
 
 
-def validation_evidence(directory, provider='qwen', base_url=None, cua_contract=None):
+def validation_evidence(directory, provider='qwen', base_url=None, cua_contract=None, plan=None):
     if directory is None:
-        raise ValueError('--validation-dir with all six passing offline cases is required')
+        raise ValueError('--validation-dir with all declared arms and passing offline cases is required')
     directory = Path(directory).resolve()
     evidence = {}
     identity = project_identity()
-    for arm in ARMS:
+    for arm in plan['arms'] if plan is not None else ARMS:
         for case in ('limit', 'terminate', 'empty'):
             path = directory / f'{arm}-{case}' / 'validation.json'
             value = read(path)
@@ -215,6 +231,8 @@ def validation_evidence(directory, provider='qwen', base_url=None, cua_contract=
                     or value.get('provider') != provider
                     or (base_url is not None and value.get('base_url') != base_url)
                     or (cua_contract is not None and value.get('cua_contract') != cua_contract)
+                    or (plan is not None and any(value.get(k) != plan[k] for k in
+                        ('model','generation_fields','max_steps','experiment')))
                     or value.get('project_source') != identity or value.get('source_unchanged') is not True
                     or value.get('live_api_called') is not False or value.get('vm_started') is not False):
                 raise ValueError('Current source lacks passing offline integration evidence: ' + str(path))
@@ -320,7 +338,7 @@ def execute_arm(args):
     os.environ.update(UI_KOBE_TASKVIEWS_PROFILE='mini_fixed_v1', UI_KOBE_MINI_CONTROLS_VIEW='disabled',
         UI_KOBE_TASKVIEWS_FEEDBACK_V10='0', UI_KOBE_GENERATION_PROFILE=plan['generation_profile']['name'],
         UI_KOBE_CUA_CONTRACT_JSON=json.dumps(plan['cua_contract']), UI_KOBE_TASK_ID=TASK_ID,
-        UI_KOBE_TELEMETRY_DIR=str(stage / 'telemetry'), OSWORLD_FULL_RUN_ID=stage.name + '-' + uuid.uuid4().hex)
+        UI_KOBE_TELEMETRY_DIR=str(stage / 'telemetry'), OSWORLD_FULL_RUN_ID=plan['run_ids'][args.arm])
     if plan['provider'] == 'sx':
         os.environ['UI_KOBE_SX_URL_ENV'] = plan['base_url_env']
     selected = reset_compatible(agent_class(plan['interface'], args.arm, 'mini_fixed_v1'))
@@ -369,10 +387,12 @@ def execute_arm(args):
                     filters={'label': 'ui-kobe.verified.run=' + os.environ['OSWORLD_FULL_RUN_ID']})
         finally:
             write(stage / 'outcome.json', {'official_score': scores[-1] if scores else None,
-                'decisions': actor.total_steps, 'max_steps': 35, 'error': error, 'closed': closed,
+                'decisions': actor.total_steps, 'max_steps': plan['max_steps'], 'run_id': os.environ['OSWORLD_FULL_RUN_ID'],
+                'error': error, 'closed': closed,
                 'cleanup_ok': cleanup_ok, 'complete': error is None and bool(scores) and closed and cleanup_ok,
                 'no_retry_or_resume': True, 'source_unchanged': sources(
-                    plan['sources']['benchmark']['repo'], plan['sources']['actor_compiler']['repo']) == plan['sources']})
+                    plan['sources']['benchmark']['repo'], plan['sources']['actor_compiler']['repo']) == plan['sources']
+                    and project_identity() == plan['project_source']})
 
 
 def launch(args):
@@ -389,25 +409,44 @@ def launch(args):
         os.environ.update(OSWORLD_VERIFIED_LAUNCHER_PID=str(os.getpid()),
                           OSWORLD_VERIFIED_LAUNCHER_CGROUP=str(group.resolve()))
         state = read(args.root / 'state.json')
-        if state['status'] != 'prepared_not_started' or any((args.root / arm).exists() for arm in ARMS):
+        arms = tuple(plan['arms'])
+        if state['status'] != 'prepared_not_started' or any((args.root / arm).exists() for arm in arms):
             raise RuntimeError('Plan was already attempted; no implicit resume or replay')
         write(args.root / 'state.json', {'status': 'running', 'completed_arms': [],
                                        'execution_authorized_by_explicit_cli': True})
-        for arm in ARMS:
+        for index, arm in enumerate(arms):
             write(args.root / 'state.json', {'status': 'running', 'active_arm': arm,
-                'completed_arms': list(ARMS[:ARMS.index(arm)]), 'execution_authorized_by_explicit_cli': True})
+                'completed_arms': list(arms[:index]), 'execution_authorized_by_explicit_cli': True})
             command = ['systemd-run', '--user', '--scope', '--quiet', '--property=MemoryMax=2G',
                 '--property=MemorySwapMax=0', sys.executable, str(Path(__file__).resolve()),
                 '_run-arm', '--root', str(args.root), '--arm', arm, '--execute-approved-plan']
             result = subprocess.run(command, check=False)
+            if plan.get('run_ids'):
+                from ui_kobe.osworld.verified_resources import cleanup_owned_run
+                try:
+                    cleanup = cleanup_owned_run(plan, plan['run_ids'][arm])
+                except Exception as exc:
+                    write(args.root / f'cleanup-{arm}.json', {'cleanup_ok':False,
+                        'error':{'type':type(exc).__name__,'message':str(exc)}})
+                    write(args.root/'state.json',{'status':'stopped_on_error','arm':arm,'reason':'cleanup_error'})
+                    return 1
+                write(args.root / f'cleanup-{arm}.json', cleanup)
+                if not cleanup['cleanup_ok']:
+                    write(args.root/'state.json',{'status':'stopped_on_error','arm':arm,'reason':'cleanup_failed'})
+                    return 1
             outcome_path = args.root / arm / 'outcome.json'
             outcome = read(outcome_path) if outcome_path.exists() else {}
+            if not outcome:
+                outcome = {'official_score':None,'complete':False,'max_steps':plan['max_steps'],
+                    'error':{'type':'ArmProcessExited','returncode':result.returncode},
+                    'cleanup_ok':bool(plan.get('run_ids')) and cleanup['cleanup_ok']}
+                write(outcome_path,outcome)
             if result.returncode or not outcome.get('complete') or not outcome.get('source_unchanged'):
                 write(args.root / 'state.json', {'status': 'stopped_on_error', 'arm': arm,
                                                 'returncode': result.returncode})
                 return 1
-            write(args.root / 'state.json', {'status': 'running' if arm == ARMS[0] else 'completed',
-                'completed_arms': list(ARMS[:ARMS.index(arm) + 1])})
+            write(args.root / 'state.json', {'status': 'completed' if index == len(arms)-1 else 'running',
+                'completed_arms': list(arms[:index + 1])})
     return 0
 
 
@@ -426,7 +465,8 @@ def main():
     parser.add_argument('--sx-url-env', choices=('SX_URL', 'SX_URL_SB'), default='SX_URL')
     parser.add_argument('--coordinate-type', choices=('absolute', 'relative'), default='absolute',
                         help='Prepare only: freeze one coordinate mode for both arms; never auto-switch')
-    parser.add_argument('--arm', choices=ARMS)
+    parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
+    parser.add_argument('--arm', choices=ALL_ARMS)
     parser.add_argument('--execute-approved-plan', action='store_true')
     args = parser.parse_args()
     args.root = args.root.resolve()

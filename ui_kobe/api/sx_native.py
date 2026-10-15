@@ -1,4 +1,4 @@
-"""Sui-xiang Qwen Flash with environment-selected, frozen HTTPS routing."""
+"""Explicit Sui-xiang Qwen profiles with frozen HTTPS routing."""
 from dataclasses import dataclass
 import json
 import os
@@ -11,6 +11,7 @@ from .kimi_stream import StreamProtocolError
 MODEL = 'qwen3.8-flash'
 PROTOCOL = 'sx-qwen38-flash-native-tools-sse-v1'
 GENERATION = 'sx-qwen38-flash-sse-low-total16k'
+MAX_HIGH_GENERATION = 'sx-qwen38-max-sse-high-total16k'
 URL_ENVS = ('SX_URL', 'SX_URL_SB')
 
 
@@ -44,14 +45,23 @@ class SXGenerationProfile(QwenGenerationProfile):
 
 
 def generation_profile(name=GENERATION):
-    if name != GENERATION:
-        raise ValueError('Unknown frozen SX generation profile')
-    return SXGenerationProfile()
+    if name == GENERATION:
+        return SXGenerationProfile()
+    if name == MAX_HIGH_GENERATION:
+        return SXGenerationProfile(name=name, reasoning_effort='high')
+    raise ValueError('Unknown frozen SX generation profile')
+
+
+def model_for_profile(profile):
+    generation_request_fields(profile)
+    return 'qwen3.8-max' if profile.name == MAX_HIGH_GENERATION else MODEL
 
 
 def generation_request_fields(profile):
     if profile != generation_profile(profile.name):
         raise ValueError('SX generation profile changed its frozen bounds')
+    if profile.name == MAX_HIGH_GENERATION:
+        return {'enable_thinking': True, 'reasoning_effort': 'high'}
     return {'reasoning_effort': 'low'}
 
 
@@ -63,6 +73,7 @@ def request_policy(profile):
 
 def transport_policy(budget=None):
     return {**shared_transport_policy(budget), 'version': 'sx-phase-aware-retry-v1',
+            'upload_timeout_s': 120, 'outer_deadlines_unchanged': True,
             'endpoint_fallback': False, 'billing_status_402': 'stop immediately; no retry',
             'sse_created': 'gateway emits per-chunk timestamps; canonical first, raw stream and last preserved'}
 
@@ -105,9 +116,11 @@ class SXNativeClient(QwenNativeClient):
     request_prefix = 'sx-'
     policy_for = staticmethod(request_policy)
     fields_for = staticmethod(generation_request_fields)
+    write_timeout_s = 120
 
     def __init__(self, *, url_env=None, **kwargs):
         self.base_url = resolve_base_url(url_env)
+        self.model_name = model_for_profile(kwargs['profile'])
         super().__init__(**kwargs)
 
     def accumulator(self):

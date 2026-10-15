@@ -145,6 +145,7 @@ class QwenNativeClient:
     base_url = BASE_URL
     model_name = MODEL
     request_prefix = 'qwens-'
+    write_timeout_s = 30
     policy_for = staticmethod(request_policy)
     fields_for = staticmethod(generation_request_fields)
 
@@ -215,7 +216,7 @@ class QwenNativeClient:
             retry_delay = None
             try:
                 timeout = httpx.Timeout(min(self.budget.idle_s, remaining), connect=min(self.budget.connect_s, remaining),
-                                        write=min(30, remaining), pool=min(self.budget.connect_s, remaining))
+                                        write=min(self.write_timeout_s, remaining), pool=min(self.budget.connect_s, remaining))
                 if streaming:
                     from .qwen_sse import response_events
                     accumulator = self.accumulator()

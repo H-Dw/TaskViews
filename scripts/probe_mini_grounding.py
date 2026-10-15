@@ -68,6 +68,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--live', action='store_true', help='Explicitly send bounded, billable synthetic API requests')
     parser.add_argument('--coordinate-type', choices=('absolute','relative'), default='absolute')
+    parser.add_argument('--experiment', choices=('legacy-low35','sx-max-high40'), default='legacy-low35')
     parser.add_argument('--sx-url-env', choices=('SX_URL','SX_URL_SB'), default='SX_URL_SB')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--root', type=Path, help='Optional new frozen SX plan to receive this prerequisite proof')
@@ -82,7 +83,7 @@ def main():
     from ui_kobe.osworld.transitions import TransitionJournal
     from ui_kobe.osworld.sx_native import SXMiniTaskViewsNativeAgent
     from ui_kobe.osworld.cua_contract import CUAContract
-    plan = validate_plan(args.root) if args.root else specification('sx', args.sx_url_env, args.coordinate_type)
+    plan = validate_plan(args.root) if args.root else specification('sx', args.sx_url_env, args.coordinate_type, args.experiment)
     if plan['provider'] != 'sx':
         raise ValueError('This grounding probe is for the declared SX Mini actor only')
     contract = CUAContract(**plan['cua_contract'])

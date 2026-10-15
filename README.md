@@ -1,5 +1,7 @@
 # OSWorld K3 TaskViews
 
+2026-10-16：Mini 优化已提交为 `2c6662c`。新增随想 `qwen3.8-max`、思考 `high`、每组 40 轮的 UI-KOBE-like → LLM baseline → TaskViews-mini 三组入口，使用显式归一化坐标和共同资源预算。配置与验证见 [Max/high 三组说明](docs/osworld-verified-invoice-sx-max-high40.md)，实际运行进度见 [运行状态](D:/cua_lty/osworld_verified_setup/运行状态.md)。
+
 2026-10-15最终结果：随想qwen3.8-flash / low的v5发票核对比较已完成，UI-KOBE-like与TaskViews-mini各35轮，官方得分均0.0。内存检查通过，容器清理、源码校验完成，巡检已暂停。见 [最终报告](docs/osworld-verified-invoice-sx-flash-results-20261015.md)。下文保留实现和历史记录。
 
 2026-10-15 21:58：按用户确认采用“真实空闲RAM>2GiB＋单独核算本项目占用”的新内存规则。56项相关回归、六例离线集成、大图在线检查和实测计数预检通过，独立v5计划已在真实环境取得完整模型响应及动作回执，20分钟巡检已恢复。模型qwen3.8-flash / low，UI-KOBE-like → Mini各最多35轮。机制见 [2GiB内存规则](docs/osworld-verified-memory-policy-20261015.md)，实时状态见 [运行状态](D:/cua_lty/osworld_verified_setup/运行状态.md)。下文保留历史记录。
