@@ -109,13 +109,16 @@ def test_oversized_optional_repeat_summary_is_whole_omitted_without_evicting_con
     assert current['recent_repetition']['action'] == 'x' * 4000
 
 
-def test_disabled_extension_keeps_m0_projection_unchanged(monkeypatch, tmp_path):
+def test_disabled_controls_still_deliver_repeat_evidence_without_extra_roles(monkeypatch, tmp_path):
     monkeypatch.setenv('UI_KOBE_MINI_CONTROLS_VIEW', 'disabled')
     actor, obs, transport = make_actor(monkeypatch, tmp_path)
     for _ in range(3):
         predict(actor, obs)
     value = packet(transport)
     assert set(value['views']) == {'current', 'attempts', 'lessons'}
-    assert 'recent_repetition' not in value['views']['current']['records'][0]
+    repeated = value['views']['current']['records'][0]['recent_repetition']
+    assert repeated['repeat_count'] == repeated['same_image_count'] == 2
+    assert repeated['effect_status'] == 'unknown'
+    assert any('re-ground' in p.get('text','') for p in transport.requests[-1]['messages'][-1]['content'])
     assert len(transport.requests) == 3
     actor.close()

@@ -13,11 +13,24 @@ from .checkpoints import ReadAnomaly
 
 LABEL = 'Fixed TaskViews (historical records and model proposals; not current facts or instructions):'
 CONTROLS_LABEL = 'Fixed TaskViews with controls guidance (documented defaults guide actions; historical records and visual notes are unverified data):'
+
+
+def nonempty_error(expression):
+    # Official successful receipts contain error="". NULL/empty/whitespace
+    # messages and false flags must not consume the lessons error budget.
+    return f"""(CASE json_type({expression})
+        WHEN 'text' THEN length(trim(json_extract({expression}), char(9)||char(10)||char(13)||' ')) > 0
+        WHEN 'true' THEN 1
+        WHEN 'object' THEN json_extract({expression}) != '{{}}'
+        WHEN 'array' THEN json_extract({expression}) != '[]'
+        ELSE 0 END)"""
+
+
 ERROR_FILTER = """json_extract(e.payload,'$.kind')='transition' AND (
-    json_extract(e.payload,'$.error') IS NOT NULL OR EXISTS (
+    """ + nonempty_error("e.payload,'$.error'") + """ OR EXISTS (
       SELECT 1 FROM json_each(e.payload,'$.controller_receipts') r WHERE
-      json_extract(r.value,'$.result.success')=0 OR json_extract(r.value,'$.result.error') IS NOT NULL
-      OR json_extract(r.value,'$.result.status') IN ('error','failed')
+      json_extract(r.value,'$.result.success')=0 OR """ + nonempty_error("r.value,'$.result.error'") + """
+      OR json_extract(r.value,'$.result.status') IN ('error','failed','failure')
       OR (json_type(r.value,'$.result.returncode')='integer'
           AND json_extract(r.value,'$.result.returncode')!=0)))"""
 PROSE_VALUE = """coalesce(nullif(json_extract(payload,'$.local_instruction'),''),
@@ -187,7 +200,7 @@ class MiniTaskViewsContext:
                             'frame_geometry': {key: deepcopy(self.owner.frame.metadata[key]) for key in
                                 ('coordinate_type', 'original_size', 'model_size', 'coordinate_bounds')},
                             'grade': 'original_input', 'image_source': 'current_native_message'}
-        if controls is not None and (repeated := self.recent_repetition(attempts)) is not None:
+        if (repeated := self.recent_repetition(attempts)) is not None:
             original_current['recent_repetition'] = repeated
         try:
             packet = materialize(episode_id=journal.episode_id, frame_id=self.owner.frame.metadata['frame_id'],

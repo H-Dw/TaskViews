@@ -1,5 +1,7 @@
 # TaskViews Mini M0
 
+2026-10-15 更新：当前实现修订为 `mini_cua_feedback_v2`，修复空错误误分类，默认提供重复操作证据，并在正式 Mini 输入中明确坐标与结果检查要求。详见[本次修复及验证记录](taskviews-mini-cua-feedback-20261015.md)。下文保留最初 M0 搭建时的配置与验证记录；最新随想发票任务的 35 轮、0/0 分结果见[正式结果](osworld-verified-invoice-sx-flash-results-20261015.md)，不应与旧 Task059/Pinggy 配置混用。
+
 Mini 在 `mini` 分支实现。它直接复用共同 `KimiNativeAgent.predict/generate_candidate` 和机械提取的 Qwen provider，不继承完整 TaskViews agent。执行仍由原 native tool schema、官方完整批次 compiler 和 controller 完成。没有模型驱动的分类、perception/controller/planner、DAG、语义图或 pointer guard。
 
 本次交付是代码搭建与离线验证。没有启动新的正式 episode、VM、模型 API 或官方评分；当前 V12 继续暂停。V12 原230已执行而安全检查点229，不能把 Mini 装入旧 episode 或用恢复229重放230。

@@ -1,0 +1,1739 @@
+{
+  "ui_kobe_like": {
+    "decisions": 35,
+    "actions_by_type": {
+      "double_click": 5,
+      "wait": 4,
+      "right_click": 1,
+      "key": 5,
+      "left_click": 16,
+      "type": 3,
+      "triple_click": 1
+    },
+    "raw_response_vs_decision_vs_trajectory_mismatches": [],
+    "coordinate_actions": 23,
+    "all_raw_coordinates_passed_unchanged": true,
+    "coordinate_audit": [
+      {
+        "step": 1,
+        "raw": [
+          962,
+          509
+        ],
+        "executed": [
+          962,
+          509
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1847,
+          550
+        ]
+      },
+      {
+        "step": 3,
+        "raw": [
+          962,
+          481
+        ],
+        "executed": [
+          962,
+          481
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1847,
+          519
+        ]
+      },
+      {
+        "step": 5,
+        "raw": [
+          962,
+          481
+        ],
+        "executed": [
+          962,
+          481
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1847,
+          519
+        ]
+      },
+      {
+        "step": 7,
+        "raw": [
+          962,
+          481
+        ],
+        "executed": [
+          962,
+          481
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1847,
+          519
+        ]
+      },
+      {
+        "step": 8,
+        "raw": [
+          17,
+          562
+        ],
+        "executed": [
+          17,
+          562
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          607
+        ]
+      },
+      {
+        "step": 10,
+        "raw": [
+          989,
+          42
+        ],
+        "executed": [
+          989,
+          42
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1899,
+          45
+        ]
+      },
+      {
+        "step": 11,
+        "raw": [
+          990,
+          42
+        ],
+        "executed": [
+          990,
+          42
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1901,
+          45
+        ]
+      },
+      {
+        "step": 12,
+        "raw": [
+          989,
+          42
+        ],
+        "executed": [
+          989,
+          42
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1899,
+          45
+        ]
+      },
+      {
+        "step": 14,
+        "raw": [
+          962,
+          481
+        ],
+        "executed": [
+          962,
+          481
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1847,
+          519
+        ]
+      },
+      {
+        "step": 15,
+        "raw": [
+          17,
+          10
+        ],
+        "executed": [
+          17,
+          10
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          11
+        ]
+      },
+      {
+        "step": 17,
+        "raw": [
+          377,
+          163
+        ],
+        "executed": [
+          377,
+          163
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          724,
+          176
+        ]
+      },
+      {
+        "step": 19,
+        "raw": [
+          377,
+          219
+        ],
+        "executed": [
+          377,
+          219
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          724,
+          237
+        ]
+      },
+      {
+        "step": 20,
+        "raw": [
+          377,
+          219
+        ],
+        "executed": [
+          377,
+          219
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          724,
+          237
+        ]
+      },
+      {
+        "step": 21,
+        "raw": [
+          592,
+          63
+        ],
+        "executed": [
+          592,
+          63
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1137,
+          68
+        ]
+      },
+      {
+        "step": 22,
+        "raw": [
+          517,
+          63
+        ],
+        "executed": [
+          517,
+          63
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          993,
+          68
+        ]
+      },
+      {
+        "step": 24,
+        "raw": [
+          517,
+          63
+        ],
+        "executed": [
+          517,
+          63
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          993,
+          68
+        ]
+      },
+      {
+        "step": 27,
+        "raw": [
+          377,
+          158
+        ],
+        "executed": [
+          377,
+          158
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          724,
+          171
+        ]
+      },
+      {
+        "step": 29,
+        "raw": [
+          87,
+          345
+        ],
+        "executed": [
+          87,
+          345
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          167,
+          373
+        ]
+      },
+      {
+        "step": 30,
+        "raw": [
+          181,
+          252
+        ],
+        "executed": [
+          181,
+          252
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          348,
+          272
+        ]
+      },
+      {
+        "step": 31,
+        "raw": [
+          87,
+          345
+        ],
+        "executed": [
+          87,
+          345
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          167,
+          373
+        ]
+      },
+      {
+        "step": 32,
+        "raw": [
+          87,
+          384
+        ],
+        "executed": [
+          87,
+          384
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          167,
+          415
+        ]
+      },
+      {
+        "step": 33,
+        "raw": [
+          222,
+          197
+        ],
+        "executed": [
+          222,
+          197
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          426,
+          213
+        ]
+      },
+      {
+        "step": 34,
+        "raw": [
+          87,
+          345
+        ],
+        "executed": [
+          87,
+          345
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          167,
+          373
+        ]
+      }
+    ],
+    "controller_count": 31,
+    "all_controller_success": true,
+    "all_official_screenshots_1920x1080": true,
+    "request_contracts": [
+      {
+        "step": 1,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 2,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 3,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 4,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 5,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 6,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 7,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 8,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 9,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 10,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 11,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 12,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 13,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 14,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 15,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 16,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 17,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 18,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 19,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 20,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 21,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 22,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 23,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 24,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 25,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 26,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 27,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 28,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 29,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 30,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 31,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 32,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 33,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 34,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 35,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      }
+    ],
+    "mini_views": [],
+    "misclassified_error_record_appearances": 0,
+    "requests_with_misclassified_errors": 0,
+    "raw_action_counts": {
+      "pyautogui.doubleClick(962, 509)": 1,
+      "WAIT": 4,
+      "pyautogui.doubleClick(962, 481)": 3,
+      "pyautogui.rightClick(962, 481)": 1,
+      "pyautogui.press(\"esc\")": 1,
+      "pyautogui.click(17, 562)": 1,
+      "pyautogui.click(989, 42)": 2,
+      "pyautogui.click(990, 42)": 1,
+      "pyautogui.hotkey(\"ctrl\", \"q\")": 1,
+      "pyautogui.click(17, 10)": 1,
+      "pyautogui.typewrite(\"files\")": 3,
+      "pyautogui.click(377, 163)": 1,
+      "pyautogui.click(377, 219)": 2,
+      "pyautogui.click(592, 63)": 1,
+      "pyautogui.tripleClick(517, 63)": 1,
+      "pyautogui.click(517, 63)": 1,
+      "pyautogui.hotkey(\"ctrl\", \"a\")": 1,
+      "pyautogui.click(377, 158)": 1,
+      "pyautogui.press(\"return\")": 1,
+      "pyautogui.click(87, 345)": 3,
+      "pyautogui.doubleClick(181, 252)": 1,
+      "pyautogui.click(87, 384)": 1,
+      "pyautogui.click(222, 197)": 1,
+      "pyautogui.hotkey(\"ctrl\", \"l\")": 1
+    }
+  },
+  "taskviews": {
+    "decisions": 35,
+    "actions_by_type": {
+      "left_click": 31,
+      "screenshot": 1,
+      "type": 2,
+      "double_click": 1
+    },
+    "raw_response_vs_decision_vs_trajectory_mismatches": [],
+    "coordinate_actions": 32,
+    "all_raw_coordinates_passed_unchanged": true,
+    "coordinate_audit": [
+      {
+        "step": 1,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 3,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 4,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 5,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 6,
+        "raw": [
+          25,
+          11
+        ],
+        "executed": [
+          25,
+          11
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          48,
+          12
+        ]
+      },
+      {
+        "step": 8,
+        "raw": [
+          378,
+          160
+        ],
+        "executed": [
+          378,
+          160
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          726,
+          173
+        ]
+      },
+      {
+        "step": 9,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 10,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 11,
+        "raw": [
+          25,
+          11
+        ],
+        "executed": [
+          25,
+          11
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          48,
+          12
+        ]
+      },
+      {
+        "step": 12,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 13,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 14,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 15,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 16,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 17,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 18,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 19,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 20,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 21,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 22,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 23,
+        "raw": [
+          952,
+          41
+        ],
+        "executed": [
+          952,
+          41
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1828,
+          44
+        ]
+      },
+      {
+        "step": 24,
+        "raw": [
+          955,
+          66
+        ],
+        "executed": [
+          955,
+          66
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1834,
+          71
+        ]
+      },
+      {
+        "step": 25,
+        "raw": [
+          25,
+          560
+        ],
+        "executed": [
+          25,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          48,
+          605
+        ]
+      },
+      {
+        "step": 26,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 27,
+        "raw": [
+          955,
+          59
+        ],
+        "executed": [
+          955,
+          59
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1834,
+          64
+        ]
+      },
+      {
+        "step": 28,
+        "raw": [
+          955,
+          64
+        ],
+        "executed": [
+          955,
+          64
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          1834,
+          69
+        ]
+      },
+      {
+        "step": 29,
+        "raw": [
+          15,
+          15
+        ],
+        "executed": [
+          15,
+          15
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          29,
+          16
+        ]
+      },
+      {
+        "step": 31,
+        "raw": [
+          25,
+          560
+        ],
+        "executed": [
+          25,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          48,
+          605
+        ]
+      },
+      {
+        "step": 32,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 33,
+        "raw": [
+          15,
+          15
+        ],
+        "executed": [
+          15,
+          15
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          29,
+          16
+        ]
+      },
+      {
+        "step": 34,
+        "raw": [
+          17,
+          560
+        ],
+        "executed": [
+          17,
+          560
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          33,
+          605
+        ]
+      },
+      {
+        "step": 35,
+        "raw": [
+          15,
+          962
+        ],
+        "executed": [
+          15,
+          962
+        ],
+        "same": true,
+        "normalized_1000_hypothesis_px": [
+          29,
+          1039
+        ]
+      }
+    ],
+    "controller_count": 35,
+    "all_controller_success": true,
+    "all_official_screenshots_1920x1080": true,
+    "request_contracts": [
+      {
+        "step": 1,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 2,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 3,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 4,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 5,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 6,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 7,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 8,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 9,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 10,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 11,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 12,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 13,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 14,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 15,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 16,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 17,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 18,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 19,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 20,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 21,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 22,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 23,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 24,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 25,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 26,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 27,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 28,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 29,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 30,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 31,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 32,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 33,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 34,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      },
+      {
+        "step": 35,
+        "schema_declares_1920x1080": true,
+        "explicit_frame_instruction_present": false
+      }
+    ],
+    "mini_views": [
+      {
+        "step": 1,
+        "bytes": 751,
+        "attempts_records": 0,
+        "lesson_grades": [],
+        "error_records": 0,
+        "success_receipts_misclassified": 0,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 2,
+        "bytes": 2213,
+        "attempts_records": 1,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 3,
+        "bytes": 2897,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 4,
+        "bytes": 2899,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 5,
+        "bytes": 2923,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 6,
+        "bytes": 2923,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 7,
+        "bytes": 2944,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 8,
+        "bytes": 2930,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 9,
+        "bytes": 2938,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 10,
+        "bytes": 2934,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 11,
+        "bytes": 2941,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 12,
+        "bytes": 2944,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 13,
+        "bytes": 2945,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 14,
+        "bytes": 2822,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 15,
+        "bytes": 2947,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 16,
+        "bytes": 2814,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 17,
+        "bytes": 2814,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 18,
+        "bytes": 2846,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 19,
+        "bytes": 2846,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 20,
+        "bytes": 2817,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 21,
+        "bytes": 2800,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 22,
+        "bytes": 2833,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 23,
+        "bytes": 2794,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 24,
+        "bytes": 2795,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 25,
+        "bytes": 2935,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 26,
+        "bytes": 2895,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 27,
+        "bytes": 2844,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 28,
+        "bytes": 2843,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 29,
+        "bytes": 2835,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 30,
+        "bytes": 2817,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 31,
+        "bytes": 2935,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 32,
+        "bytes": 2939,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 33,
+        "bytes": 2939,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 34,
+        "bytes": 2942,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "execution_error_record",
+          "execution_error_record"
+        ],
+        "error_records": 2,
+        "success_receipts_misclassified": 2,
+        "repetition_evidence_present": false
+      },
+      {
+        "step": 35,
+        "bytes": 2808,
+        "attempts_records": 2,
+        "lesson_grades": [
+          "model_intent_proposal",
+          "execution_error_record"
+        ],
+        "error_records": 1,
+        "success_receipts_misclassified": 1,
+        "repetition_evidence_present": false
+      }
+    ],
+    "misclassified_error_record_appearances": 50,
+    "requests_with_misclassified_errors": 34,
+    "raw_action_counts": {
+      "pyautogui.click(17, 560)": 19,
+      "pyautogui.screenshot()": 1,
+      "pyautogui.click(25, 11)": 2,
+      "pyautogui.typewrite(\"files\")": 1,
+      "pyautogui.click(378, 160)": 1,
+      "pyautogui.doubleClick(17, 560)": 1,
+      "pyautogui.click(952, 41)": 1,
+      "pyautogui.click(955, 66)": 1,
+      "pyautogui.click(25, 560)": 2,
+      "pyautogui.click(955, 59)": 1,
+      "pyautogui.click(955, 64)": 1,
+      "pyautogui.click(15, 15)": 2,
+      "pyautogui.typewrite(\"Files\")": 1,
+      "pyautogui.click(15, 962)": 1
+    }
+  }
+}

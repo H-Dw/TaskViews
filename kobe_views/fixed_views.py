@@ -4,6 +4,7 @@ from copy import deepcopy
 from .model import dumps
 
 PROFILE = 'mini_fixed_v1'
+REVISION = 'mini_cua_feedback_v2'
 MAX_BYTES = 3000
 VIEW_IDS = ('current', 'attempts', 'lessons')
 SELECTORS = {'current': 'current_frame', 'attempts': 'recent_execution_edges',
@@ -11,7 +12,11 @@ SELECTORS = {'current': 'current_frame', 'attempts': 'recent_execution_edges',
 
 
 def profile_contract():
-    return {'profile': PROFILE, 'view_ids': list(VIEW_IDS), 'selectors': dict(SELECTORS),
+    return {'profile': PROFILE, 'implementation_revision': REVISION,
+            'frame_input': 'mandatory current-only coordinate units and result-verification guidance',
+            'error_selection': 'nonempty error or explicit failed status/nonzero returncode',
+            'repeat_feedback': 'literal recent journal evidence, independent of controls',
+            'view_ids': list(VIEW_IDS), 'selectors': dict(SELECTORS),
             'max_bytes': MAX_BYTES, 'recent_edges': 4, 'extra_role_requests': 0,
             'optional_error_policy': 'whole projection omission',
             'integrity_error_policy': 'pause before next actor', 'strict_native_input': True, 'focus_gate': False}
@@ -46,10 +51,10 @@ def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max
                 'grade': 'model_proposal', 'reobserve_required': True}
         # The new independently declared guidance is either whole or explicitly absent.
         # Historical attempts/lessons cannot evict it. No budget or M0 default changes.
-        if len(dumps(packet).encode()) > limit and 'recent_repetition' in packet['views']['current']['records'][0]:
-            literal = packet['views']['current']['records'][0]
-            del literal['recent_repetition']
-            literal['recent_repetition_omitted'] = True
+    if len(dumps(packet).encode()) > limit and 'recent_repetition' in packet['views']['current']['records'][0]:
+        literal = packet['views']['current']['records'][0]
+        del literal['recent_repetition']
+        literal['recent_repetition_omitted'] = True
     if len(dumps(packet).encode()) > limit:
         return None
     selected = {key: set() for key in rows}

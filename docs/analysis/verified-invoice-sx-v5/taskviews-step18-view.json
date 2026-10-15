@@ -1,0 +1,157 @@
+{
+  "episode_id": "22124b3d22004db6bd00812f1a9a1d86",
+  "frame_id": "native-frame-0018",
+  "profile": "mini_fixed_v1",
+  "views": {
+    "attempts": {
+      "omitted_records": 15,
+      "records": [
+        {
+          "command_index": 0,
+          "controller_receipts": [
+            {
+              "command": "pyautogui.click(17, 560)",
+              "result": {
+                "error": "",
+                "output": "",
+                "returncode": 0,
+                "status": "success"
+              }
+            }
+          ],
+          "effect_status": "unknown",
+          "error": null,
+          "operation_id": "23c0d3ada34449be87216c99058cd504",
+          "seq": 81,
+          "source": "09a4b8a8c681412c9cdf9204d9127658",
+          "source_event_id": "23c0d3ada34449be87216c99058cd504",
+          "source_sha256": "ad0151a0480f582568ae56e26cc45a2c6402ff7b432cd691d19fa7ffec9b9ba3",
+          "target": "627627a0da4d426fbf05ce993d9ba2e0",
+          "tool": {
+            "arguments": {
+              "action": "left_click",
+              "coordinate": [
+                17,
+                560
+              ]
+            },
+            "command_indices": [
+              0
+            ],
+            "id": "call_acc942357cec44508cc2d1d4"
+          }
+        },
+        {
+          "command_index": 0,
+          "controller_receipts": [
+            {
+              "command": "pyautogui.click(17, 560)",
+              "result": {
+                "error": "",
+                "output": "",
+                "returncode": 0,
+                "status": "success"
+              }
+            }
+          ],
+          "effect_status": "unknown",
+          "error": null,
+          "operation_id": "ae956215bb6a4c0bbf2a54419de6fab2",
+          "seq": 86,
+          "source": "8baf8195f0ca43e090289e62a891ba79",
+          "source_event_id": "ae956215bb6a4c0bbf2a54419de6fab2",
+          "source_sha256": "7ba2e8c03bb40dad4f2dc6bb613c776182244d717526454a8627925d68e5a311",
+          "target": "38e47c96a8204daab8ea14d794c983ff",
+          "tool": {
+            "arguments": {
+              "action": "left_click",
+              "coordinate": [
+                17,
+                560
+              ]
+            },
+            "command_indices": [
+              0
+            ],
+            "id": "call_231f171c896048528f1ee822"
+          }
+        }
+      ],
+      "selector": "recent_execution_edges"
+    },
+    "current": {
+      "omitted_records": 0,
+      "records": [
+        {
+          "frame_geometry": {
+            "coordinate_bounds": [
+              1920,
+              1080
+            ],
+            "coordinate_type": "absolute",
+            "model_size": [
+              1920,
+              1080
+            ],
+            "original_size": [
+              1920,
+              1080
+            ]
+          },
+          "grade": "original_input",
+          "image_source": "current_native_message",
+          "observation_id": "e5b672c999874fee891591d0e854e0dd",
+          "original_sha256": "53c0a5939705f517c6adae7fc69fbd1a8e98f82af76d075919d9d75429c80903",
+          "task_input_id": "615493c9d8dc4b84aca275be6a94f147"
+        }
+      ],
+      "selector": "current_frame"
+    },
+    "lessons": {
+      "omitted_records": 32,
+      "records": [
+        {
+          "grade": "model_intent_proposal",
+          "seq": 84,
+          "source_event_id": "ccab70a8d16445ef9ed0f163826fb146",
+          "source_observation_id": "8baf8195f0ca43e090289e62a891ba79",
+          "source_sha256": "957979b0feaf3b6bcb287e5d3614edad6d287dcc3ff1e5080e828173c2948251",
+          "text": "The Files window may be opening behind the maximized GIMP. Let me click the folder icon and then open the Activities overview to see all windows.\n\n"
+        },
+        {
+          "controller_receipts": [
+            {
+              "command": "pyautogui.click(17, 560)",
+              "result": {
+                "error": "",
+                "output": "",
+                "returncode": 0,
+                "status": "success"
+              }
+            }
+          ],
+          "error": null,
+          "grade": "execution_error_record",
+          "operation_id": "ae956215bb6a4c0bbf2a54419de6fab2",
+          "seq": 86,
+          "source_event_id": "ae956215bb6a4c0bbf2a54419de6fab2",
+          "source_sha256": "7ba2e8c03bb40dad4f2dc6bb613c776182244d717526454a8627925d68e5a311",
+          "tool": {
+            "arguments": {
+              "action": "left_click",
+              "coordinate": [
+                17,
+                560
+              ]
+            },
+            "command_indices": [
+              0
+            ],
+            "id": "call_231f171c896048528f1ee822"
+          }
+        }
+      ],
+      "selector": "recorded_errors_and_model_proposals"
+    }
+  }
+}

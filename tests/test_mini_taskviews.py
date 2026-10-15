@@ -39,12 +39,12 @@ class OfflineTransport:
         pass
 
 
-def make_actor(monkeypatch, tmp_path, *, actions=None, tiny=False, cls=QwenMiniTaskViewsNativeAgent):
+def make_actor(monkeypatch, tmp_path, *, actions=None, tiny=False, cls=QwenMiniTaskViewsNativeAgent, contract=None):
     monkeypatch.setenv('QWEN_API_KEY', 'offline-placeholder')
     monkeypatch.setenv('UI_KOBE_TELEMETRY_DIR', str(tmp_path))
     monkeypatch.setenv('UI_KOBE_TASKVIEWS_PROFILE', PROFILE)
     monkeypatch.setenv('UI_KOBE_TASKVIEWS_FEEDBACK_V10', '0')
-    contract = CUAContract(history_n=20, image_max=1, fold_size=1, context_max_text_chars=32000,
+    contract = contract or CUAContract(history_n=20, image_max=1, fold_size=1, context_max_text_chars=32000,
         context_max_payload_chars=2000000, context_reserve_chars=10000,
         context_rough_text_token_budget=12000, taskviews_context_bytes=1 if tiny else 8000)
     monkeypatch.setenv('UI_KOBE_CUA_CONTRACT_JSON', json.dumps(contract.snapshot()))
@@ -151,12 +151,17 @@ def test_original_controller_status_and_returncode_enter_lessons_without_visual_
     actor.close()
 
 
-def test_too_small_optional_view_is_exactly_the_common_native_input(monkeypatch, tmp_path):
+def test_too_small_optional_view_keeps_mandatory_geometry_and_common_native_input(monkeypatch, tmp_path):
     mini, obs, mini_transport = make_actor(monkeypatch, tmp_path / 'mini', tiny=True)
     predict(mini, obs)
     baseline, obs, native_transport = make_actor(monkeypatch, tmp_path / 'baseline', tiny=True, cls=QwenNativeAgent)
     baseline.predict(TASK, obs)
-    assert mini_transport.requests == native_transport.requests
+    requests = deepcopy(mini_transport.requests)
+    content = requests[0]['messages'][-1]['content']
+    geometry = [p for p in content if p.get('text', '').startswith('Trusted screenshot/coordinate contract:')]
+    assert len(geometry) == 1 and 'absolute pixels' in geometry[0]['text']
+    content.remove(geometry[0])
+    assert requests == native_transport.requests
     assert mini.cached_context is None and mini.mini_context.trace['omission_reason'] == 'whole_envelope_budget'
     mini.close()
     baseline.close()

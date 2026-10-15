@@ -1,4 +1,5 @@
 """M0 fixed TaskViews on the unchanged shared native actor and compiler."""
+import json
 import os
 
 from kobe_views.fixed_views import PROFILE, profile_contract
@@ -8,6 +9,9 @@ from .checkpoints import ReadAnomaly
 from .kimi_native import KimiNativeAgent
 from .mini_taskviews_context import LABEL, CONTROLS_LABEL, MiniTaskViewsContext
 from .qwen_native_base import QwenNativeProvider
+
+
+FRAME_CONTRACT_PREFIX = 'Trusted screenshot/coordinate contract: '
 
 
 class MiniTaskViewsNativeAgent(KimiNativeAgent):
@@ -39,6 +43,35 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
                 view_delivered=self.mini_context.trace.get('delivered', False),
                 effect_status='unknown', extra_role_requests=0)
         return result
+
+    def current_frame_content(self):
+        # Mandatory before history admission; an optional view being omitted
+        # must not remove the coordinate contract. The compiler remains the
+        # sole projection authority; never infer units from a candidate.
+        # Only the current frame needs this generated annotation. Retaining a
+        # copy per old frame needlessly evicts native assistant/tool pairs.
+        # Original task text, model replies and controller receipts stay intact.
+        for turn in self.turns:
+            turn[0]['content'] = [part for part in turn[0]['content']
+                                  if not part.get('text', '').startswith(FRAME_CONTRACT_PREFIX)]
+        s = self.frame.screenshot
+        if s.coordinate_type == 'absolute':
+            units = (f'Use absolute pixels of the {s.model_width}x{s.model_height} image, NOT normalized 0..1000. '
+                     f'The image center is ({s.model_width // 2},{s.model_height // 2}); '
+                     f'the bottom-right pixel is ({s.model_width - 1},{s.model_height - 1}). '
+                     'Do not rescale tool arguments. ')
+        else:
+            units = ('Use normalized 0..1000 on EACH axis, not image pixels. '
+                     'The center is (500,500); the compiler converts to desktop pixels. ')
+        geometry = {key: self.frame.metadata[key] for key in
+                    ('frame_id', 'coordinate_type', 'original_size', 'model_size')}
+        text = (FRAME_CONTRACT_PREFIX + json.dumps(geometry, separators=(',', ':')) + '\n'
+                + units + 'Check tool arguments against this frame, not a scaled preview. '
+                'Returned/repeated commands are not task success. Verify the expected visible change; '
+                'if absent, re-ground or choose a different visible/keyboard route. '
+                'Image differences alone are not success. Confirm focus before typing.')
+        return [*super().current_frame_content(),
+                {'type': 'text', 'text': text}]
 
     def reset(self, _logger=None):
         super().reset(_logger)
