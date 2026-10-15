@@ -139,12 +139,25 @@ def provider_error(body):
 
 
 class QwenNativeClient:
+    # Provider hooks keep the audited transport shared without changing module
+    # globals or sending one provider's credential/extension fields to another.
+    api_key_env = 'QWEN_API_KEY'
+    base_url = BASE_URL
+    model_name = MODEL
+    request_prefix = 'qwens-'
+    policy_for = staticmethod(request_policy)
+    fields_for = staticmethod(generation_request_fields)
+
+    def accumulator(self):
+        from .qwen_sse import QwenSSE
+        return QwenSSE(self.model_name)
+
     def __init__(self, *, api_key=None, budget, profile, emit, response_dir, client=None, sleep=time.sleep):
-        self.key = api_key or os.environ.get('QWEN_API_KEY')
+        self.key = api_key or os.environ.get(self.api_key_env)
         if not self.key:
-            raise ValueError('QWEN_API_KEY is missing')
+            raise ValueError(self.api_key_env + ' is missing')
         self.budget, self.profile, self.emit = budget, profile, emit
-        self.request_policy = request_policy(profile)
+        self.request_policy = self.policy_for(profile)
         self.response_dir = Path(response_dir)
         self.response_dir.mkdir(parents=True, exist_ok=True)
         self.client = client or httpx.Client(headers={'Authorization': 'Bearer ' + self.key}, follow_redirects=False,
@@ -156,11 +169,13 @@ class QwenNativeClient:
     def create(self, *, deadline, step_ledger, budget_role, generation_attempt=1, parent_request_id=None, **payload):
         cap_field = self.request_policy['output_field']
         streaming = self.request_policy['stream']
-        if payload.get('model') != MODEL or ('max_tokens' if streaming else 'max_completion_tokens') in payload:
+        other_cap = 'max_tokens' if cap_field == 'max_completion_tokens' else 'max_completion_tokens'
+        if payload.get('model') != self.model_name or other_cap in payload:
             raise ValueError('Qwen requires its exact model and Qwen generation fields')
         payload = deepcopy(payload)
-        fields = generation_request_fields(self.profile)
-        for key in ('enable_thinking', 'reasoning_effort', 'preserve_thinking', 'thinking_budget'):
+        fields = self.fields_for(self.profile)
+        for key in ('enable_thinking', 'reasoning_effort', 'preserve_thinking', 'thinking_budget',
+                    'separate_reasoning', 'reasoning', 'provider'):
             if key in payload and (key not in fields or payload[key] != fields[key]):
                 raise ValueError('Request differs from frozen Qwen reasoning fields: ' + key)
         payload.update(temperature=0, top_p=0.9, stream=streaming, **fields)
@@ -185,9 +200,9 @@ class QwenNativeClient:
             if cap <= 0:
                 raise ValueError('Insufficient output admission for remaining Qwen transport attempts')
             payload[cap_field] = cap
-            rid = self.last_request_id = 'qwens-' + uuid.uuid4().hex
+            rid = self.last_request_id = self.request_prefix + uuid.uuid4().hex
             step_ledger.reserve(rid, budget_role, cap)
-            self.emit('api_request', request_id=rid, endpoint=BASE_URL, attempt=attempt,
+            self.emit('api_request', request_id=rid, endpoint=self.base_url, attempt=attempt,
                 generation_attempt=generation_attempt, parent_request_id=parent_request_id,
                 budget_role=budget_role, payload=payload)
             started = time.monotonic()
@@ -202,12 +217,12 @@ class QwenNativeClient:
                 timeout = httpx.Timeout(min(self.budget.idle_s, remaining), connect=min(self.budget.connect_s, remaining),
                                         write=min(30, remaining), pool=min(self.budget.connect_s, remaining))
                 if streaming:
-                    from .qwen_sse import QwenSSE, response_events
-                    accumulator = QwenSSE(MODEL)
+                    from .qwen_sse import response_events
+                    accumulator = self.accumulator()
                     response = None
                     is_sse = False
                     last_chunk = None
-                    for kind, value in response_events(self.client, BASE_URL + '/chat/completions', payload,
+                    for kind, value in response_events(self.client, self.base_url + '/chat/completions', payload,
                                                        timeout, min(overall, started + self.budget.generation_s), trace=trace):
                         elapsed = round(time.monotonic() - started, 4)
                         if kind == 'headers':
@@ -252,7 +267,7 @@ class QwenNativeClient:
                         self.emit('http_error_body', request_id=rid, status=status,
                                   body=safe_error_body(str(error_body) if error_body else raw.decode('utf-8', errors='replace'), self.key),
                                   original_response_sha256=raw_sha)
-                        if code in ('exceeded_current_quota_error', 'insufficient_quota', 'insufficient_balance'):
+                        if status == 402 or code in ('exceeded_current_quota_error', 'insufficient_quota', 'insufficient_balance'):
                             raise ProviderQuotaBlocked('Qwen provider billing/quota blocked', request=response.request, response=response)
                         if status == 429:
                             retry_delay = max(60, retry_after_seconds(response.headers.get('retry-after')) or 60)
@@ -273,7 +288,7 @@ class QwenNativeClient:
                               raw_response_sha256=raw_sha, raw_sse_path=str(sse_path), raw_response_path=str(response_path),
                               canonical_response_sha256=hashlib.sha256(response_path.read_bytes()).hexdigest())
                     return Completion(body)
-                with self.client.stream('POST', BASE_URL + '/chat/completions', json=payload,
+                with self.client.stream('POST', self.base_url + '/chat/completions', json=payload,
                                         timeout=timeout, extensions={'trace': trace}) as response:
                     status = response.status_code
                     self.last_timing = {'headers_s': round(time.monotonic() - started, 4), 'stream': False,
@@ -302,7 +317,7 @@ class QwenNativeClient:
                         self.emit('http_error_body', request_id=rid, status=status,
                             body=safe_error_body(text, self.key), original_response_sha256=raw_sha,
                             headers={k: response.headers[k] for k in ['retry-after', 'content-type', 'x-request-id'] if k in response.headers})
-                        if code in ['exceeded_current_quota_error', 'insufficient_quota', 'insufficient_balance']:
+                        if status == 402 or code in ['exceeded_current_quota_error', 'insufficient_quota', 'insufficient_balance']:
                             raise ProviderQuotaBlocked('Qwen provider billing/quota blocked', request=response.request, response=response)
                         if status == 429:
                             delay = retry_after_seconds(response.headers.get('retry-after'))

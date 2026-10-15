@@ -33,8 +33,10 @@ class CUAContract:
         if (self.model_screen_width is None) != (self.model_screen_height is None):
             raise ValueError("Declare both model dimensions or neither")
         if self.model_screen_width is not None:
-            if self.coordinate_type != "absolute":
-                raise ValueError("Official fixed model dimensions require absolute coordinates")
+            # The official processor accepts fixed image dimensions in both
+            # modes. Normalized action units do not require resizing pixels.
+            # Keeping a declared 1920x1080 frame avoids automatic 32px alignment
+            # growing it beyond the lossless transport's frozen pixel limit.
             if any(type(n) is not int or n < 1 for n in (self.model_screen_width, self.model_screen_height)):
                 raise ValueError("Model dimensions must be positive integers")
         for name in ("history_n", "image_max", "fold_size", "context_max_payload_chars",
@@ -109,6 +111,18 @@ def options_contract(options, *, provider='kimi', generation_profile=None):
         selected_profile = generation_profile or QwenGenerationProfile()
         thinking = generation_request_fields(selected_profile)['enable_thinking']
         required.update(stream=request_policy(selected_profile)['stream'], enable_thinking=thinking, top_p=0.9)
+    elif provider == 'tinker':
+        from ui_kobe.api.tinker_native import generation_request_fields
+        generation_request_fields(generation_profile)
+        required.update(top_p=0.9)
+    elif provider == 'openrouter':
+        from ui_kobe.api.openrouter_native import generation_request_fields
+        generation_request_fields(generation_profile)
+        required.update(top_p=0.9)
+    elif provider == 'sx':
+        from ui_kobe.api.sx_native import generation_request_fields
+        generation_request_fields(generation_profile)
+        required.update(top_p=0.9)
     elif provider != 'kimi':
         raise ValueError('Unknown native provider')
     for name, expected in required.items():
@@ -124,15 +138,15 @@ def options_contract(options, *, provider='kimi', generation_profile=None):
                       "endless_min_chars", "endless_retry_limit")
     inactive = {name: values.pop(name) for name in inactive_names if name in values}
     api_key = values.pop("api_key", None)
-    if provider == 'qwen':
+    if provider in ('qwen', 'tinker', 'openrouter', 'sx'):
         from ui_kobe.api.qwen_native import QwenTransportBudget
         budget_class = QwenTransportBudget
     else:
         budget_class = StreamBudget
-    budget = budget_class(attempts=values.pop("max_api_retries", 6 if provider == 'qwen' else 2),
+    budget = budget_class(attempts=values.pop("max_api_retries", 6 if provider in ('qwen', 'tinker', 'openrouter', 'sx') else 2),
                           generation_s=values.pop("generation_timeout", 600),
                           total_s=values.pop("request_timeout", 900))
-    expected_retry_cap = 60.0 if provider == 'qwen' and budget.attempts > 2 else 15.0
+    expected_retry_cap = 60.0 if provider in ('qwen', 'tinker', 'openrouter', 'sx') and budget.attempts > 2 else 15.0
     retry_base, retry_cap = values.pop("retry_sleep_base", 3.0), values.pop("retry_sleep_cap", expected_retry_cap)
     if (retry_base, retry_cap) != (3.0, expected_retry_cap):
         raise ValueError(f"Native transport supports retry_sleep_base=3 / cap={expected_retry_cap:g}")

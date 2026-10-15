@@ -12,6 +12,17 @@ import sys
 def agent_class(interface, arm, taskviews_profile='full_checkpoint'):
     from ui_kobe.osworld.taskviews_profiles import FULL_PROFILE, MINI_PROFILE
     if taskviews_profile == MINI_PROFILE:
+        if interface == 'sx-native':
+            from ui_kobe.osworld.sx_native import SXTransitionNativeAgent, SXMiniTaskViewsNativeAgent
+            return {'taskviews': SXMiniTaskViewsNativeAgent, 'ui_kobe_like': SXTransitionNativeAgent}[arm]
+        if interface == 'openrouter-native':
+            from ui_kobe.osworld.openrouter_native import OpenRouterTransitionNativeAgent, OpenRouterMiniTaskViewsNativeAgent
+            return {'taskviews': OpenRouterMiniTaskViewsNativeAgent,
+                    'ui_kobe_like': OpenRouterTransitionNativeAgent}[arm]
+        if interface == 'tinker-native':
+            from ui_kobe.osworld.tinker_native import TinkerTransitionNativeAgent, TinkerMiniTaskViewsNativeAgent
+            return {'taskviews': TinkerMiniTaskViewsNativeAgent,
+                    'ui_kobe_like': TinkerTransitionNativeAgent}[arm]
         if interface != 'qwen-native':
             raise ValueError('Mini requires the declared Qwen native interface')
         from ui_kobe.osworld.mini_taskviews_native import QwenMiniTaskViewsNativeAgent

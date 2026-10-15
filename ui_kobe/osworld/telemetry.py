@@ -75,7 +75,8 @@ def safe(value):
             mime, encoded = value.split(";base64,", 1)
             data = base64.b64decode(encoded)
             return save_image(data, "jpg" if "jpeg" in mime else "png")
-        for name in ("QWEN_API_KEY", "KIMI_API_KEY", "OPENAI_API_KEY", "GLM_API_KEY", "ANTHROPIC_API_KEY"):
+        for name in ("QWEN_API_KEY", "KIMI_API_KEY", "OPENAI_API_KEY", "GLM_API_KEY", "ANTHROPIC_API_KEY",
+                     "TINKER_API_KEY", "OPENROUTER_LTY_API_KEY", "SX_QWEN_API_KEY"):
             secret = os.environ.get(name)
             if secret:
                 value = value.replace(secret, "[REDACTED]")

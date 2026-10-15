@@ -1,5 +1,15 @@
 # OSWorld K3 TaskViews
 
+2026-10-15最终结果：随想qwen3.8-flash / low的v5发票核对比较已完成，UI-KOBE-like与TaskViews-mini各35轮，官方得分均0.0。内存检查通过，容器清理、源码校验完成，巡检已暂停。见 [最终报告](docs/osworld-verified-invoice-sx-flash-results-20261015.md)。下文保留实现和历史记录。
+
+2026-10-15 21:58：按用户确认采用“真实空闲RAM>2GiB＋单独核算本项目占用”的新内存规则。56项相关回归、六例离线集成、大图在线检查和实测计数预检通过，独立v5计划已在真实环境取得完整模型响应及动作回执，20分钟巡检已恢复。模型qwen3.8-flash / low，UI-KOBE-like → Mini各最多35轮。机制见 [2GiB内存规则](docs/osworld-verified-memory-policy-20261015.md)，实时状态见 [运行状态](D:/cua_lty/osworld_verified_setup/运行状态.md)。下文保留历史记录。
+
+2026-10-15 21:41巡检：v4在UI-KOBE-like完成9轮后因Windows可用RAM降至3.821GiB触发4GiB保护；9次模型调用完整返回，容器已清理、未评分、Mini未启动。巡检已通过应用工具暂停。证据和后续所需处理见 [运行状态](D:/cua_lty/osworld_verified_setup/运行状态.md)。下文保留启动与历史说明。
+
+2026-10-15 21:16，按用户明确指令以新v4目录重新运行随想qwen3.8-flash / low的UI-KOBE-like → Mini比较，各最多35轮。启动前可用RAM约11.6GiB、零swap，代码与配置沿用已验证版本；v3历史记录保留。UI-KOBE-like已在真实环境取得完整模型响应与动作回执，应用已确认20分钟巡检恢复ACTIVE。实时进度见 [运行状态](D:/cua_lty/osworld_verified_setup/运行状态.md)。
+
+OSWorld-Verified（OSWorld-1）的发票与流水核对入口为 `scripts/verified_invoice.py`。2026-10-15按用户指令使用随想接口、环境变量 `SX_QWEN_API_KEY` 和 `SX_URL_SB`、模型 `qwen3.8-flash` / low，每组最多35决策，UI-KOBE-like → Mini串行。含大图的真实接口检查、六例离线集成及运行预检通过；v3真实运行完成14轮及14次完整模型响应后，因Windows可用RAM降至3.736GiB触发4GiB保护，已清理容器，未取得评分、Mini未启动。当前配置与状态见 [随想接入说明](docs/osworld-verified-invoice-sx-flash.md)；历史证据均保留。
+
 `mini` 分支提供 **TaskViews Mini M0**：一个共同 native actor、三个固定只读 views、零额外分析角色请求、显式 profile 与检查点。后续 Mini 测试先执行 `git switch mini`，使用带分支检查的 `scripts/validate_mini.py`。实现、配置和运行边界见 [Mini 使用说明](docs/taskviews-mini.md)，后续分层接入见 [路线图](docs/taskviews-mini-roadmap-20261012.md)。当前暂停的完整 V12 不迁移为 Mini。
 
 以下 v7 说明是旧 Kimi 比较路径的历史接口文档，不是 Mini 或 Qwen 完整版的当前配置。v7 分为 **baseline、UI-KOBE-like、TaskViews 三组**，共用同一套 actor、K3 协议适配、截图/坐标契约和官方执行评分。baseline 不创建转换图数据库，也不读取扩展记忆；UI-KOBE-like 单独测试执行边的保存与检索，TaskViews 在此基础上增加任务模块和自适应视图。详见 [三组 actor 与证据边界](docs/cua-v7.md)。

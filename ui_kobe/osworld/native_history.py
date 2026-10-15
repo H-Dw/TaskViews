@@ -12,7 +12,7 @@ def context_size(messages):
         for key, value in message.items():
             if key == "content" and isinstance(value, list):
                 text += sum(len(p.get("text", "")) for p in value if p.get("type") == "text")
-            elif key in {"content", "reasoning_content", "tool_calls"} and value is not None:
+            elif key in {"content", "reasoning_content", "reasoning", "reasoning_details", "tool_calls"} and value is not None:
                 text += len(value) if isinstance(value, str) else len(json.dumps(value, ensure_ascii=False))
     return len(json.dumps(messages, ensure_ascii=False, separators=(",", ":"))), text
 

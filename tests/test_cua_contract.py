@@ -61,7 +61,7 @@ def test_units_are_declared_not_guessed_or_clamped():
 
 
 @pytest.mark.parametrize("options,match", [
-    ({"coordinate_type": "relative", "model_screen_width": 1920, "model_screen_height": 1080}, "absolute"),
+    ({"coordinate_type": "relative", "model_screen_width": 1920, "model_screen_height": None}, "both"),
     ({"coordinate_type": "auto"}, "declared"), ({"enable_zoom": True}, "Unsupported"),
     ({"terminal_status_judge": True}, "Unsupported"), ({"summary_folding": True}, "Unsupported"),
     ({"enable_thinking": False}, "Unsupported"), ({"made_up_option": True}, "Unknown"),
@@ -69,6 +69,16 @@ def test_units_are_declared_not_guessed_or_clamped():
 def test_misleading_or_inconsistent_options_rejected_before_api(options, match):
     with pytest.raises(ValueError, match=match):
         options_contract(options)
+
+
+def test_explicit_relative_frame_keeps_pixels_and_uses_official_projection():
+    contract, _, _, _ = options_contract({'coordinate_type': 'relative',
+        'model_screen_width': 1920, 'model_screen_height': 1080})
+    frame = contract.process(png((1920, 1080)), 1)
+    assert frame.metadata['model_size'] == frame.metadata['original_size'] == [1920, 1080]
+    assert frame.metadata['coordinate_bounds'] == [1000, 1000]
+    _, batch = validate_native(candidate([{'action': 'mouse_move', 'coordinate': [950, 800]}]), frame)
+    assert batch.commands == ['pyautogui.moveTo(1824, 864)']
 
 
 def test_task_date_and_official_batch_guidance_are_shared():
