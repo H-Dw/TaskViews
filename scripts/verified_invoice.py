@@ -101,7 +101,8 @@ def project_identity():
 def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolute', experiment='legacy-low35',
                   task_key='invoice'):
     task_spec = TASKS[task_key]
-    if task_key != 'invoice' and experiment != 'sx-pair-max-high40':
+    single_vlc_mini = task_key == 'vlc' and experiment == 'sx-mini-max-high40'
+    if task_key != 'invoice' and experiment != 'sx-pair-max-high40' and not single_vlc_mini:
         raise ValueError('GIMP/VLC require the explicit baseline/Mini Max/high40 experiment')
     max40 = experiment in MAX40_EXPERIMENTS
     if experiment not in EXPERIMENTS or (max40 and provider != 'sx'):
@@ -137,7 +138,8 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         # image count, view bytes or output tokens in either comparison arm.
         contract['context_max_payload_chars'] = 12_000_000
     from ui_kobe.osworld.verified_resources import resource_policy
-    return {'version': 'osworld-verified-invoice-v5' if task_key == 'invoice' else 'osworld-verified-media-v1',
+    return {'version': ('osworld-verified-invoice-v5' if task_key == 'invoice' else
+                        'osworld-verified-vlc-mini-v4-v1' if single_vlc_mini else 'osworld-verified-media-v1'),
         'provider': provider, 'experiment': experiment,
         'interface': provider + '-native', 'benchmark': 'OSWorld-Verified (OSWorld-1)',
         'task_key': task_key, 'task_id': task_spec['id'], 'domain': task_spec['domain'],

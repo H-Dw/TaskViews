@@ -120,9 +120,11 @@ def main():
         assert json.dumps(task['evaluator']) not in json.dumps(body)
         text = json.dumps(body['messages'])
         assert task['evaluator']['expected']['dest'] not in text
+        mini_packet = None
         for part in body['messages'][-1]['content']:
             if part.get('type') == 'text' and part.get('text', '').startswith('TaskViews:'):
                 packet = json.loads(part['text'].split('\n', 1)[1])
+                mini_packet = packet
                 view_sets.append(sorted(packet['views']))
         step = counts['requests']
         terminal = args.case == 'terminate' and step == 7
@@ -132,6 +134,14 @@ def main():
         calls = [{'index': i, 'id': f'fixture-{step}-{i}', 'type': 'function', 'function': {
                   'name': 'computer_use', 'arguments': json.dumps(action)}} for i, action in enumerate(actions)]
         delta = {'role': 'assistant', 'content': 'Synthetic fixture action', 'tool_calls': calls}
+        if terminal and args.arm == 'taskviews':
+            from kobe_views.artifact_view import CHECKS
+            assert mini_packet is not None
+            ref = mini_packet['views']['current']['records'][0]['ref']
+            review = {'applicable': True, 'candidate': '/synthetic/artifact.bin', 'checks': {
+                key: {'ref': ref, 'observed': 'Synthetic observation for ' + key} for key in CHECKS}}
+            # A mock process-contract fixture, never semantic artifact proof.
+            delta['content'] += '<artifact_review>' + json.dumps(review) + '</artifact_review>'
         if args.provider == 'openrouter':
             delta['reasoning_details'] = [{'type': 'reasoning.text', 'text': 'fixture', 'index': 0}]
         raw = stream_frame(delta)

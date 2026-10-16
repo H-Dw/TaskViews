@@ -1,6 +1,8 @@
 # TaskViews Mini M0
 
-2026-10-16 当前实现修订为 `mini_keyboard_memory_v3`：默认视图改为 `current/keyboard/attempts/lessons`，总预算仍3000 UTF-8 bytes。keyboard 按最近意图或同 actor 的 `<key_lookup>主题</key_lookup>` 请求提供下一轮键名参考，单独检索同 episode 最近32条键盘执行边、按主题最多展示2条。它区分后端 token、应用快捷键和未确认的执行效果。末端拦截只作兜底。231项测试、记录回放和原运行器模拟集成通过；真实首候选生成对照已完成，尚未进行新正式评测。详见[异常复盘及完整验证](taskviews-mini-keyboard-postmortem-20261016.md)和[auto-research 策略](taskviews-mini-auto-research.md)。**以下是旧 M0 搭建记录，三视图表格和当时的验证状态只描述历史版本。**
+2026-10-16 当前实现修订为 `mini_artifact_evidence_v4`：四项产物状态默认为unknown；成功终止前需要引用真实观察的公开复核记录，模型报告不冒充独立认证。3000 UTF-8 bytes内优先保留有效操作与后续观察、未解决问题，再放匹配的键盘参考；最大化、最小化、切换窗口和重命名分别处理，无匹配则省略。四视图与额外模型角色数0保持。详见[v4实现与验证范围](taskviews-mini-artifact-evidence-v4.md)。旧v3评测与检查点保持原样，不能静默续跑为v4。
+
+先前 `mini_keyboard_memory_v3` 的231项测试、生成对照及历史运行证据见[键盘复盘](taskviews-mini-keyboard-postmortem-20261016.md)和[auto-research策略](taskviews-mini-auto-research.md)。**以下是旧M0搭建记录，三视图表格和旧验证状态只描述历史版本。**
 
 2026-10-15 更新：当前实现修订为 `mini_cua_feedback_v2`，修复空错误误分类，默认提供重复操作证据，并在正式 Mini 输入中明确坐标与结果检查要求。详见[本次修复及验证记录](taskviews-mini-cua-feedback-20261015.md)。下文保留最初 M0 搭建时的配置与验证记录；最新随想发票任务的 35 轮、0/0 分结果见[正式结果](osworld-verified-invoice-sx-flash-results-20261015.md)，不应与旧 Task059/Pinggy 配置混用。
 

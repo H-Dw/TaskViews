@@ -8,8 +8,7 @@ from ui_kobe.api.kimi_stream import StreamProtocolError
 
 VERSION = 'mini_interaction_v1'
 SILENT_KEY_ALIASES = {'page_down': 'pagedown', 'page_up': 'pageup', 'minus': '-'}
-KEY_GUIDANCE = ('Keyboard view maps intent to exact keys tokens (e.g. pagedown, "-"). '
-                'Action-name underscores do not define key names. ')
+KEY_GUIDANCE = ('Keyboard references use exact backend key tokens. Action-name underscores do not define key names. ')
 WORKFLOW_GUIDANCE = (
     'Keep the requested deliverable in view. Revisit resolved reads only for a specific uncertainty. '
     'Typing a name does not confirm a dialog or move a file. Confirm creation, the selected source '
@@ -40,4 +39,5 @@ def interaction_contract():
     return {'version': VERSION, 'grade': 'adapter_semantics_and_workflow_guidance',
             'scroll': 'scroll.pixels = wheel ticks, ignores its coordinate; move pointer first, try 3-5 then observe.',
             'deliverable': 'Typing a name does not confirm a dialog or move a file. Verify the requested final artifact.',
+            'observation': 'Desktop observations are not exported user artifacts; timestamps and closed menus do not certify contents.',
             'visual_effect': 'unknown; controller success only confirms command return'}

@@ -4,7 +4,7 @@ import json
 from kobe_views.fixed_views import MAX_BYTES, PROFILE
 from ui_kobe.api.kimi_stream import Completion
 from ui_kobe.osworld.checkpoints import Checkpoints
-from test_mini_taskviews import TASK, make_actor, predict
+from test_mini_taskviews import TASK, make_actor, original_event, predict
 from test_taskviews_checkpoints import VM
 
 
@@ -75,9 +75,7 @@ def test_500_mock_decisions_and_midpoint_restore_keep_original_sequence_and_erro
     packet = json.loads(encoded)
     assert len(encoded.encode()) <= MAX_BYTES
     for row in packet['views']['attempts']['records']:
-        original = restored.execution_journal.db.execute('SELECT payload FROM events WHERE id=?',
-                                                        (row['source_event_id'],)).fetchone()[0]
-        assert json.loads(original)['step'] < 500
+        assert original_event(restored, packet, row)['step'] < 500
     error = next(row for row in packet['views']['lessons']['records'] if row['grade'] == 'execution_error_record')
     assert error['error'] == 'Original early controller failure'
     db = restored.execution_journal.db

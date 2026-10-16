@@ -8,7 +8,7 @@ from kobe_views.fixed_views import materialize
 from kobe_views.controls_view import record
 from ui_kobe.osworld.checkpoints import ReadAnomaly
 from test_mini_controls_view import enable
-from test_mini_taskviews import make_actor, packet, predict
+from test_mini_taskviews import make_actor, original_event, packet, predict
 
 
 def last_attempts(actor):
@@ -28,8 +28,8 @@ def test_repeat_feedback_delivered_with_original_commands_sources_and_unknown_ef
     assert feedback['action'] == 'pyautogui.click(400, 200)'
     rows = actor.execution_journal.db.execute('SELECT seq,payload FROM events WHERE seq IN (?,?,?,?) ORDER BY seq', feedback['source_seqs']).fetchall()
     assert len({json.loads(encoded)['tool']['id'] for _, encoded in rows}) == 4
-    assert feedback['latest_event_id'] == json.loads(rows[-1][1])['id']
-    assert feedback['latest_event_sha256'] == hashlib.sha256(rows[-1][1].encode()).hexdigest()
+    assert original_event(actor, value, feedback)['id'] == json.loads(rows[-1][1])['id']
+    assert value['sources'][str(feedback['ref'])]['sha256'] == hashlib.sha256(rows[-1][1].encode()).hexdigest()
     assert actor.mini_context.trace['packet_bytes'] <= 3000 and len(transport.requests) == 5
     assert value['views']['controls']['records'][0]['current_focus'] == 'unknown'
     actor.close()

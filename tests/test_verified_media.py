@@ -35,6 +35,18 @@ def test_media_pairs_share_actor_budget_but_keep_task_and_scoring_identity(media
         pair.specification('sx','SX_URL_SB','relative','sx-max-high40',key)
 
 
+def test_vlc_single_mini_keeps_pair_contract_and_cannot_dispatch_baseline(media_spec):
+    single = pair.specification('sx','SX_URL_SB','relative','sx-mini-max-high40','vlc')
+    previous = media_spec('vlc')
+    assert single['arms'] == ['taskviews']
+    assert single['version'] == 'osworld-verified-vlc-mini-v4-v1'
+    for field in previous.keys() - {'version', 'arms', 'arm_profiles', 'experiment'}:
+        assert single[field] == previous[field], field
+    assert single['arm_profiles'] == {'taskviews': previous['arm_profiles']['taskviews']}
+    with pytest.raises(ValueError, match='explicit baseline/Mini'):
+        pair.specification('sx','SX_URL_SB','relative','sx-mini-max-high40','gimp')
+
+
 @pytest.mark.parametrize('key', ['gimp','vlc'])
 def test_gold_is_cached_for_host_evaluator_and_never_added_to_guest_setup(tmp_path,media_spec,key):
     plan = media_spec(key)

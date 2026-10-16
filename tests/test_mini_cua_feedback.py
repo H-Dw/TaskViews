@@ -7,7 +7,7 @@ from kobe_views.fixed_views import REVISION, materialize, profile_contract
 from ui_kobe.osworld.checkpoints import ReadAnomaly
 from ui_kobe.osworld.cua_contract import CUAContract
 from ui_kobe.osworld.mini_taskviews_native import FRAME_CONTRACT_PREFIX
-from test_mini_taskviews import make_actor, packet, predict
+from test_mini_taskviews import make_actor, original_event, packet, predict
 
 
 @pytest.mark.parametrize('error', [None, '', ' ', '\t\r\n', False, {}, []])
@@ -22,7 +22,7 @@ def test_successful_official_receipts_do_not_enter_error_lessons(monkeypatch, tm
     value = packet(transport)
     assert not any(r['grade']=='execution_error_record' for r in value['views']['lessons']['records'])
     assert any(r['grade']=='model_intent_proposal' for r in value['views']['lessons']['records'])
-    assert value['views']['attempts']['records'][0]['controller_receipts'] == receipts
+    assert original_event(actor, value, value['views']['attempts']['records'][0])['controller_receipts'] == receipts
     actor.close()
 
 
@@ -38,7 +38,7 @@ def test_failure_signals_survive_empty_message_fix(monkeypatch, tmp_path, result
     actor.record_execution(commands[0], receipts=receipts)
     predict(actor, obs)
     errors = [r for r in packet(transport)['views']['lessons']['records'] if r['grade']=='execution_error_record']
-    assert len(errors)==1 and errors[0]['controller_receipts']==receipts
+    assert len(errors)==1 and original_event(actor, packet(transport), errors[0])['controller_receipts']==receipts
     actor.close()
 
 
@@ -57,7 +57,7 @@ def test_actual_predict_declares_units_and_only_official_compiler_projects(monke
         assert predict(actor, obs)==[expected]
         current=transport.requests[-1]['messages'][-1]['content']
         text=next(p['text'] for p in current if p.get('text','').startswith('Trusted screenshot/coordinate contract:'))
-        assert len(text)<900  # Leave room for the original 500-step folded action prefix.
+        assert len(text)<700  # Keep the final native assistant/tool pair even at the 500-step prefix boundary.
         assert f'native-frame-{step:04d}' in text
         assert ('Use normalized 0..1000' if relative else 'Use absolute pixels') in text
         assert ('center is (500,500)' if relative else 'center is (960,540)') in text

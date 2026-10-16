@@ -3,17 +3,20 @@ import json
 
 import pytest
 
-from kobe_views.keyboard_view import CATALOG, record, select_topic
+from kobe_views.keyboard_view import record, select_topic
 from ui_kobe.api.kimi_stream import Completion
 from ui_kobe.osworld.checkpoints import ReadAnomaly
-from test_mini_taskviews import make_actor, packet, predict
+from test_mini_taskviews import make_actor, original_event, packet, predict
 
 
 @pytest.mark.parametrize('prose,topic,keys', [
     ('Click in the document area and use Page Down to scroll.', 'page_navigation', ['pagedown']),
     ('Go back and zoom out with Ctrl+-.', 'zoom', ['ctrl', '-']),
     ('Move the invoice into the folder.', 'file_transfer', ['ctrl', 'x']),
-    ('Maximize the window.', 'window', ['alt', 'f10']),
+    ('Maximize the window.', 'window_maximize', ['alt', 'f10']),
+    ('Minimize the window.', 'window_minimize', ['win', 'h']),
+    ('Switch to another application.', 'window_switch', ['win', 'tab']),
+    ('Rename the selected file.', 'rename', ['f2']),
 ])
 def test_intent_retrieval_supplies_exact_native_call_before_generation(prose, topic, keys):
     selected, reason = select_topic([prose])
@@ -45,14 +48,18 @@ def test_agent_can_request_a_view_and_retrieve_keyboard_memory_beyond_four_edges
     text = '<key_lookup>page_navigation</key_lookup>'
     predict(actor, obs)
     predict(actor, obs)
+    assert packet(transport)['views']['keyboard']['records'], {
+        'bytes': actor.mini_context.trace['packet_bytes'],
+        'views': {key:len(json.dumps(value)) for key,value in packet(transport)['views'].items()},
+        'sources': len(json.dumps(packet(transport)['sources']))}
     view = packet(transport)['views']['keyboard']['records'][0]
     assert view['selection'] == 'same_actor_explicit_lookup'
-    assert view['memory'][0]['source_event_id'] == first
+    assert original_event(actor, packet(transport), view['memory'][0])['id'] == first
     assert view['memory'][0]['keys'] == ['pagedown']
     assert view['memory'][0]['image_delta'] == 'same_bytes'
     assert view['memory'][0]['effect_status'] == 'unknown'
     assert len(transport.requests) == 9 and actor.mini_context.trace['packet_bytes'] <= 3000
-    assert all(r['source_event_id'] != first for r in packet(transport)['views']['attempts']['records'])
+    assert all(original_event(actor, packet(transport), r)['id'] != first for r in packet(transport)['views']['attempts']['records'])
     actor.close()
 
 
@@ -77,8 +84,7 @@ def test_keyboard_memory_provenance_is_required(monkeypatch, tmp_path):
     '<key_lookup>zoom</key_lookup><key_lookup>window</key_lookup>', '<key_lookup>{}</key_lookup>'])
 def test_malformed_lookup_never_changes_schema_or_creates_external_actions(text):
     topic, reason = select_topic([text])
-    assert topic in CATALOG and reason != 'same_actor_explicit_lookup'
-    assert all(r['tool']['action'] == 'key' for r in record(topic, reason)['recipes'])
+    assert topic is None and reason == 'invalid_lookup'
 
 
 def test_reference_not_raw_wrong_alias_is_in_current_request(monkeypatch, tmp_path):

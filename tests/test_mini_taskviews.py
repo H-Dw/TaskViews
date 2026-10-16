@@ -79,6 +79,13 @@ def packet(transport):
     return json.loads(transport.requests[-1]['messages'][-1]['content'][-1]['text'].split('\n', 1)[1])
 
 
+def original_event(actor, value, row):
+    reference = value['sources'][str(row['ref'])]
+    encoded = actor.execution_journal.db.execute('SELECT payload FROM events WHERE seq=?', (row['ref'],)).fetchone()[0]
+    assert reference['sha256'] == hashlib.sha256(encoded.encode()).hexdigest()
+    return json.loads(encoded)
+
+
 def test_fixed_views_use_one_actor_and_no_full_control(monkeypatch, tmp_path):
     actor, obs, transport = make_actor(monkeypatch, tmp_path)
     assert actor.predict.__func__ is KimiNativeAgent.predict
@@ -86,7 +93,8 @@ def test_fixed_views_use_one_actor_and_no_full_control(monkeypatch, tmp_path):
     predict(actor, obs)
     value = packet(transport)
     assert set(value['views']) == set(VIEW_IDS)
-    assert value['views']['attempts']['records'] == value['views']['lessons']['records'] == []
+    assert value['views']['attempts']['records'] == []
+    assert all(v=='unknown' for v in value['views']['lessons']['records'][0]['verification'].values())
     assert len(transport.requests) == 1 and transport.requests[0]['budget_role'] == 'executor'
     assert actor.mini_context.trace['delivered'] and actor.mini_context.delivery['count'] == 1
     assert sum(part['type'] == 'image_url' for part in transport.requests[0]['messages'][-1]['content']) == 1
@@ -121,9 +129,7 @@ def test_real_edges_errors_and_prose_have_distinct_source_grades(monkeypatch, tm
     attempt = value['views']['attempts']['records'][0]
     assert attempt['tool']['id'] == 'original-1'
     assert attempt['tool']['arguments'] == {'action': 'left_click'}
-    encoded = actor.execution_journal.db.execute('SELECT payload FROM events WHERE id=?',
-                                               (attempt['source_event_id'],)).fetchone()[0]
-    assert attempt['source_sha256'] == hashlib.sha256(encoded.encode()).hexdigest()
+    assert original_event(actor, value, attempt)['tool'] == attempt['tool']
     lessons = value['views']['lessons']['records']
     error = next(row for row in lessons if row['grade'] == 'execution_error_record')
     prose = next(row for row in lessons if row['grade'] == 'model_intent_proposal')
@@ -146,8 +152,8 @@ def test_original_controller_status_and_returncode_enter_lessons_without_visual_
     predict(actor, obs)
     errors = [row for row in packet(transport)['views']['lessons']['records']
               if row['grade'] == 'execution_error_record']
-    assert len(errors) == 1 and errors[0]['controller_receipts'] == receipts
-    assert errors[0]['error'] is None and 'assessment' not in errors[0]
+    assert len(errors) == 1 and original_event(actor, packet(transport), errors[0])['controller_receipts'] == receipts
+    assert original_event(actor, packet(transport), errors[0])['error'] is None and 'assessment' not in errors[0]
     actor.close()
 
 

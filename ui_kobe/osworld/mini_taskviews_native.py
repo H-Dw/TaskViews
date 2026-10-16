@@ -9,7 +9,8 @@ from .checkpoints import ReadAnomaly
 from .kimi_native import KimiNativeAgent
 from .mini_taskviews_context import LABEL, CONTROLS_LABEL, MiniTaskViewsContext
 from .qwen_native_base import QwenNativeProvider
-from .mini_interaction import KEY_GUIDANCE, validate_keys
+from .mini_interaction import validate_keys
+from kobe_views.artifact_view import GUIDANCE as ARTIFACT_GUIDANCE
 
 
 FRAME_CONTRACT_PREFIX = 'Trusted screenshot/coordinate contract: '
@@ -38,6 +39,8 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
     def validate_actor_candidate(self, response):
         result = super().validate_actor_candidate(response)
         validate_keys(result[0], response)
+        if result[1].terminal_status == 'success':
+            self.mini_context.require_final_review(response.model_dump()['choices'][0]['message'].get('content'), response)
         if self.controls_view_enabled:
             content = response.model_dump()['choices'][0]['message'].get('content')
             telemetry.emit('mini_controls_candidate', frame_id=self.frame.metadata['frame_id'],
@@ -59,19 +62,15 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
         s = self.frame.screenshot
         if s.coordinate_type == 'absolute':
             units = (f'Use absolute pixels of the {s.model_width}x{s.model_height} image, NOT normalized 0..1000. '
-                     f'The image center is ({s.model_width // 2},{s.model_height // 2}); '
-                     f'the bottom-right pixel is ({s.model_width - 1},{s.model_height - 1}). '
-                     'Do not rescale tool arguments. ')
+                     f'The center is ({s.model_width // 2},{s.model_height // 2}). ')
         else:
             units = ('Use normalized 0..1000 on EACH axis, not image pixels. '
                      'The center is (500,500); the compiler converts to desktop pixels. ')
         geometry = {key: self.frame.metadata[key] for key in
                     ('frame_id', 'coordinate_type', 'original_size', 'model_size')}
         text = (FRAME_CONTRACT_PREFIX + json.dumps(geometry, separators=(',', ':')) + '\n'
-                + units + 'Check tool arguments against this frame, not a scaled preview. '
-                'Returned/repeated commands are not task success. Verify the expected visible change; '
-                'if absent, re-ground or choose a different visible/keyboard route. '
-                'Image differences alone are not success. Confirm focus before typing. ' + KEY_GUIDANCE)
+                + units + 'Verify the expected visible change; if absent, re-ground. Confirm focus before typing. '
+                + ARTIFACT_GUIDANCE)
         return [*super().current_frame_content(),
                 {'type': 'text', 'text': text}]
 
