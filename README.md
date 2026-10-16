@@ -1,5 +1,7 @@
 # OSWorld K3 TaskViews
 
+2026-10-16 开发更新：Max/high 三组官方结果为 UI-KOBE-like 0、baseline 1、Mini 0。已依据保存轨迹将 Mini 更新为 `mini_keyboard_memory_v3`：独立 keyboard view、意图到确切键名的生成引导、同 episode 键盘记忆检索，默认四视图仍共用3000-byte上限。231项回归、保存轨迹回放、原运行器模拟集成通过；6次真实键名生成测试中，新上下文在两个现场均首轮正确。新代码尚无正式分数，巡检保持暂停。见[输入差异、异常与修复验证](docs/taskviews-mini-keyboard-postmortem-20261016.md)及[auto-research 策略](docs/taskviews-mini-auto-research.md)。
+
 2026-10-16：Mini 优化已提交为 `2c6662c`。新增随想 `qwen3.8-max`、思考 `high`、每组 40 轮的 UI-KOBE-like → LLM baseline → TaskViews-mini 三组入口，使用显式归一化坐标和共同资源预算。配置与验证见 [Max/high 三组说明](docs/osworld-verified-invoice-sx-max-high40.md)，实际运行进度见 [运行状态](D:/cua_lty/osworld_verified_setup/运行状态.md)。
 
 2026-10-15最终结果：随想qwen3.8-flash / low的v5发票核对比较已完成，UI-KOBE-like与TaskViews-mini各35轮，官方得分均0.0。内存检查通过，容器清理、源码校验完成，巡检已暂停。见 [最终报告](docs/osworld-verified-invoice-sx-flash-results-20261015.md)。下文保留实现和历史记录。
@@ -12,7 +14,7 @@
 
 OSWorld-Verified（OSWorld-1）的发票与流水核对入口为 `scripts/verified_invoice.py`。2026-10-15按用户指令使用随想接口、环境变量 `SX_QWEN_API_KEY` 和 `SX_URL_SB`、模型 `qwen3.8-flash` / low，每组最多35决策，UI-KOBE-like → Mini串行。含大图的真实接口检查、六例离线集成及运行预检通过；v3真实运行完成14轮及14次完整模型响应后，因Windows可用RAM降至3.736GiB触发4GiB保护，已清理容器，未取得评分、Mini未启动。当前配置与状态见 [随想接入说明](docs/osworld-verified-invoice-sx-flash.md)；历史证据均保留。
 
-`mini` 分支提供 **TaskViews Mini M0**：一个共同 native actor、三个固定只读 views、零额外分析角色请求、显式 profile 与检查点。后续 Mini 测试先执行 `git switch mini`，使用带分支检查的 `scripts/validate_mini.py`。实现、配置和运行边界见 [Mini 使用说明](docs/taskviews-mini.md)，后续分层接入见 [路线图](docs/taskviews-mini-roadmap-20261012.md)。当前暂停的完整 V12 不迁移为 Mini。
+`mini` 分支提供 **TaskViews Mini**：一个共同 native actor，默认 `current/keyboard/attempts/lessons` 四个有界视图，零额外分析角色请求、显式 profile 与检查点。最初 M0 的三视图结构保留在历史说明中。后续 Mini 测试先执行 `git switch mini`，使用带分支检查的 `scripts/validate_mini.py`。实现、配置和运行边界见 [Mini 使用说明](docs/taskviews-mini.md)，后续分层接入见 [路线图](docs/taskviews-mini-roadmap-20261012.md)。当前暂停的完整 V12 不迁移为 Mini。
 
 以下 v7 说明是旧 Kimi 比较路径的历史接口文档，不是 Mini 或 Qwen 完整版的当前配置。v7 分为 **baseline、UI-KOBE-like、TaskViews 三组**，共用同一套 actor、K3 协议适配、截图/坐标契约和官方执行评分。baseline 不创建转换图数据库，也不读取扩展记忆；UI-KOBE-like 单独测试执行边的保存与检索，TaskViews 在此基础上增加任务模块和自适应视图。详见 [三组 actor 与证据边界](docs/cua-v7.md)。
 

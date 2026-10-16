@@ -113,7 +113,7 @@ def main():
         text = json.dumps(body['messages'])
         assert 'Gold.pdf' not in text
         for part in body['messages'][-1]['content']:
-            if part.get('type') == 'text' and part.get('text', '').startswith('Fixed TaskViews'):
+            if part.get('type') == 'text' and part.get('text', '').startswith('TaskViews:'):
                 packet = json.loads(part['text'].split('\n', 1)[1])
                 view_sets.append(sorted(packet['views']))
         step = counts['requests']
@@ -180,7 +180,7 @@ def main():
         assert counts['resets'] == counts['evaluations'] == 1 and scores == [0.125]
         assert counts['commands'] == (0 if args.case == 'empty' else 12 if args.case == 'terminate' else 2*plan['max_steps'])
         assert bool(view_sets) == (args.arm == 'taskviews')
-        assert all(views == ['attempts', 'current', 'lessons'] for views in view_sets)
+        assert all(views == ['attempts', 'current', 'keyboard', 'lessons'] for views in view_sets)
         if args.arm=='baseline':
             from ui_kobe.osworld.kimi_native import KimiNativeAgent
             assert actor.optional_context.__func__ is KimiNativeAgent.optional_context

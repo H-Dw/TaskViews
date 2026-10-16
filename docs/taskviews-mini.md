@@ -1,5 +1,7 @@
 # TaskViews Mini M0
 
+2026-10-16 当前实现修订为 `mini_keyboard_memory_v3`：默认视图改为 `current/keyboard/attempts/lessons`，总预算仍3000 UTF-8 bytes。keyboard 按最近意图或同 actor 的 `<key_lookup>主题</key_lookup>` 请求提供下一轮键名参考，单独检索同 episode 最近32条键盘执行边、按主题最多展示2条。它区分后端 token、应用快捷键和未确认的执行效果。末端拦截只作兜底。231项测试、记录回放和原运行器模拟集成通过；真实首候选生成对照已完成，尚未进行新正式评测。详见[异常复盘及完整验证](taskviews-mini-keyboard-postmortem-20261016.md)和[auto-research 策略](taskviews-mini-auto-research.md)。**以下是旧 M0 搭建记录，三视图表格和当时的验证状态只描述历史版本。**
+
 2026-10-15 更新：当前实现修订为 `mini_cua_feedback_v2`，修复空错误误分类，默认提供重复操作证据，并在正式 Mini 输入中明确坐标与结果检查要求。详见[本次修复及验证记录](taskviews-mini-cua-feedback-20261015.md)。下文保留最初 M0 搭建时的配置与验证记录；最新随想发票任务的 35 轮、0/0 分结果见[正式结果](osworld-verified-invoice-sx-flash-results-20261015.md)，不应与旧 Task059/Pinggy 配置混用。
 
 Mini 在 `mini` 分支实现。它直接复用共同 `KimiNativeAgent.predict/generate_candidate` 和机械提取的 Qwen provider，不继承完整 TaskViews agent。执行仍由原 native tool schema、官方完整批次 compiler 和 controller 完成。没有模型驱动的分类、perception/controller/planner、DAG、语义图或 pointer guard。

@@ -9,6 +9,7 @@ from .checkpoints import ReadAnomaly
 from .kimi_native import KimiNativeAgent
 from .mini_taskviews_context import LABEL, CONTROLS_LABEL, MiniTaskViewsContext
 from .qwen_native_base import QwenNativeProvider
+from .mini_interaction import KEY_GUIDANCE, validate_keys
 
 
 FRAME_CONTRACT_PREFIX = 'Trusted screenshot/coordinate contract: '
@@ -36,6 +37,7 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
 
     def validate_actor_candidate(self, response):
         result = super().validate_actor_candidate(response)
+        validate_keys(result[0], response)
         if self.controls_view_enabled:
             content = response.model_dump()['choices'][0]['message'].get('content')
             telemetry.emit('mini_controls_candidate', frame_id=self.frame.metadata['frame_id'],
@@ -69,7 +71,7 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
                 + units + 'Check tool arguments against this frame, not a scaled preview. '
                 'Returned/repeated commands are not task success. Verify the expected visible change; '
                 'if absent, re-ground or choose a different visible/keyboard route. '
-                'Image differences alone are not success. Confirm focus before typing.')
+                'Image differences alone are not success. Confirm focus before typing. ' + KEY_GUIDANCE)
         return [*super().current_frame_content(),
                 {'type': 'text', 'text': text}]
 

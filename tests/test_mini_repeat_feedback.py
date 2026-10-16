@@ -115,7 +115,7 @@ def test_disabled_controls_still_deliver_repeat_evidence_without_extra_roles(mon
     for _ in range(3):
         predict(actor, obs)
     value = packet(transport)
-    assert set(value['views']) == {'current', 'attempts', 'lessons'}
+    assert set(value['views']) == {'current', 'keyboard', 'attempts', 'lessons'}
     repeated = value['views']['current']['records'][0]['recent_repetition']
     assert repeated['repeat_count'] == repeated['same_image_count'] == 2
     assert repeated['effect_status'] == 'unknown'

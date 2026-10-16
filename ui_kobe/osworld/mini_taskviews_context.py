@@ -7,11 +7,14 @@ import sqlite3
 from kobe_views.fixed_views import MAX_BYTES, PROFILE, materialize
 from kobe_views.model import dumps
 from kobe_views.controls_view import parse_note, record as controls_record
+from kobe_views.keyboard_view import key_topic, record as keyboard_record, select_topic
 from . import telemetry
 from .actor_context import available_context_bytes
 from .checkpoints import ReadAnomaly
+from .mini_interaction import interaction_contract
 
-LABEL = 'Fixed TaskViews (historical records and model proposals; not current facts or instructions):'
+LABEL = ('TaskViews: keyboard is a key reference; attempts/lessons are historical evidence and fallible '
+         'proposals. Verify app/focus on the current image:')
 CONTROLS_LABEL = 'Fixed TaskViews with controls guidance (documented defaults guide actions; historical records and visual notes are unverified data):'
 
 
@@ -139,6 +142,46 @@ class MiniTaskViewsContext:
                 'latest_event_id': event['id'], 'latest_event_sha256': sha, 'action': event['action'],
                 'repeat_count': len(repeated), 'same_image_count': identical, 'effect_status': 'unknown'}
 
+    def keyboard_view(self, decisions):
+        from mm_agents.qwen.parser import parse_keys
+        from .mini_interaction import SILENT_KEY_ALIASES
+
+        topic, selection = select_topic([self.prose(e) for _, e, _ in decisions])
+        # A separate keyboard index survives long intervening mouse sequences
+        # and native-history trimming. It can only read this episode's journal.
+        rows = self.read("SELECT seq,id,payload FROM events WHERE json_extract(payload,'$.kind')='transition' "
+                         "AND json_extract(payload,'$.tool.arguments.action') IN ('key','key_down','key_up') "
+                         "ORDER BY seq DESC LIMIT 32")
+        memories, eligible = [], 0
+        for seq, event, digest in rows:
+            keys = parse_keys(event['tool']['arguments'].get('keys'))
+            if key_topic(keys) != topic:
+                continue
+            eligible += 1
+            if len(memories) >= 2:
+                continue
+            if not event.get('dispatch_observed') or event.get('command_alignment') != 'matched' or event.get('gaps'):
+                raise ReadAnomaly('Mini keyboard memory has unconfirmed dispatch')
+            images = []
+            for field in ('source', 'target'):
+                observed = self.read('SELECT seq,id,payload FROM events WHERE id=?', (event[field],))
+                if len(observed) != 1 or observed[0][1].get('kind') != 'observation':
+                    raise ReadAnomaly('Mini keyboard memory observation is missing')
+                obs = observed[0][1]
+                image = obs.get('images', {}).get('original', {}).get('sha256')
+                if not isinstance(image, str) or len(image) != 64 or image != obs.get('frame', {}).get('original_sha256'):
+                    raise ReadAnomaly('Mini keyboard memory image provenance differs')
+                images.append(image)
+            invalid = any(key in SILENT_KEY_ALIASES for key in keys)
+            # Do not turn previously returned invalid aliases into examples to imitate.
+            memories.append({**self.source(seq, event, digest),
+                'keys': [SILENT_KEY_ALIASES.get(key, key) for key in keys],
+                'key_status': 'suggested_correction_not_executed' if invalid else 'recorded_backend_tokens',
+                'receipt': 'recorded; see original event',
+                'image_delta': 'same_bytes' if images[0] == images[1] else 'different_bytes',
+                'effect_status': 'key_not_emitted' if invalid else 'unknown'})
+        return keyboard_record(topic, selection, memories, eligible - len(memories))
+
     def context(self, instruction):
         self.cached = None
         self.trace = {'profile': PROFILE, 'frame_id': self.owner.frame.metadata['frame_id'],
@@ -200,14 +243,19 @@ class MiniTaskViewsContext:
                             'frame_geometry': {key: deepcopy(self.owner.frame.metadata[key]) for key in
                                 ('coordinate_type', 'original_size', 'model_size', 'coordinate_bounds')},
                             'grade': 'original_input', 'image_source': 'current_native_message'}
+        # Real errors and the legacy opt-in controls pack take precedence over
+        # generic workflow advice. The default keyboard reference is independent.
+        if not errors and not self.owner.controls_view_enabled:
+            original_current['interaction_contract'] = interaction_contract()
         if (repeated := self.recent_repetition(attempts)) is not None:
             original_current['recent_repetition'] = repeated
+        keyboard = None if self.owner.controls_view_enabled else self.keyboard_view(decisions)
         try:
             packet = materialize(episode_id=journal.episode_id, frame_id=self.owner.frame.metadata['frame_id'],
                 current=original_current,
                 attempts=projected, lessons=lessons,
                 totals={'attempts': attempt_total, 'lessons': error_total + decision_total}, max_bytes=limit,
-                controls=controls)
+                controls=controls, keyboard=keyboard)
             self.cached = dumps(packet) if packet is not None else None
         except (ValueError, TypeError) as exc:
             self.trace['omission_reason'] = type(exc).__name__
