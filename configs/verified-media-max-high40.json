@@ -1,0 +1,16 @@
+{
+  "version": "verified-media-max-high40-v1",
+  "tasks": ["gimp", "vlc"],
+  "provider": "sx",
+  "experiment": "sx-pair-max-high40",
+  "sx_url_env": "SX_URL_SB",
+  "coordinate_type": "relative",
+  "model": "qwen3.8-max",
+  "generation_fields": {"enable_thinking": true, "reasoning_effort": "high"},
+  "arms": ["baseline", "taskviews"],
+  "max_steps": 40,
+  "one_run_per_slot": true,
+  "mini_snapshot_commit": "49fefeb8b9d028f420b986790fa25d534409a3bf",
+  "human_review_required": true,
+  "execution_authorized": false
+}

@@ -186,7 +186,7 @@ def test_original_asset_cache_names_and_evaluator_gold_are_outside_guest(tmp_pat
     assets = tmp_path / 'assets'
     assets.mkdir()
     (assets / 'input.pdf').write_bytes(b'%PDF-synthetic')
-    task = {'config': [{'parameters': {'files': [{'path': '/home/user/Desktop/input.pdf',
+    task = {'config': [{'type':'download', 'parameters': {'files': [{'path': '/home/user/Desktop/input.pdf',
                                                 'url': 'https://example.test/input.pdf'}]}}],
             'evaluator': {'expected': {'path': 'https://example.test/input.pdf', 'dest': 'gold.pdf'}}}
     stage_cache({'assets': str(assets)}, tmp_path / 'arm', task)

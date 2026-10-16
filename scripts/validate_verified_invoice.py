@@ -18,6 +18,7 @@ from unittest.mock import patch
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
 from scripts.verified_invoice import (ALL_ARMS, EXPERIMENTS, project_identity, specification, sources, verify_task, write)  # noqa: E402
+from ui_kobe.osworld.verified_tasks import TASKS  # noqa: E402
 
 
 def main():
@@ -29,19 +30,26 @@ def main():
     parser.add_argument('--sx-url-env', choices=('SX_URL', 'SX_URL_SB'), default='SX_URL')
     parser.add_argument('--coordinate-type', choices=('absolute', 'relative'), default='absolute')
     parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
+    parser.add_argument('--task', choices=tuple(TASKS), default='invoice')
     parser.add_argument('--benchmark-repo', type=Path, default=Path.home() / 'osworld-verified/OSWorld')
     parser.add_argument('--compiler-repo', type=Path, default=Path.home() / 'osworld2/OSWorld-V2')
     args = parser.parse_args()
     if args.output.exists():
         raise FileExistsError('Keep prior validation evidence; use a new directory')
     args.output.mkdir(parents=True)
-    before = sources(args.benchmark_repo, args.compiler_repo)
-    plan = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment)
+    before = sources(args.benchmark_repo, args.compiler_repo, args.task)
+    plan = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment, args.task)
+    actor_scope = None
+    if args.task != 'invoice':
+        from scripts.osworld_native_experiment import require_scope
+        # This fixture loads the actual actor plus the full official runtime,
+        # so use the already frozen actor-service cap, with zero swap.
+        actor_scope = require_scope(plan['service_memory_bytes'])
     if args.arm not in plan['arms']:
         raise ValueError('Arm absent from the declared experiment')
-    task = verify_task(args.benchmark_repo)
+    task = verify_task(args.benchmark_repo, args.task)
     from ui_kobe.osworld.verified_runtime import load_runtime, reset_compatible
-    env_module, runner, qwen = load_runtime(args.benchmark_repo, args.compiler_repo)
+    env_module, runner, qwen = load_runtime(args.benchmark_repo, args.compiler_repo, args.task)
     from scripts.run_official_native_tasks import agent_class
     from ui_kobe.osworld import telemetry
     if args.provider == 'sx':
@@ -111,7 +119,7 @@ def main():
                     assert message['reasoning_details'] == [{'type': 'reasoning.text', 'text': 'fixture', 'index': 0}]
         assert json.dumps(task['evaluator']) not in json.dumps(body)
         text = json.dumps(body['messages'])
-        assert 'Gold.pdf' not in text
+        assert task['evaluator']['expected']['dest'] not in text
         for part in body['messages'][-1]['content']:
             if part.get('type') == 'text' and part.get('text', '').startswith('TaskViews:'):
                 packet = json.loads(part['text'].split('\n', 1)[1])
@@ -190,12 +198,16 @@ def main():
         transitions = journal.db.execute("SELECT count(*) FROM events WHERE json_extract(payload,'$.kind')='transition'").fetchone()[0]
         assert transitions == counts['commands'] + (1 if args.case == 'terminate' else 0)
         env.close()
-    assert sources(args.benchmark_repo, args.compiler_repo) == before
+    assert sources(args.benchmark_repo, args.compiler_repo, args.task) == before
     write(args.output / 'validation.json', {'passed': True, 'arm': args.arm, 'case': args.case, 'provider': args.provider,
         'base_url': plan['base_url'], 'cua_contract': plan['cua_contract'], 'large_frame_fixture': large_frame_fixture,
         'counts': counts, 'round_limit': plan['max_steps'], 'view_sets': sorted(set(tuple(v) for v in view_sets)),
         'model':plan['model'], 'generation_fields':plan['generation_fields'], 'max_steps':plan['max_steps'],
-        'experiment':plan['experiment'],
+        'experiment':plan['experiment'], 'task_key':plan['task_key'], 'task_id':plan['task_id'], 'domain':plan['domain'],
+        'media_metric_tested_separately':args.task != 'invoice',
+        'scope_limit_bytes':int((actor_scope/'memory.max').read_text()) if actor_scope else None,
+        'scope_peak_bytes':int((actor_scope/'memory.peak').read_text()) if actor_scope else None,
+        'memory_swap_max':int((actor_scope/'memory.swap.max').read_text()) if actor_scope else None,
         'mock_wire_reasoning_verified': plan['generation_profile']['reasoning_effort'], 'live_reasoning_verified': False,
         'source_unchanged': True, 'live_api_called': False,
         'vm_started': False, 'benchmark_score': None, 'mock_evaluator_sentinel': 0.125,

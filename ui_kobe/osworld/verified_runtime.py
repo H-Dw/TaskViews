@@ -1,8 +1,8 @@
 """Task-scoped OSWorld-Verified imports, without changing upstream source.
 
-The benchmark's environment, setup, runner, getters and PDF metric come from
+The benchmark's environment, setup, runner, getters and selected metric come from
 OSWorld-1. Only the common actor's Qwen compiler/prompt helpers come from V2.
-Unrelated OCR/model evaluators are not imported by this single-task registry.
+Unrelated evaluators are not registered by this task-scoped registry.
 """
 from __future__ import annotations
 
@@ -25,7 +25,10 @@ def namespace(name, path):
     return module
 
 
-def load_runtime(benchmark_repo, compiler_repo):
+def load_runtime(benchmark_repo, compiler_repo, task_key='invoice'):
+    from ui_kobe.osworld.verified_tasks import TASKS
+    metric = TASKS[task_key]['metric']
+    metric_module = {'invoice': 'chrome', 'gimp': 'gimp', 'vlc': 'vlc'}[task_key]
     benchmark_repo, compiler_repo = Path(benchmark_repo).resolve(), Path(compiler_repo).resolve()
     if any(name in sys.modules for name in ('desktop_env', 'mm_agents', 'lib_run_single')):
         raise RuntimeError('OSWorld-Verified requires an isolated interpreter')
@@ -34,9 +37,9 @@ def load_runtime(benchmark_repo, compiler_repo):
     # Register only the exact unchanged functions referenced by this task.
     metrics = namespace('desktop_env.evaluators.metrics', benchmark_repo / 'desktop_env/evaluators/metrics')
     getters = namespace('desktop_env.evaluators.getters', benchmark_repo / 'desktop_env/evaluators/getters')
-    chrome = importlib.import_module('desktop_env.evaluators.metrics.chrome')
+    selected = importlib.import_module('desktop_env.evaluators.metrics.' + metric_module)
+    setattr(metrics, metric, getattr(selected, metric))
     files = importlib.import_module('desktop_env.evaluators.getters.file')
-    metrics.compare_pdfs = chrome.compare_pdfs
     getters.get_vm_file = files.get_vm_file
     getters.get_cloud_file = files.get_cloud_file
     env = importlib.import_module('desktop_env.desktop_env')

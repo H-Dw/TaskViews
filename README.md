@@ -1,5 +1,7 @@
 # OSWorld K3 TaskViews
 
+2026-10-16 待审配置：新增 OSWorld-Verified 的 GIMP 背景透明化与 VLC 截帧，每项比较 LLM baseline 和 TaskViews-mini，统一 `qwen3.8-max / high`、每组最多40决策轮。Mini 先以 `49fefeb` 提交快照，当前只准备与离线验证，不启动正式评测。工具操作、四组设置与入口见 [GIMP/VLC 评测准备](docs/osworld-verified-media-max-high40.md)。
+
 2026-10-16 开发更新：Max/high 三组官方结果为 UI-KOBE-like 0、baseline 1、Mini 0。已依据保存轨迹将 Mini 更新为 `mini_keyboard_memory_v3`：独立 keyboard view、意图到确切键名的生成引导、同 episode 键盘记忆检索，默认四视图仍共用3000-byte上限。231项回归、保存轨迹回放、原运行器模拟集成通过；6次真实键名生成测试中，新上下文在两个现场均首轮正确。新代码尚无正式分数，巡检保持暂停。见[输入差异、异常与修复验证](docs/taskviews-mini-keyboard-postmortem-20261016.md)及[auto-research 策略](docs/taskviews-mini-auto-research.md)。
 
 2026-10-16：Mini 优化已提交为 `2c6662c`。新增随想 `qwen3.8-max`、思考 `high`、每组 40 轮的 UI-KOBE-like → LLM baseline → TaskViews-mini 三组入口，使用显式归一化坐标和共同资源预算。配置与验证见 [Max/high 三组说明](docs/osworld-verified-invoice-sx-max-high40.md)，实际运行进度见 [运行状态](D:/cua_lty/osworld_verified_setup/运行状态.md)。

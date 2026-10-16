@@ -13,35 +13,48 @@ import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.verified_invoice import (IMAGE_REVISION, IMAGE_ZIP_SHA256, sha, verify_task, write)  # noqa: E402
+from ui_kobe.osworld.verified_tasks import TASKS, asset_files  # noqa: E402
+
+
+def verify_format(path):
+    with path.open('rb') as handle:
+        header = handle.read(12)
+    extension = path.suffix.lower()
+    if not ((extension == '.pdf' and header.startswith(b'%PDF-'))
+            or (extension == '.png' and header.startswith(b'\x89PNG\r\n\x1a\n'))
+            or (extension == '.mp4' and header[4:8] == b'ftyp')):
+        raise ValueError('Downloaded asset format differs from its official filename: ' + path.name)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--benchmark-repo', type=Path, default=Path.home() / 'osworld-verified/OSWorld')
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--task', choices=tuple(TASKS), default='invoice')
     parser.add_argument('--archive', type=Path)
     parser.add_argument('--image', type=Path, default=Path.home() / 'osworld-verified/images/Ubuntu.qcow2')
     args = parser.parse_args()
-    task = verify_task(args.benchmark_repo)
+    task = verify_task(args.benchmark_repo, args.task)
     assets = args.output / 'assets'
     assets.mkdir(parents=True, exist_ok=True)
     import requests
     identities = []
-    for item in task['config'][0]['parameters']['files']:
-        name = Path(item['path']).name
+    for item in asset_files(task):
+        name = item['name']
         path = assets / name
         if not path.exists():
-            temporary = path.with_suffix('.download')
+            temporary = path.with_name(path.stem + '.download' + path.suffix)
             with requests.get(item['url'], timeout=(20, 120), stream=True) as response:
                 response.raise_for_status()
                 with temporary.open('wb') as handle:
                     for block in response.iter_content(1024 * 1024):
                         handle.write(block)
-            if temporary.read_bytes()[:5] != b'%PDF-':
-                raise ValueError('Downloaded input is not a PDF')
+            verify_format(temporary)
             temporary.replace(path)
-        identities.append({'name': name, 'url': item['url'], 'bytes': path.stat().st_size, 'sha256': sha(path)})
-    write(args.output / 'assets.json', {'files': identities, 'content_inspected': False})
+        verify_format(path)
+        identities.append({**item, 'bytes': path.stat().st_size, 'sha256': sha(path)})
+    write(args.output / 'assets.json', {'task_key': args.task, 'files': identities, 'content_inspected': False,
+                                      'gold_exposed_to_actor': False})
     if args.archive:
         if sha(args.archive) != IMAGE_ZIP_SHA256:
             raise ValueError('OSWorld-1 archive SHA256 differs from Hugging Face LFS metadata')

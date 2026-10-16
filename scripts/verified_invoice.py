@@ -19,6 +19,7 @@ import uuid
 
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
+from ui_kobe.osworld.verified_tasks import (TASKS, asset_files, download_files, expected_asset_name, task_path)  # noqa: E402
 TASK_ID = '337d318b-aa07-4f4f-b763-89d9a2dd013f'
 TASK_PATH = f'evaluation_examples/examples/multi_apps/{TASK_ID}.json'
 BENCHMARK_COMMIT = 'b138d348256078fa634fc3b73567a7337c793e6b'
@@ -33,6 +34,7 @@ MAX40_EXPERIMENTS = {
     'sx-mini-max-high40': ('high', ('taskviews',)),
     'sx-max-medium40': ('medium', ('baseline', 'taskviews')),
     'sx-max-low40': ('low', ('baseline', 'taskviews')),
+    'sx-pair-max-high40': ('high', ('baseline', 'taskviews')),
 }
 EXPERIMENTS = ('legacy-low35', *MAX40_EXPERIMENTS)
 GENERATION = 'qwen-sse-low-total16k'
@@ -82,10 +84,10 @@ def source_identity(repo, commit, paths):
     return {'repo': str(repo), 'commit': commit, 'sha256': {name: sha(repo / name) for name in names}}
 
 
-def sources(benchmark, compiler):
+def sources(benchmark, compiler, task_key='invoice'):
     return {
         'benchmark': source_identity(benchmark, BENCHMARK_COMMIT,
-            ['desktop_env', 'lib_run_single.py', 'lib_results_logger.py', 'mm_agents/os_symphony', TASK_PATH,
+            ['desktop_env', 'lib_run_single.py', 'lib_results_logger.py', 'mm_agents/os_symphony', task_path(task_key),
              'evaluation_examples/test_all.json']),
         'actor_compiler': source_identity(compiler, COMPILER_COMMIT, ['mm_agents/qwen']),
     }
@@ -96,7 +98,11 @@ def project_identity():
             for path in sorted((PROJECT / folder).rglob('*.py'))}
 
 
-def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolute', experiment='legacy-low35'):
+def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolute', experiment='legacy-low35',
+                  task_key='invoice'):
+    task_spec = TASKS[task_key]
+    if task_key != 'invoice' and experiment != 'sx-pair-max-high40':
+        raise ValueError('GIMP/VLC require the explicit baseline/Mini Max/high40 experiment')
     max40 = experiment in MAX40_EXPERIMENTS
     if experiment not in EXPERIMENTS or (max40 and provider != 'sx'):
         raise ValueError('Unknown experiment or provider incompatible with frozen experiment')
@@ -131,9 +137,11 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         # image count, view bytes or output tokens in either comparison arm.
         contract['context_max_payload_chars'] = 12_000_000
     from ui_kobe.osworld.verified_resources import resource_policy
-    return {'version': 'osworld-verified-invoice-v5', 'provider': provider, 'experiment': experiment,
+    return {'version': 'osworld-verified-invoice-v5' if task_key == 'invoice' else 'osworld-verified-media-v1',
+        'provider': provider, 'experiment': experiment,
         'interface': provider + '-native', 'benchmark': 'OSWorld-Verified (OSWorld-1)',
-        'task_id': TASK_ID, 'domain': 'multi_apps', 'arms': list(arms), 'max_steps': max_steps,
+        'task_key': task_key, 'task_id': task_spec['id'], 'domain': task_spec['domain'],
+        'snapshot': task_spec['snapshot'], 'metric': task_spec['metric'], 'arms': list(arms), 'max_steps': max_steps,
         'round_unit': 'actor.predict calls, including empty decisions; repair/API/GUI counts reported separately',
         'model': api.model_for_profile(profile) if provider == 'sx' else api.MODEL,
         'base_url': api.resolve_base_url(sx_url_env) if provider == 'sx' else api.BASE_URL,
@@ -144,7 +152,7 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         'live_provider_check_required': provider in ('tinker', 'openrouter', 'sx'),
         'mini_grounding_check_required': provider == 'sx', 'coordinate_type': coordinate_type,
         'mini_grounding_check_policy': ('collect_all_record_accuracy' if experiment in
-                                       ('sx-mini-max-high40', 'sx-max-medium40', 'sx-max-low40')
+                                       ('sx-mini-max-high40', 'sx-max-medium40', 'sx-max-low40', 'sx-pair-max-high40')
                                         else 'all_targets_within30px'),
         'cua_contract': contract, 'taskviews_profile': 'mini_fixed_v1',
         'arm_profiles': {arm: frozen_profile(arm) for arm in arms},
@@ -159,14 +167,18 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         'human_review_required': True, 'execution_authorized': False}
 
 
-def verify_task(repo):
-    task = read(Path(repo) / TASK_PATH)
-    if (task.get('id') != TASK_ID or task.get('snapshot') != 'libreoffice_calc'
-            or task.get('evaluator', {}).get('func') != 'compare_pdfs'
-            or [item['type'] for item in task['config']] != ['download']
-            or len(task['config'][0]['parameters']['files']) != 4):
+def verify_task(repo, task_key='invoice'):
+    spec = TASKS[task_key]
+    path = Path(repo) / task_path(task_key)
+    task = read(path)
+    if (task.get('id') != spec['id'] or task.get('snapshot') != spec['snapshot']
+            or task.get('evaluator', {}).get('func') != spec['metric']
+            or ('sha256' in spec and sha(path) != spec['sha256'])):
+        raise ValueError('Unexpected pinned task contract: ' + task_key)
+    if task_key == 'invoice' and ([item['type'] for item in task['config']] != ['download']
+                                or len(download_files(task)) != 4):
         raise ValueError('Unexpected invoice task contract')
-    if TASK_ID not in read(Path(repo) / 'evaluation_examples/test_all.json')['multi_apps']:
+    if spec['id'] not in read(Path(repo) / 'evaluation_examples/test_all.json')[spec['domain']]:
         raise ValueError('Task is absent from official task list')
     return task
 
@@ -175,13 +187,14 @@ def prepare(args):
     root = args.root.resolve()
     if root.exists():
         raise FileExistsError('Use a new plan directory; existing plans are immutable')
-    task = verify_task(args.benchmark_repo)
-    spec = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment)
+    task_key = getattr(args, 'task', 'invoice')
+    task = verify_task(args.benchmark_repo, task_key)
+    spec = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment, task_key)
     evidence = validation_evidence(args.validation_dir, args.provider, spec['base_url'], spec['cua_contract'], spec)
-    plan = spec | {'sources': sources(args.benchmark_repo, args.compiler_repo),
+    plan = spec | {'sources': sources(args.benchmark_repo, args.compiler_repo, task_key),
         'project_source': project_identity(), 'image': str(args.image.resolve()),
         'image_proof': str(args.image_proof.resolve()), 'assets': str(args.assets.resolve()),
-        'task_sha256': sha(args.benchmark_repo / TASK_PATH), 'validation': evidence,
+        'task_sha256': sha(args.benchmark_repo / task_path(task_key)), 'validation': evidence,
         'project_commit': subprocess.check_output(['git','-C',str(PROJECT),'rev-parse','HEAD'],text=True).strip(),
         'run_ids': {arm: f'{root.name}-{arm}-{uuid.uuid4().hex}' for arm in spec['arms']}}
     if args.image_proof.is_file():
@@ -189,8 +202,7 @@ def prepare(args):
         if proof['archive_sha256'] != IMAGE_ZIP_SHA256 or proof['image_sha256'] != sha(args.image, release_cache=True):
             raise ValueError('Image proof differs from official archive or extracted image')
         plan['image_identity'] = proof
-    plan['asset_identity'] = {Path(f['path']).name: sha(args.assets / Path(f['path']).name)
-                              for f in task['config'][0]['parameters']['files']}
+    plan['asset_identity'] = {item['name']: sha(args.assets / item['name']) for item in asset_files(task)}
     root.mkdir(parents=True)
     write(root / 'plan.json', plan)
     write(root / 'plan.sha256.json', {'sha256': sha(root / 'plan.json')})
@@ -204,7 +216,8 @@ def validate_plan(root):
     if sha(root / 'plan.json') != read(root / 'plan.sha256.json')['sha256']:
         raise ValueError('Plan changed after preparation')
     for key, value in specification(plan.get('provider', 'qwen'), plan.get('base_url_env') or 'SX_URL',
-                                    plan.get('coordinate_type', 'absolute'), plan.get('experiment','legacy-low35')).items():
+                                    plan.get('coordinate_type', 'absolute'), plan.get('experiment','legacy-low35'),
+                                    plan.get('task_key','invoice')).items():
         if plan.get(key) != value:
             raise ValueError('Frozen comparison differs from implementation: ' + key)
     if project_identity() != plan['project_source']:
@@ -217,12 +230,17 @@ def validate_plan(root):
     if validation_evidence(Path(plan['validation']['directory']), plan['provider'], plan['base_url'],
                            plan['cua_contract'], plan) != plan['validation']:
         raise ValueError('Offline validation evidence changed')
-    actual = sources(plan['sources']['benchmark']['repo'], plan['sources']['actor_compiler']['repo'])
+    task_key = plan.get('task_key', 'invoice')
+    actual = sources(plan['sources']['benchmark']['repo'], plan['sources']['actor_compiler']['repo'], task_key)
     if actual != plan['sources']:
         raise ValueError('Upstream source changed')
-    task = verify_task(plan['sources']['benchmark']['repo'])
-    for f in task['config'][0]['parameters']['files']:
-        name = Path(f['path']).name
+    task = verify_task(plan['sources']['benchmark']['repo'], task_key)
+    if sha(Path(plan['sources']['benchmark']['repo']) / task_path(task_key)) != plan['task_sha256']:
+        raise ValueError('Task identity differs from frozen plan')
+    if set(plan['asset_identity']) != {item['name'] for item in asset_files(task)}:
+        raise ValueError('Task assets differ from frozen plan')
+    for item in asset_files(task):
+        name = item['name']
         if sha(Path(plan['assets']) / name) != plan['asset_identity'][name]:
             raise ValueError('Task asset changed')
     return plan
@@ -244,17 +262,36 @@ def validation_evidence(directory, provider='qwen', base_url=None, cua_contract=
                     or (cua_contract is not None and value.get('cua_contract') != cua_contract)
                     or (plan is not None and any(value.get(k) != plan[k] for k in
                         ('model','generation_fields','max_steps','experiment')))
+                    or (plan is not None and plan.get('task_key','invoice') != 'invoice'
+                        and any(value.get(k) != plan[k] for k in ('task_key','task_id','domain')))
                     or value.get('project_source') != identity or value.get('source_unchanged') is not True
                     or value.get('live_api_called') is not False or value.get('vm_started') is not False):
                 raise ValueError('Current source lacks passing offline integration evidence: ' + str(path))
             evidence[str(path)] = sha(path)
+    if plan is not None and plan.get('task_key','invoice') != 'invoice':
+        path = directory / 'metrics' / 'validation.json'
+        value = read(path)
+        if (value.get('passed') is not True or value.get('task_key') != plan['task_key']
+                or value.get('official_metric_module') != 'desktop_env.evaluators.metrics.' + plan['task_key']
+                or value.get('original_evaluate_method_used') is not True
+                or value.get('official_postconfig_preserved_but_mocked') is not True
+                or value.get('source_unchanged') is not True or value.get('project_source') != identity
+                or value.get('live_api_called') is not False or value.get('vm_started') is not False
+                or value.get('gui_actions') != 0 or value.get('benchmark_score') is not None
+                or value.get('official_task_assets_opened') is not False
+                or len(value.get('cases',[])) != 4 or not all(case.get('passed') is True for case in value['cases'])):
+            raise ValueError('Current source lacks passing synthetic metric/getter integration: ' + str(path))
+        evidence[str(path)] = sha(path)
     return {'directory': str(directory), 'sha256': evidence}
 
 
 def check(args):
     plan = validate_plan(args.root)
     from ui_kobe.osworld.verified_runtime import load_runtime
-    env, runner, qwen = load_runtime(plan['sources']['benchmark']['repo'], plan['sources']['actor_compiler']['repo'])
+    env, runner, qwen = load_runtime(plan['sources']['benchmark']['repo'], plan['sources']['actor_compiler']['repo'],
+                                     plan.get('task_key','invoice'))
+    from desktop_env.evaluators import metrics
+    metric = getattr(metrics, plan['metric'])
     proof = read(plan['image_proof']) if Path(plan['image_proof']).is_file() else None
     image_ok = bool(proof and proof == plan.get('image_identity')
                     and proof.get('archive_sha256') == IMAGE_ZIP_SHA256
@@ -264,7 +301,9 @@ def check(args):
         docker_id = client.images.get(DOCKER_IMAGE).id
     report = {'status': 'ready_for_user_review' if image_ok else 'image_not_ready',
         'image_verified': image_ok, 'docker_image_id': docker_id,
-        'imports': {'environment': env.__file__, 'runner': runner.__file__, 'actor_helpers': qwen.__file__},
+        'imports': {'environment': env.__file__, 'runner': runner.__file__, 'actor_helpers': qwen.__file__,
+                    'metric': metric.__code__.co_filename},
+        'task_key': plan['task_key'], 'task_id': plan['task_id'], 'domain': plan['domain'],
         'model': plan['model'], 'reasoning': plan['generation_fields'], 'max_steps': plan['max_steps'],
         'arms': plan['arms'], 'key_present': bool(os.environ.get(plan['api_key_env'])),
         'model_endpoint_probed': False, 'vm_started': False, 'official_score_computed': False,
@@ -321,16 +360,15 @@ def require_live_provider_check(root, plan):
 
 
 def stage_cache(plan, stage, task):
-    cache = stage / 'cache' / TASK_ID
+    cache = stage / 'cache' / plan.get('task_id', TASK_ID)
     cache.mkdir(parents=True, exist_ok=False)
-    for item in task['config'][0]['parameters']['files']:
+    for item in download_files(task):
         name = Path(item['path']).name
         target = f"{uuid.uuid5(uuid.NAMESPACE_URL, item['url'])}_{name}"
         shutil.copyfile(Path(plan['assets']) / name, cache / target)
     # Gold is evaluator-only, outside the guest and actor input.
     expected = task['evaluator']['expected']
-    matching = next(f for f in task['config'][0]['parameters']['files'] if f['url'] == expected['path'])
-    shutil.copyfile(Path(plan['assets']) / Path(matching['path']).name, cache / expected['dest'])
+    shutil.copyfile(Path(plan['assets']) / expected_asset_name(task), cache / expected['dest'])
 
 
 def execute_arm(args):
@@ -352,17 +390,17 @@ def execute_arm(args):
     require_scope(plan['service_memory_bytes'])
     from ui_kobe.osworld.verified_runtime import load_runtime, reset_compatible
     env_module, runner, qwen = load_runtime(plan['sources']['benchmark']['repo'],
-                                          plan['sources']['actor_compiler']['repo'])
+                                          plan['sources']['actor_compiler']['repo'], plan.get('task_key','invoice'))
     from scripts.run_official_native_tasks import agent_class
     from ui_kobe.osworld.verified_resources import install_provider, resource_guard
     from ui_kobe.osworld import telemetry
     stage = args.root / args.arm
     stage.mkdir(exist_ok=False)
-    task = verify_task(plan['sources']['benchmark']['repo'])
+    task = verify_task(plan['sources']['benchmark']['repo'], plan.get('task_key','invoice'))
     stage_cache(plan, stage, task)
     os.environ.update(UI_KOBE_TASKVIEWS_PROFILE='mini_fixed_v1', UI_KOBE_MINI_CONTROLS_VIEW='disabled',
         UI_KOBE_TASKVIEWS_FEEDBACK_V10='0', UI_KOBE_GENERATION_PROFILE=plan['generation_profile']['name'],
-        UI_KOBE_CUA_CONTRACT_JSON=json.dumps(plan['cua_contract']), UI_KOBE_TASK_ID=TASK_ID,
+        UI_KOBE_CUA_CONTRACT_JSON=json.dumps(plan['cua_contract']), UI_KOBE_TASK_ID=plan['task_id'],
         UI_KOBE_TELEMETRY_DIR=str(stage / 'telemetry'), OSWORLD_FULL_RUN_ID=plan['run_ids'][args.arm])
     if plan['provider'] == 'sx':
         os.environ['UI_KOBE_SX_URL_ENV'] = plan['base_url_env']
@@ -382,7 +420,7 @@ def execute_arm(args):
         resource_guard(startup=False, audit_path=stage / 'resource-monitor.jsonl', phase='before_evaluation')
         return original_evaluate(self, *args, **kwargs)
     env_module.DesktopEnv.evaluate = guarded_evaluate
-    result_dir = stage / 'official' / 'multi_apps' / TASK_ID
+    result_dir = stage / 'official' / plan['domain'] / plan['task_id']
     result_dir.mkdir(parents=True)
     actor = selected(model=plan['model'], base_url=plan['base_url'], temperature=0, max_tokens=16000,
                      api_key=os.environ[plan['api_key_env']])
@@ -416,7 +454,8 @@ def execute_arm(args):
                 'error': error, 'closed': closed,
                 'cleanup_ok': cleanup_ok, 'complete': error is None and bool(scores) and closed and cleanup_ok,
                 'no_retry_or_resume': True, 'source_unchanged': sources(
-                    plan['sources']['benchmark']['repo'], plan['sources']['actor_compiler']['repo']) == plan['sources']
+                    plan['sources']['benchmark']['repo'], plan['sources']['actor_compiler']['repo'],
+                    plan.get('task_key','invoice')) == plan['sources']
                     and project_identity() == plan['project_source']})
 
 
@@ -491,6 +530,7 @@ def main():
     parser.add_argument('--coordinate-type', choices=('absolute', 'relative'), default='absolute',
                         help='Prepare only: freeze one coordinate mode for both arms; never auto-switch')
     parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
+    parser.add_argument('--task', choices=tuple(TASKS), default='invoice', help='Prepare only; later commands use plan')
     parser.add_argument('--arm', choices=ALL_ARMS)
     parser.add_argument('--execute-approved-plan', action='store_true')
     args = parser.parse_args()
