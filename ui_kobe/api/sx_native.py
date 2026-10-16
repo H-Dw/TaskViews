@@ -12,6 +12,9 @@ MODEL = 'qwen3.8-flash'
 PROTOCOL = 'sx-qwen38-flash-native-tools-sse-v1'
 GENERATION = 'sx-qwen38-flash-sse-low-total16k'
 MAX_HIGH_GENERATION = 'sx-qwen38-max-sse-high-total16k'
+MAX_MEDIUM_GENERATION = 'sx-qwen38-max-sse-medium-total16k'
+MAX_LOW_GENERATION = 'sx-qwen38-max-sse-low-total16k'
+MAX_GENERATIONS = {MAX_HIGH_GENERATION: 'high', MAX_MEDIUM_GENERATION: 'medium', MAX_LOW_GENERATION: 'low'}
 URL_ENVS = ('SX_URL', 'SX_URL_SB')
 
 
@@ -47,21 +50,21 @@ class SXGenerationProfile(QwenGenerationProfile):
 def generation_profile(name=GENERATION):
     if name == GENERATION:
         return SXGenerationProfile()
-    if name == MAX_HIGH_GENERATION:
-        return SXGenerationProfile(name=name, reasoning_effort='high')
+    if name in MAX_GENERATIONS:
+        return SXGenerationProfile(name=name, reasoning_effort=MAX_GENERATIONS[name])
     raise ValueError('Unknown frozen SX generation profile')
 
 
 def model_for_profile(profile):
     generation_request_fields(profile)
-    return 'qwen3.8-max' if profile.name == MAX_HIGH_GENERATION else MODEL
+    return 'qwen3.8-max' if profile.name in MAX_GENERATIONS else MODEL
 
 
 def generation_request_fields(profile):
     if profile != generation_profile(profile.name):
         raise ValueError('SX generation profile changed its frozen bounds')
-    if profile.name == MAX_HIGH_GENERATION:
-        return {'enable_thinking': True, 'reasoning_effort': 'high'}
+    if profile.name in MAX_GENERATIONS:
+        return {'enable_thinking': True, 'reasoning_effort': MAX_GENERATIONS[profile.name]}
     return {'reasoning_effort': 'low'}
 
 
