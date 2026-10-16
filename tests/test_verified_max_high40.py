@@ -41,8 +41,9 @@ def test_mini_only_high40_freezes_exactly_one_arm_with_unchanged_budgets(monkeyp
     mini=module.specification('sx','SX_URL_SB','relative','sx-mini-max-high40')
     assert mini['arms']==['taskviews'] and set(mini['arm_profiles'])=={'taskviews'}
     for key in comparison:
-        if key not in ('arms','arm_profiles','experiment'):
+        if key not in ('arms','arm_profiles','experiment','mini_grounding_check_policy'):
             assert mini[key]==comparison[key]
+    assert mini['mini_grounding_check_policy']=='collect_all_record_accuracy'
     with pytest.raises(ValueError,match='provider incompatible'):
         module.specification('qwen',experiment='sx-mini-max-high40')
 

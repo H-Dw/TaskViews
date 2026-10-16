@@ -81,6 +81,41 @@ def test_offline_evidence_cannot_qualify_a_different_coordinate_contract(tmp_pat
         module.validation_evidence(tmp_path,cua_contract=other)
 
 
+def test_mini_evaluation_records_localization_misses_without_hiding_protocol_failures(tmp_path, monkeypatch):
+    from copy import deepcopy
+    from scripts import verified_invoice as module
+    monkeypatch.setenv('SX_URL_SB','https://example.test/v1')
+    plan=specification('sx','SX_URL_SB','relative','sx-mini-max-high40')
+    plan['project_source']={'test':'frozen'}
+    fields={k:plan[k] for k in ('model','base_url','generation_fields','cua_contract','project_source')}
+    module.write(tmp_path/'live-provider-check.json',{**fields,'complete':True,
+        'checks':['text','vision_native_tool','tool_reply']})
+    evidence={**deepcopy(fields),'kind':'synthetic_mini_grounding','complete':True,
+        'policy':'collect_all_record_accuracy','collection_complete':True,'all_targets_passed':False,
+        'source_unchanged':True,'live_api_called':True,'vm_started':False,'gui_actions':0,'benchmark_score':None,
+        'cases':[{'passed':False,'compiled_point_px':[1588,179],
+                  'native_actions':[{'action':'mouse_move','coordinate':[827,166]}]} for _ in range(4)]}
+    module.write(tmp_path/'mini-grounding-check.json',evidence)
+    module.require_live_provider_check(tmp_path,plan)
+    for mutation in ('missing','units','source','out_of_frame','wrong_tool','accuracy_falsified'):
+        invalid=deepcopy(evidence)
+        if mutation=='missing':
+            invalid['cases'].pop()
+        elif mutation=='units':
+            invalid['cua_contract']['coordinate_type']='absolute'
+        elif mutation=='source':
+            invalid['source_unchanged']=False
+        elif mutation=='out_of_frame':
+            invalid['cases'][0]['compiled_point_px']=[1921,179]
+        elif mutation=='wrong_tool':
+            invalid['cases'][0]['native_actions'][0]['action']='terminate'
+        else:
+            invalid['all_targets_passed']=True
+        module.write(tmp_path/'mini-grounding-check.json',invalid)
+        with pytest.raises(ValueError,match='grounding evidence'):
+            module.require_live_provider_check(tmp_path,plan)
+
+
 def test_image_hash_releases_only_read_ranges_without_changing_digest(tmp_path, monkeypatch):
     import hashlib
     from scripts import verified_invoice as module
@@ -123,7 +158,7 @@ def test_frozen_low35_comparison_has_no_implicit_execution():
     assert plan['generation_profile']['max_completion_tokens'] == 16000
     assert plan['execution_authorized'] is False and plan['checkpoint_resume'] is False
     assert plan['controls_view'] == 'disabled'
-    assert plan['arm_profiles']['taskviews']['view_ids'] == ['current', 'attempts', 'lessons']
+    assert plan['arm_profiles']['taskviews']['view_ids'] == ['current', 'keyboard', 'attempts', 'lessons']
     assert all(plan['arm_profiles'][arm]['extra_role_requests'] == 0 for arm in ARMS)
 
 

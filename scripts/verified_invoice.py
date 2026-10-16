@@ -136,6 +136,8 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         'transport_policy': api.transport_policy(), 'api_key_env': key_env,
         'live_provider_check_required': provider in ('tinker', 'openrouter', 'sx'),
         'mini_grounding_check_required': provider == 'sx', 'coordinate_type': coordinate_type,
+        'mini_grounding_check_policy': ('collect_all_record_accuracy' if experiment == 'sx-mini-max-high40'
+                                        else 'all_targets_within30px'),
         'cua_contract': contract, 'taskviews_profile': 'mini_fixed_v1',
         'arm_profiles': {arm: frozen_profile(arm) for arm in arms},
         'controls_view': 'disabled', 'full_taskviews_feedback': False,
@@ -284,13 +286,27 @@ def require_live_provider_check(root, plan):
         raise ValueError('Live provider compatibility check is missing or incomplete; no VM may start')
     if plan.get('mini_grounding_check_required'):
         grounding = read(root / 'mini-grounding-check.json')
+        diagnostic = plan.get('mini_grounding_check_policy') == 'collect_all_record_accuracy'
+        cases = grounding.get('cases', [])
+        if diagnostic:
+            width, height = plan['cua_contract']['model_screen_width'], plan['cua_contract']['model_screen_height']
+            compatible = (grounding.get('policy') == 'collect_all_record_accuracy'
+                and grounding.get('collection_complete') is True
+                and grounding.get('all_targets_passed') == all(c.get('passed') is True for c in cases)
+                and all(type(c.get('passed')) is bool and isinstance(c.get('compiled_point_px'), list)
+                    and len(c['compiled_point_px']) == 2
+                    and all(type(v) in (int, float) and 0 <= v < bound
+                            for v, bound in zip(c['compiled_point_px'], (width, height)))
+                    and len(c.get('native_actions', [])) == 1
+                    and c['native_actions'][0].get('action') == 'mouse_move' for c in cases))
+        else:
+            compatible = all(case.get('passed') is True for case in cases)
         if (grounding.get('kind') != 'synthetic_mini_grounding' or grounding.get('complete') is not True
                 or grounding.get('live_api_called') is not True
                 or grounding.get('source_unchanged') is not True
                 or grounding.get('project_source') != plan['project_source']
                 or any(grounding.get(k) != plan[k] for k in ('model', 'base_url', 'generation_fields', 'cua_contract'))
-                or len(grounding.get('cases', [])) != 4
-                or any(case.get('passed') is not True for case in grounding.get('cases', []))
+                or len(cases) != 4 or not compatible
                 or grounding.get('vm_started') is not False or grounding.get('gui_actions') != 0
                 or grounding.get('benchmark_score') is not None):
             raise ValueError('Mini actual-predict grounding evidence is incomplete or differs from the frozen plan')

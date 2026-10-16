@@ -68,7 +68,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--live', action='store_true', help='Explicitly send bounded, billable synthetic API requests')
     parser.add_argument('--coordinate-type', choices=('absolute','relative'), default='absolute')
-    parser.add_argument('--experiment', choices=('legacy-low35','sx-max-high40'), default='legacy-low35')
+    from scripts.verified_invoice import EXPERIMENTS
+    parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
     parser.add_argument('--sx-url-env', choices=('SX_URL','SX_URL_SB'), default='SX_URL_SB')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--root', type=Path, help='Optional new frozen SX plan to receive this prerequisite proof')
@@ -86,10 +87,13 @@ def main():
     plan = validate_plan(args.root) if args.root else specification('sx', args.sx_url_env, args.coordinate_type, args.experiment)
     if plan['provider'] != 'sx':
         raise ValueError('This grounding probe is for the declared SX Mini actor only')
+    policy = plan.get('mini_grounding_check_policy', 'all_targets_within30px')
+    collect_all = policy == 'collect_all_record_accuracy'
     contract = CUAContract(**plan['cua_contract'])
     args.output.mkdir(parents=True, exist_ok=False)
     source = project_identity()
     report = {'kind':'synthetic_mini_grounding', 'complete':False, 'cases':[],
+              'policy':policy, 'collection_complete':False, 'all_targets_passed':False,
               'started_utc':datetime.now(timezone.utc).isoformat(), 'project_source':source,
               'model':plan['model'], 'base_url':plan['base_url'], 'cua_contract':contract.snapshot(),
               'generation_fields':plan['generation_fields'], 'live_api_called':False,
@@ -120,9 +124,11 @@ def main():
             write(args.output/'report.json', report)
             print(json.dumps({'case':index, 'passed':record['passed'],
                               'compiled_point_px':record['compiled_point_px'] }), flush=True)
-            if not record['passed']:
+            if not record['passed'] and not collect_all:
                 break  # Preserve the first failure; never auto-switch units or retry for success.
-        report['complete'] = len(report['cases'])==len(TARGETS) and all(c['passed'] for c in report['cases'])
+        report['collection_complete'] = len(report['cases'])==len(TARGETS)
+        report['all_targets_passed'] = report['collection_complete'] and all(c['passed'] for c in report['cases'])
+        report['complete'] = report['collection_complete'] and (collect_all or report['all_targets_passed'])
     except Exception as exc:
         from ui_kobe.osworld.telemetry import safe
         report['error'] = {'type':type(exc).__name__, 'message':safe(str(exc))}
