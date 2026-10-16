@@ -28,7 +28,7 @@ IMAGE_ZIP_SHA256 = 'b795b6cd4c69b252c1b4f10150a347795555032501b60fd031751ed09b89
 DOCKER_IMAGE = 'happysixd/osworld-docker@sha256:0e6497a9295647cf05bf2b2af522fdd79bdeba2737595259cab310a3bcf6baa9'
 ARMS = ('ui_kobe_like', 'taskviews')
 ALL_ARMS = ('ui_kobe_like', 'baseline', 'taskviews')
-EXPERIMENTS = ('legacy-low35', 'sx-max-high40')
+EXPERIMENTS = ('legacy-low35', 'sx-max-high40', 'sx-mini-max-high40')
 GENERATION = 'qwen-sse-low-total16k'
 
 
@@ -91,7 +91,8 @@ def project_identity():
 
 
 def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolute', experiment='legacy-low35'):
-    if experiment not in EXPERIMENTS or (experiment == 'sx-max-high40' and provider != 'sx'):
+    high40 = experiment in ('sx-max-high40', 'sx-mini-max-high40')
+    if experiment not in EXPERIMENTS or (high40 and provider != 'sx'):
         raise ValueError('Unknown experiment or provider incompatible with frozen experiment')
     if coordinate_type not in ('absolute', 'relative'):
         raise ValueError('Coordinate type must be explicitly absolute or relative')
@@ -109,11 +110,11 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         generation, key_env = api.GENERATION, 'SX_QWEN_API_KEY'
     else:
         raise ValueError('Unknown invoice provider')
-    if experiment == 'sx-max-high40':
+    if high40:
         generation = api.MAX_HIGH_GENERATION
     profile = api.generation_profile(generation)
-    arms = ALL_ARMS if experiment == 'sx-max-high40' else ARMS
-    max_steps = 40 if experiment == 'sx-max-high40' else 35
+    arms = ('taskviews',) if experiment == 'sx-mini-max-high40' else ALL_ARMS if high40 else ARMS
+    max_steps = 40 if high40 else 35
     from ui_kobe.osworld.taskviews_profiles import frozen_profile, mini_cua_contract
     contract = mini_cua_contract()
     contract['coordinate_type'] = coordinate_type

@@ -36,6 +36,17 @@ def test_max_high40_changes_only_declared_model_reasoning_rounds_and_arms(monkey
         module.specification('qwen',experiment='sx-max-high40')
 
 
+def test_mini_only_high40_freezes_exactly_one_arm_with_unchanged_budgets(monkeypatch):
+    comparison=spec(monkeypatch)
+    mini=module.specification('sx','SX_URL_SB','relative','sx-mini-max-high40')
+    assert mini['arms']==['taskviews'] and set(mini['arm_profiles'])=={'taskviews'}
+    for key in comparison:
+        if key not in ('arms','arm_profiles','experiment'):
+            assert mini[key]==comparison[key]
+    with pytest.raises(ValueError,match='provider incompatible'):
+        module.specification('qwen',experiment='sx-mini-max-high40')
+
+
 def test_max_high_wire_cannot_silently_send_flash_or_low(tmp_path,monkeypatch):
     plan=spec(monkeypatch)
     from test_sx_native import stream, MODEL
@@ -103,9 +114,12 @@ def test_three_actors_share_projection_but_baseline_reads_no_extra_context(tmp_p
         actor.close()
 
 
-@pytest.mark.parametrize('stop_arm',[None,'ui_kobe_like','baseline'])
-def test_three_arm_dispatch_never_marks_complete_or_skips_cleanup_early(tmp_path,monkeypatch,stop_arm):
-    plan=spec(monkeypatch)
+@pytest.mark.parametrize('experiment,stop_arm',[
+    ('sx-max-high40',None),('sx-max-high40','ui_kobe_like'),('sx-max-high40','baseline'),
+    ('sx-mini-max-high40',None),('sx-mini-max-high40','taskviews')])
+def test_three_arm_dispatch_never_marks_complete_or_skips_cleanup_early(tmp_path,monkeypatch,experiment,stop_arm):
+    spec(monkeypatch)
+    plan=module.specification('sx','SX_URL_SB','relative',experiment)
     from scripts import osworld_native_experiment
     monkeypatch.setattr(osworld_native_experiment,'require_scope',lambda limit:tmp_path)
     monkeypatch.setattr(module,'validate_plan',lambda root:plan)
@@ -122,13 +136,16 @@ def test_three_arm_dispatch_never_marks_complete_or_skips_cleanup_early(tmp_path
         return SimpleNamespace(returncode=0)
     monkeypatch.setattr(module.subprocess,'run',run)
     code=module.launch(SimpleNamespace(execute_approved_plan=True,root=tmp_path))
-    count=plan['arms'].index(stop_arm)+1 if stop_arm else 3
+    count=plan['arms'].index(stop_arm)+1 if stop_arm else len(plan['arms'])
     assert seen==plan['arms'][:count] and code==bool(stop_arm)
     assert module.read(tmp_path/'state.json')['status']==('stopped_on_error' if stop_arm else 'completed')
 
 
-def test_high40_requires_all_nine_cases_with_current_generation(tmp_path,monkeypatch):
-    plan=spec(monkeypatch)
+@pytest.mark.parametrize('experiment,count,corrupt_arm',[
+    ('sx-max-high40',9,'baseline'),('sx-mini-max-high40',3,'taskviews')])
+def test_high40_requires_all_nine_cases_with_current_generation(tmp_path,monkeypatch,experiment,count,corrupt_arm):
+    spec(monkeypatch)
+    plan=module.specification('sx','SX_URL_SB','relative',experiment)
     identity={'fixture':'source'}
     monkeypatch.setattr(module,'project_identity',lambda:identity)
     for arm in plan['arms']:
@@ -138,8 +155,8 @@ def test_high40_requires_all_nine_cases_with_current_generation(tmp_path,monkeyp
                        project_source=identity,live_api_called=False,vm_started=False)
             module.write(tmp_path/f'{arm}-{case}'/'validation.json',row)
     args=(tmp_path,'sx',plan['base_url'],plan['cua_contract'],plan)
-    assert len(module.validation_evidence(*args)['sha256'])==9
-    path=tmp_path/'baseline-limit'/'validation.json'
+    assert len(module.validation_evidence(*args)['sha256'])==count
+    path=tmp_path/f'{corrupt_arm}-limit'/'validation.json'
     row=module.read(path)
     row['generation_fields']={'reasoning_effort':'low'}
     module.write(path,row)
