@@ -6,7 +6,7 @@ from .keyboard_view import policy as keyboard_policy
 from .artifact_view import policy as artifact_policy
 
 PROFILE = 'mini_fixed_v1'
-REVISION = 'mini_artifact_evidence_v4'
+REVISION = 'mini_artifact_protocol_v6'
 MAX_BYTES = 3000
 VIEW_IDS = ('current', 'keyboard', 'attempts', 'lessons')
 SELECTORS = {'current': 'current_frame_and_artifact_checks', 'attempts': 'active_operations_with_followup_observations',
@@ -22,7 +22,8 @@ def profile_contract():
             'interaction': 'mini_interaction_v1; reject known silent key aliases before dispatch; no rewrite',
             'keyboard': keyboard_policy(),
             'artifact': artifact_policy(),
-            'packing_priority': 'current/checks; active operation+followup; unresolved error/review; relevant keyboard; other history',
+            'packing_priority': 'current/checks/full review protocol; active operation+followup; unresolved error/review; relevant keyboard; other history; generic reminders',
+            'packet_metadata': 'selectors/control source URLs in profile; current geometry in native frame contract; image hash via current ref',
             'view_ids': list(VIEW_IDS), 'selectors': dict(SELECTORS),
             'max_bytes': MAX_BYTES, 'recent_edges': 4, 'extra_role_requests': 0,
             'optional_error_policy': 'whole projection omission',
@@ -45,9 +46,17 @@ def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max
         raise ValueError('Fixed view eligible counts must include all candidates')
     view_ids = VIEW_IDS if controls is None else tuple(k for k in VIEW_IDS if k != 'keyboard')
     packet = {'profile': PROFILE, 'episode_id': episode_id, 'frame_id': frame_id,
-              'views': {key: {'selector': SELECTORS[key], 'records': [], 'omitted_records':
+              'views': {key: {'records': [], 'omitted_records':
                         0 if key in ('current', 'keyboard') else totals[key]} for key in view_ids}}
     packet['views']['current']['records'] = [deepcopy(current)]
+    selected = {key: set() for key in rows}
+    # Reserve mandatory unknown state before admitting any optional extension.
+    for index, row in enumerate(lessons):
+        if row.get('grade') == 'artifact_verification_state':
+            packet['views']['lessons']['records'].append(deepcopy(row))
+            packet['views']['lessons']['omitted_records'] -= 1
+            selected['lessons'].add(index)
+    lookup = packet['views']['current']['records'][0].pop('keyboard_lookup', None)
     optional_current = {}
     for key in ('recent_repetition', 'interaction_contract'):
         literal = packet['views']['current']['records'][0]
@@ -94,7 +103,6 @@ def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max
         # Historical attempts/lessons cannot evict it. No budget or M0 default changes.
     if len(dumps(packet).encode()) > limit:
         return None
-    selected = {key: set() for key in rows}
 
     def admit(key, index, ceiling):
         if index in selected[key]:
@@ -114,9 +122,6 @@ def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max
         return True
 
     # A meaningful operation and unresolved verification precede key references.
-    for index, row in enumerate(lessons):
-        if row.get('grade') == 'artifact_verification_state' and not admit('lessons', index, limit):
-            return None
     if attempts:
         admit('attempts', 0, limit)
     for index, row in enumerate(lessons):
@@ -141,7 +146,9 @@ def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max
             packet.update(proposed)
         else:
             packet['views']['keyboard']['omitted_records'] = 1
-    for key, value in optional_current.items():
+    # Only literal repetition evidence precedes other journal records. Generic
+    # interaction reminders must not evict a useful operation or review.
+    def admit_current(key, value):
         proposed = deepcopy(packet)
         literal = proposed['views']['current']['records'][0]
         literal.pop(key + '_omitted')
@@ -150,6 +157,8 @@ def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max
         if len(dumps(proposed).encode()) <= limit:
             packet.clear()
             packet.update(proposed)
+    if 'recent_repetition' in optional_current:
+        admit_current('recent_repetition', optional_current['recent_repetition'])
     for key, quota in (('attempts', 1200), ('lessons', 1000)):
         for index in range(len(rows[key])):
             admit(key, index, quota)
@@ -157,4 +166,13 @@ def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max
         for index in range(len(rows[key])):
             if index not in selected[key]:
                 admit(key, index, limit)
+    if 'interaction_contract' in optional_current:
+        admit_current('interaction_contract', optional_current['interaction_contract'])
+    # Catalog discovery is the lowest priority: it must never evict journal
+    # evidence, key memory or model intent. Omission is recorded by the caller.
+    if lookup is not None:
+        proposed = deepcopy(packet)
+        proposed['views']['current']['records'][0]['keyboard_lookup'] = deepcopy(lookup)
+        if len(dumps(proposed).encode()) <= limit:
+            packet = proposed
     return packet

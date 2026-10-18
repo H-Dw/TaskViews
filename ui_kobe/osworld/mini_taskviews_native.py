@@ -11,6 +11,7 @@ from .mini_taskviews_context import LABEL, CONTROLS_LABEL, MiniTaskViewsContext
 from .qwen_native_base import QwenNativeProvider
 from .mini_interaction import validate_keys
 from kobe_views.artifact_view import GUIDANCE as ARTIFACT_GUIDANCE
+from kobe_views.keyboard_view import normalize_toolsets, policy as keyboard_policy
 
 
 FRAME_CONTRACT_PREFIX = 'Trusted screenshot/coordinate contract: '
@@ -25,6 +26,7 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
     strict_native_input = True
 
     def __init__(self, **options):
+        self.keyboard_toolsets = normalize_toolsets(json.loads(os.environ.get('UI_KOBE_MINI_KEYBOARD_TOOLS', '[]')))
         if (os.environ.get('UI_KOBE_TASKVIEWS_PROFILE', PROFILE) != PROFILE
                 or os.environ.get('UI_KOBE_TASKVIEWS_FEEDBACK_V10', '0') != '0'):
             raise ValueError('Mini requires its own declared profile, without full feedback workflow')
@@ -32,6 +34,8 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
         if control_version not in ('disabled', VERSION):
             raise ValueError('Unknown Mini controls view')
         self.controls_view_enabled = control_version == VERSION
+        if self.controls_view_enabled and self.keyboard_toolsets:
+            raise ValueError('Scoped keyboard tools cannot use the legacy controls-only packet')
         self.native_parameter_repair_feedback = self.controls_view_enabled
         self.context_label = CONTROLS_LABEL if self.controls_view_enabled else LABEL
         super().__init__(**options)
@@ -100,14 +104,16 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
         return hasattr(self, 'mini_context')
 
     def checkpoint_state(self):
-        value = {'contract': profile_contract(), 'delivery': self.mini_context.snapshot()}
+        value = {'contract': profile_contract(), 'delivery': self.mini_context.snapshot(),
+                 'keyboard_tools': keyboard_policy(self.keyboard_toolsets)}
         if self.controls_view_enabled:
             value['controls_view'] = policy()
         return value
 
     def restore_checkpoint_state(self, value):
-        if (not isinstance(value, dict) or set(value) not in ({'contract', 'delivery'},
-                {'contract', 'delivery', 'controls_view'}) or value['contract'] != profile_contract()):
+        if (not isinstance(value, dict) or set(value) not in ({'contract', 'delivery', 'keyboard_tools'},
+                {'contract', 'delivery', 'keyboard_tools', 'controls_view'}) or value['contract'] != profile_contract()
+                or value['keyboard_tools'] != keyboard_policy(self.keyboard_toolsets)):
             raise ReadAnomaly('Mini checkpoint profile differs from implementation')
         if 'controls_view' in value and (not self.controls_view_enabled or value['controls_view'] != policy()):
             raise ReadAnomaly('Mini controls checkpoint extension is incompatible')

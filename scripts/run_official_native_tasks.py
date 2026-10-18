@@ -59,12 +59,15 @@ def configure_profile(plan, manifest):
         from scripts.osworld_native_experiment import require_mini_branch
         if (manifest.get('mini_profile') != plan['mini_profile']
                 or manifest.get('source_branch') != plan['source_branch']
-                or manifest.get('mini_controls_view') != plan.get('mini_controls_view')):
+                or manifest.get('mini_controls_view') != plan.get('mini_controls_view')
+                or manifest.get('mini_keyboard_tools') != plan.get('mini_keyboard_tools')):
             raise RuntimeError('Manifest fixed-view contract differs from frozen Mini plan')
         require_mini_branch()
     os.environ['UI_KOBE_TASKVIEWS_PROFILE'] = profile
     os.environ['UI_KOBE_MINI_CONTROLS_VIEW'] = (plan['mini_controls_view']['version']
         if plan.get('mini_controls_view') is not None else 'disabled')
+    os.environ['UI_KOBE_MINI_KEYBOARD_TOOLS'] = json.dumps(
+        plan['mini_keyboard_tools']['enabled_toolsets'][1:] if plan.get('mini_keyboard_tools') else [])
     return profile
 
 

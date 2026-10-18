@@ -11,12 +11,8 @@ from test_mini_taskviews import make_actor, original_event, packet, predict
 
 @pytest.mark.parametrize('prose,topic,keys', [
     ('Click in the document area and use Page Down to scroll.', 'page_navigation', ['pagedown']),
-    ('Go back and zoom out with Ctrl+-.', 'zoom', ['ctrl', '-']),
-    ('Move the invoice into the folder.', 'file_transfer', ['ctrl', 'x']),
-    ('Maximize the window.', 'window_maximize', ['alt', 'f10']),
-    ('Minimize the window.', 'window_minimize', ['win', 'h']),
-    ('Switch to another application.', 'window_switch', ['win', 'tab']),
-    ('Rename the selected file.', 'rename', ['f2']),
+    ('Copy the selected text.', 'clipboard', ['ctrl', 'c']),
+    ('Switch to another application.', 'window_switch', ['alt', 'tab']),
 ])
 def test_intent_retrieval_supplies_exact_native_call_before_generation(prose, topic, keys):
     selected, reason = select_topic([prose])

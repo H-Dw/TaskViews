@@ -7,16 +7,16 @@ import sqlite3
 from kobe_views.fixed_views import MAX_BYTES, PROFILE, materialize
 from kobe_views.model import dumps
 from kobe_views.controls_view import parse_note, record as controls_record
-from kobe_views.keyboard_view import key_topic, record as keyboard_record, select_topic
+from kobe_views.keyboard_view import key_topic, lookup_guide, record as keyboard_record, select_topic
 from . import telemetry
 from .actor_context import available_context_bytes
 from .checkpoints import ReadAnomaly
 from .mini_interaction import interaction_contract
 from .mini_evidence import ACTIVE, MiniEvidence
-from kobe_views.artifact_view import CHECKS, parse_review, unknown_checks
+from kobe_views.artifact_view import CHECKS, REVIEW_SCHEMA, ReviewError, parse_review, unknown_checks, validate_review
 
-LABEL = ('TaskViews: sources maps seq refs to immutable events. Reports are unverified; '
-         'unknown checks are not success. Verify app/focus and artifact contents on the current image:')
+LABEL = ('TaskViews: sources maps seq refs to immutable events. Unknown=no independent certification; '
+         'complete only after evidence review; reports never upgrade unknown. Missing evidence: inspect, never invent:')
 CONTROLS_LABEL = 'Fixed TaskViews with controls guidance (documented defaults guide actions; historical records and visual notes are unverified data):'
 
 
@@ -148,7 +148,8 @@ class MiniTaskViewsContext:
         from mm_agents.qwen.parser import parse_keys
         from .mini_interaction import SILENT_KEY_ALIASES
 
-        topic, selection = select_topic([self.prose(e) for _, e, _ in decisions])
+        toolsets = self.owner.keyboard_toolsets
+        topic, selection = select_topic([self.prose(e) for _, e, _ in decisions], toolsets)
         if topic is None:
             return None
         # A separate keyboard index survives long intervening mouse sequences
@@ -159,7 +160,7 @@ class MiniTaskViewsContext:
         memories, eligible = [], 0
         for seq, event, digest in rows:
             keys = parse_keys(event['tool']['arguments'].get('keys'))
-            if key_topic(keys) != topic:
+            if key_topic([SILENT_KEY_ALIASES.get(key, key) for key in keys], topic, toolsets) != topic:
                 continue
             eligible += 1
             if len(memories) >= 2:
@@ -184,7 +185,7 @@ class MiniTaskViewsContext:
                 'receipt': 'recorded; see original event',
                 'image_delta': 'same_bytes' if images[0] == images[1] else 'different_bytes',
                 'effect_status': 'key_not_emitted' if invalid else 'unknown'})
-        return keyboard_record(topic, selection, memories, eligible - len(memories))
+        return keyboard_record(topic, selection, memories, eligible - len(memories), toolsets=toolsets)
 
     def validate_review_references(self, note, *, final):
         """Check review process/provenance, never certify a model's visual claim."""
@@ -192,33 +193,38 @@ class MiniTaskViewsContext:
         if not note['applicable']:
             return
         if final and set(note['checks']) != set(CHECKS):
-            raise ValueError('Review source, contents, name and destination before success')
-        for check in note['checks'].values():
+            raise ReviewError('missing_checks', 'Review all four checks before success')
+        for key, check in note['checks'].items():
+            if check['ref'] > journal.current['seq']:
+                raise ReviewError('invalid_reference', f'{key}.ref: no observation at this seq in the current episode')
             rows = self.read('SELECT seq,id,payload FROM events WHERE seq=?', (check['ref'],))
             if len(rows) != 1 or rows[0][1].get('kind') != 'observation':
-                raise ValueError('Artifact review must reference real same-episode observations')
+                raise ReviewError('invalid_reference', f'{key}.ref: must identify a real same-episode observation')
             observation = rows[0][1]
             same_task = journal.db.execute("SELECT 1 FROM events WHERE json_extract(payload,'$.instruction')=? AND "
                 "((json_extract(payload,'$.kind')='task_input' AND json_extract(payload,'$.observation')=?) OR "
                 "(json_extract(payload,'$.kind')='transition' AND json_extract(payload,'$.target')=?)) LIMIT 1",
                 (journal.task_input['instruction'], observation['id'], observation['id'])).fetchone()
             if not same_task:
-                raise ValueError('Artifact evidence belongs to a different task input')
+                raise ReviewError('wrong_task_reference', f'{key}.ref: observation belongs to a different task input')
             image = observation.get('images', {}).get('original', {}).get('sha256')
             if not image or image != observation.get('frame', {}).get('original_sha256'):
                 raise ReadAnomaly('Artifact review image provenance differs')
         if final and note['checks']['content_previewed']['ref'] != journal.current['seq']:
-            raise ValueError('Preview final candidate contents on the current observation before success')
+            raise ReviewError('stale_preview', 'content_previewed.ref must equal current.ref; '
+                              'preview candidate contents on the current observation before success')
 
     def require_final_review(self, content, response):
         from ui_kobe.api.kimi_stream import StreamProtocolError
-        note = parse_review(content)
         try:
-            if note is None:
-                raise ValueError('Success requires a bounded <artifact_review> of the candidate, or a reason no artifact is required')
+            note = validate_review(content, final=True)
             self.validate_review_references(note, final=True)
-        except ValueError as exc:
-            raise StreamProtocolError(str(exc), code='mini_artifact_review', observed_response=response.model_dump(),
+        except ReviewError as exc:
+            telemetry.emit('mini_artifact_review_rejected', failure=exc.code, action_executed=False)
+            feedback = (f'Mini public artifact report failed: {exc}. '
+                        'Correct assistant.content per current.artifact.review_schema; keep native tool syntax. '
+                        'If evidence is missing, inspect before success.')
+            raise StreamProtocolError(feedback, code='mini_artifact_review', observed_response=response.model_dump(),
                                       retryable=True) from exc
         telemetry.emit('mini_artifact_review', applicable_reported=note['applicable'],
             checks_reported=list(note.get('checks', {})), verification=unknown_checks(),
@@ -227,7 +233,7 @@ class MiniTaskViewsContext:
     def context(self, instruction):
         self.cached = None
         self.trace = {'profile': PROFILE, 'frame_id': self.owner.frame.metadata['frame_id'],
-                      'delivered': False, 'extra_role_requests': 0}
+                      'delivered': False, 'artifact_protocol_in_packet': False, 'extra_role_requests': 0}
         journal = self.journal()
         self.boundary()
         current = journal.current
@@ -284,13 +290,16 @@ class MiniTaskViewsContext:
             controls = controls_record(self.owner.frame.metadata['frame_id'], previous)
             controls.pop('guidance')  # Whole original guidance stays in the declared controls catalog.
             controls['guidance_ref'] = 'mini_controls_v1 catalog'
+            # Source IDs still resolve through the immutable controls policy;
+            # repeating static URLs competes with real operation evidence.
+            controls['sources'] = list(controls['sources'])
         # Real errors get first opportunity; proposals never become verified errors.
         limit = min(MAX_BYTES, available_context_bytes(self.owner.actor_input_messages,
                       label=self.owner.context_label, contract=self.owner.contract))
+        # Geometry is already mandatory in this request's native frame contract.
+        # current_ref resolves the immutable observation (including image hash),
+        # so duplicate geometry/hash fields must not displace review evidence.
         original_current = {'ref': current_ref, 'artifact': state,
-                            'original_sha256': self.owner.frame.original_sha256,
-                            'frame_geometry': {key: deepcopy(self.owner.frame.metadata[key]) for key in
-                                ('coordinate_type', 'original_size', 'model_size', 'coordinate_bounds')},
                             'grade': 'original_input', 'image_source': 'current_native_message'}
         # Real errors and the legacy opt-in controls pack take precedence over
         # generic workflow advice. The default keyboard reference is independent.
@@ -303,11 +312,15 @@ class MiniTaskViewsContext:
             repeated.pop('latest_event_sha256')
             original_current['recent_repetition'] = repeated
         keyboard = None if self.owner.controls_view_enabled else self.keyboard_view(decisions)
+        if not self.owner.controls_view_enabled and keyboard is None:
+            original_current['keyboard_lookup'] = lookup_guide(self.owner.keyboard_toolsets)
         if keyboard:
             for memory in keyboard['memory']:
                 row = self.read('SELECT seq,id,payload FROM events WHERE id=?', (memory['source_event_id'],))[0]
                 memory['ref'] = evidence.reference(row)
-                for key in ('seq', 'source_event_id', 'source_sha256'):
+                # The literal receipt remains under ref; repeating "recorded"
+                # can evict the actual keys and observed image delta.
+                for key in ('seq', 'source_event_id', 'source_sha256', 'receipt'):
                     memory.pop(key, None)
         try:
             packet = materialize(episode_id=journal.episode_id, frame_id=self.owner.frame.metadata['frame_id'],
@@ -320,6 +333,8 @@ class MiniTaskViewsContext:
             self.trace['omission_reason'] = type(exc).__name__
         if self.cached:
             self.trace.update(packet_sha256=hashlib.sha256(self.cached.encode()).hexdigest(),
+                              keyboard_lookup_omitted='keyboard_lookup' in original_current
+                                  and 'keyboard_lookup' not in packet['views']['current']['records'][0],
                               packet_bytes=len(self.cached.encode()), journal_seq=cursor,
                               selected_operations=[row['tool']['arguments'] for row in packet['views']['attempts']['records']
                                                    if row.get('tool')],
@@ -328,6 +343,8 @@ class MiniTaskViewsContext:
                               artifact_review_delivered=not reviews or any(row.get('ref')==reviews[0]['ref']
                                   for row in packet['views']['lessons']['records']),
                               artifact_checks=unknown_checks(),
+                              artifact_protocol_in_packet=packet['views']['current']['records'][0]
+                                  ['artifact']['review_schema'] == REVIEW_SCHEMA,
                               views={key: {'source_event_ids': [evidence.sources[str(row['ref'])]['id']
                                          for row in view['records'] if row.get('ref')],
                                     'omitted_records': view['omitted_records']}

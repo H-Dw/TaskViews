@@ -107,16 +107,21 @@ def test_current_geometry_is_literal_current_frame_and_does_not_transform_native
     commands = predict(actor, obs)
     value = packet(transport)
     current = value['views']['current']['records'][0]
-    assert current['frame_geometry'] == {key: actor.frame.metadata[key] for key in
-        ('coordinate_type', 'original_size', 'model_size', 'coordinate_bounds')}
-    assert current['frame_geometry']['coordinate_type'] == 'absolute'
-    assert current['frame_geometry']['original_size'] == current['frame_geometry']['model_size'] == [1920, 1080]
-    assert current['frame_geometry']['coordinate_bounds'] == [1920, 1080]
+    original_frame = original_event(actor, value, current)['frame']
+    assert original_frame == actor.frame.metadata
+    assert original_frame['coordinate_type'] == 'absolute'
+    assert original_frame['original_size'] == original_frame['model_size'] == [1920, 1080]
+    assert original_frame['coordinate_bounds'] == [1920, 1080]
+    frame_text = next(p['text'] for p in transport.requests[-1]['messages'][-1]['content']
+                      if p.get('text', '').startswith('Trusted screenshot/coordinate contract:'))
+    assert 'absolute pixels' in frame_text and '1920x1080' in frame_text
+    assert 'frame_geometry' not in current  # One mandatory copy; current.ref preserves audit provenance.
     assert commands == ['pyautogui.click(698, 248)']
     first_frame = value['frame_id']
     predict(actor, obs)
     assert packet(transport)['frame_id'] != first_frame
-    assert packet(transport)['views']['current']['records'][0]['original_sha256'] == actor.frame.original_sha256
+    value = packet(transport)
+    assert original_event(actor, value, value['views']['current']['records'][0])['frame']['original_sha256'] == actor.frame.original_sha256
     assert len(transport.requests) == 2 and actor.contract.taskviews_context_bytes == 8000
     actor.close()
 

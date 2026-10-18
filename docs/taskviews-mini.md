@@ -1,5 +1,9 @@
 # TaskViews Mini M0
 
+2026-10-18 当前实现修订为 `mini_artifact_protocol_v6`，保留 v5 按键工具，修复成功报告的指引／校验不一致和错误反馈不具体的问题。完整报告模板、长度限制与关键证据共用原 3000 UTF-8 bytes；原生修复次数、输入预算、模型与官方执行／评分代码不变。详见 [v6 实现与离线验证](taskviews-mini-artifact-protocol-v6.md)。以下版本记录保留为历史。
+
+2026-10-17 当前按键实现修订为 `mini_keyboard_tools_v5`：默认只检索跨软件通用控制，Evince 翻页/缩放、文件管理器重命名与 GNOME 窗口绑定移入显式目录。软件类型、平台和软件名称分别建档，配方保持原生 `action:key / keys:[...]` 格式。四个 View、3000 UTF-8 bytes 与额外角色请求数 0 保持。使用、分类、研究来源和迁移边界见 [按键 tools](../tools/keyboard/README.md)、[索引](../tools/keyboard/index.md)与[检索记录](../tools/keyboard/survey.md)。下文的 v4、v3 与 M0 搭建记录保留为历史。
+
 2026-10-16 当前实现修订为 `mini_artifact_evidence_v4`：四项产物状态默认为unknown；成功终止前需要引用真实观察的公开复核记录，模型报告不冒充独立认证。3000 UTF-8 bytes内优先保留有效操作与后续观察、未解决问题，再放匹配的键盘参考；最大化、最小化、切换窗口和重命名分别处理，无匹配则省略。四视图与额外模型角色数0保持。详见[v4实现与验证范围](taskviews-mini-artifact-evidence-v4.md)。旧v3评测与检查点保持原样，不能静默续跑为v4。
 
 先前 `mini_keyboard_memory_v3` 的231项测试、生成对照及历史运行证据见[键盘复盘](taskviews-mini-keyboard-postmortem-20261016.md)和[auto-research策略](taskviews-mini-auto-research.md)。**以下是旧M0搭建记录，三视图表格和旧验证状态只描述历史版本。**

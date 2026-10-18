@@ -65,15 +65,24 @@ def test_failed_repairs_are_bounded_and_never_execute(monkeypatch, tmp_path):
     actor.close()
 
 
-def test_task_independent_guidance_delivered_under_original_view_budget(monkeypatch, tmp_path):
+def test_generic_guidance_yields_to_journal_evidence_under_original_view_budget(monkeypatch, tmp_path):
     actor, obs, transport = make_actor(monkeypatch, tmp_path)
     for _ in range(3):
         predict(actor, obs)
     value = packet(transport)
     current = value['views']['current']['records'][0]
-    assert current['interaction_contract'] == interaction_contract()
-    assert 'ignores its coordinate' in current['interaction_contract']['scroll']
-    assert 'does not confirm a dialog' in current['interaction_contract']['deliverable']
+    first = json.loads(transport.requests[0]['messages'][-1]['content'][-1]['text'].split('\n', 1)[1])
+    guidance = first['views']['current']['records'][0]['interaction_contract']
+    assert guidance == interaction_contract()
+    assert 'ignores its coordinate' in guidance['scroll']
+    assert 'does not confirm a dialog' in guidance['deliverable']
+    # Generic advice is optional; later real evidence and the full report
+    # protocol take its space rather than being silently displaced by it.
+    assert current['interaction_contract_omitted'] is True
+    assert 'interaction_contract' not in current
+    assert value['views']['attempts']['records']
+    assert actor.mini_context.trace['latest_operation_delivered']
+    assert actor.mini_context.trace['artifact_protocol_in_packet']
     assert actor.mini_context.trace['packet_bytes'] <= 3000
     assert len(transport.requests) == 3
     assert '243729' not in json.dumps(current) and 'problematic' not in json.dumps(current)

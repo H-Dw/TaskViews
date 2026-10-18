@@ -126,7 +126,8 @@ def test_tinker_profile_and_live_launch_gate(tmp_path):
     assert plan['model'] == MODEL and plan['base_url'] == BASE_URL
     assert plan['api_key_env'] == 'TINKER_API_KEY'
     assert plan['max_steps'] == 35 and plan['arms'] == ['ui_kobe_like', 'taskviews']
-    assert plan['arm_profiles']['taskviews']['view_ids'] == ['current', 'attempts', 'lessons']
+    assert plan['arm_profiles']['taskviews']['view_ids'] == ['current', 'keyboard', 'attempts', 'lessons']
+    assert plan['mini_keyboard_tools']['enabled_toolsets'] == ['general']
     _, budget, _, _ = options_contract({}, provider='tinker', generation_profile=generation_profile())
     assert budget.attempts == 6
     plan['project_source'] = {'test': 'hash'}

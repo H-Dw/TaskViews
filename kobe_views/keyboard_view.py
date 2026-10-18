@@ -1,104 +1,108 @@
-"""Intent-indexed key recipes. Display labels, X11 names and tool keys differ."""
+"""Scoped, source-backed key references. Only general controls route by default."""
 from copy import deepcopy
 import hashlib
+import json
+from pathlib import Path
 import re
 
 from .model import dumps
 
-VERSION = 'mini_keyboard_v2'
-SOURCES = {
-    'document': 'https://help.gnome.org/evince/movingaround.html',
-    'files': 'https://help.gnome.org/gnome-help/files-copy.html',
-    'window': 'https://help.gnome.org/gnome-help/shell-windows-maximize.html',
-    'navigation': 'https://help.gnome.org/gnome-help/keyboard-nav.html',
-    'rename': 'https://help.gnome.org/gnome-help/files-rename.html',
-    'backend': 'PyAutoGUI 0.9.54 KEY_NAMES and _pyautogui_x11.py; pinned qwen parser/actions',
-}
-CATALOG = {
-    'page_navigation': {'scope': 'focused document pane', 'source': 'document',
-        'recipes': [('Page Down / scroll one viewport', ['pagedown']),
-                    ('Page Up / scroll one viewport', ['pageup']),
-                    ('Evince next PDF page', ['ctrl', 'pagedown'])]},
-    'zoom': {'scope': 'Evince document viewer', 'source': 'document',
-        'recipes': [('zoom out', ['ctrl', '-']), ('zoom in', ['ctrl', '+'])]},
-    'file_transfer': {'scope': 'GNOME Files; select source, cut, navigate destination, paste', 'source': 'files',
-        'recipes': [('cut selected files', ['ctrl', 'x']), ('copy selected files', ['ctrl', 'c']),
-                    ('paste into current folder', ['ctrl', 'v'])]},
-    'window_maximize': {'scope': 'GNOME active window; maximize is a toggle', 'source': 'window',
-        'recipes': [('toggle maximize', ['alt', 'f10'])]},
-    'window_minimize': {'scope': 'GNOME active window; Super is the backend win key', 'source': 'navigation',
-        'recipes': [('minimize active window', ['win', 'h'])]},
-    'window_switch': {'scope': 'GNOME applications; Super is the backend win key; recheck focus', 'source': 'navigation',
-        'recipes': [('switch application', ['win', 'tab'])]},
-    'rename': {'scope': 'GNOME Files; selected file, then editable basename or complete name', 'source': 'rename',
-        'recipes': [('rename selected file', ['f2'])],
-        'check': 'Observe which text is selected: basename or full name. Preserve the extension exactly once; verify after confirm.'},
-    'editing': {'scope': 'focused editable field; verify before confirm', 'source': 'backend',
-        'recipes': [('select field text', ['ctrl', 'a']), ('confirm', ['return']), ('dismiss', ['escape'])]},
-}
+CATALOG_PATH = Path(__file__).with_name('key_tools') / 'catalog.json'
+DATA = json.loads(CATALOG_PATH.read_text(encoding='utf-8'))
+VERSION = DATA['version']
+SOURCES = {key: value['url'] for key, value in DATA['sources'].items()}
+TOOLSETS = DATA['toolsets']
+CATALOG = TOOLSETS['general']['topics']
+CATALOG_SHA256 = hashlib.sha256(dumps(DATA).encode()).hexdigest()
 PATTERNS = (
-    ('window_minimize', r'\bminimi[sz]e\b|\bhide (?:the |this |active )?window\b|最小化|隐藏窗口'),
-    ('window_maximize', r'\b(?:maximi[sz]e|unmaximi[sz]e)\b|最大化'),
     ('window_switch', r'\bswitch\b.*\b(?:window|app|application)s?\b|切换.*(?:窗口|应用)'),
-    ('rename', r'\brename\b|\bbasename\b|重命名|扩展名'),
-    ('zoom', r'zoom|fit.page|缩放|放大|缩小'),
     ('page_navigation', r'page[ _-]?(down|up)|scroll|翻页|滚动'),
-    ('file_transfer', r'\b(?:cut|copy|paste)\b|\bmove\b.*\b(?:file|folder)\b|剪切|粘贴|复制|移动文件'),
-    ('editing', r'\b(?:type|edit|confirm|dismiss)\b|输入|编辑|确认|取消'),
+    ('clipboard', r'\b(?:cut|copy|paste)\b|\bmove\b.*\b(?:file|folder)\b|剪切|粘贴|复制|移动文件'),
+    ('undo', r'\bundo\b|撤销'),
+    ('focus_navigation', r'\b(?:next|previous) (?:control|field)\b|焦点遍历|下一个控件'),
+    ('context_menu', r'\bcontext menu\b|上下文菜单|右键菜单'),
+    ('popup_dismiss', r'\bdismiss\b|\bcancel\b|取消|关闭弹窗'),
+    ('editing', r'\b(?:type|edit|confirm)\b|输入|编辑|确认'),
 )
+# Intent is never app detection; these operations need a named toolset.
+SCOPED_INTENT = r'\b(?:rename|maximi[sz]e|unmaximi[sz]e|minimi[sz]e|zoom)\b|fit.page|重命名|扩展名|最大化|最小化|缩放|放大|缩小'
 
 
-def select_topic(proposals):
-    """Only intent routing, never a claim that an app/focus was detected."""
-    proposals = [text for text in proposals if isinstance(text, str)]
-    # Only the newest intent routes automatically. An old plan must not keep a
-    # window/file recipe alive through unrelated later observations.
-    for text in proposals[:1]:
-        if not isinstance(text, str):
-            continue
-        requests = re.findall(r'<key_lookup>([a-z_]+)</key_lookup>', text)
-        if len(requests) == 1 and requests[0] in CATALOG:
-            return requests[0], 'same_actor_explicit_lookup'
-        if '<key_lookup' in text:
-            return None, 'invalid_lookup'
-    for text in proposals[:1]:
-        for topic, pattern in PATTERNS:
-            if isinstance(text, str) and re.search(pattern, text, re.I):
-                return topic, 'recent_model_intent_not_visual_detection'
+def normalize_toolsets(toolsets=()):
+    """The current actor is pinned to Linux/X11; foreign backends are references."""
+    if not isinstance(toolsets, (list, tuple)) or any(not isinstance(key, str) for key in toolsets):
+        raise ValueError('Keyboard toolsets must be a list of exact catalog IDs')
+    if len(set(toolsets)) != len(toolsets):
+        raise ValueError('Duplicate keyboard toolset')
+    for key in toolsets:
+        if key == 'general' or key not in TOOLSETS:
+            raise ValueError('Unknown or redundant keyboard toolset: ' + key)
+        entry = TOOLSETS[key]
+        if entry['reference_only'] or not entry['topics'] or DATA['runtime_platform'] not in entry['platforms']:
+            raise ValueError('Keyboard toolset is incompatible with the Linux/X11 actor: ' + key)
+    return tuple(sorted(toolsets))
+
+
+def active_catalog(toolsets=()):
+    active = dict(CATALOG)
+    for key in normalize_toolsets(toolsets):
+        for name, entry in TOOLSETS[key]['topics'].items():
+            active[key + '.' + name] = entry
+    return active
+
+
+def select_topic(proposals, toolsets=()):
+    """Newest intent only. Scoped references require both opt-in and exact lookup."""
+    active = active_catalog(toolsets)
+    # An empty newest intent must not revive an older request.
+    text = proposals[0] if proposals and isinstance(proposals[0], str) else ''
+    if '<key_lookup' in text or '</key_lookup' in text:
+        requests = re.findall(r'<key_lookup>([a-z0-9_.]+)</key_lookup>', text)
+        if (text.count('<key_lookup>') == text.count('</key_lookup>') == 1
+                and text.count('<key_lookup') == 1 and len(requests) == 1):
+            if requests[0] in active:
+                return requests[0], 'same_actor_explicit_lookup'
+            if any(requests[0].startswith(key + '.') for key in TOOLSETS if key != 'general'):
+                return None, 'disabled_or_unknown_scoped_lookup'
+        return None, 'invalid_lookup'
+    if re.search(SCOPED_INTENT, text, re.I):
+        return None, 'scoped_intent_requires_explicit_toolset_and_lookup'
+    for topic, pattern in PATTERNS:
+        if re.search(pattern, text, re.I):
+            return topic, 'recent_model_intent_not_visual_detection'
     return None, 'no_matching_intent'
 
 
-def key_topic(keys):
-    if any(k in ('pagedown', 'pageup', 'page_down', 'page_up', 'home', 'end') for k in keys):
-        return 'page_navigation'
-    if 'ctrl' in keys and any(k in ('-', '+', 'minus') for k in keys):
-        return 'zoom'
-    if 'ctrl' in keys and any(k in ('x', 'c', 'v') for k in keys):
-        return 'file_transfer'
-    if 'alt' in keys and 'f10' in keys:
-        return 'window_maximize'
-    if 'win' in keys and 'h' in keys:
-        return 'window_minimize'
-    if 'win' in keys and 'tab' in keys:
-        return 'window_switch'
-    if 'f2' in keys:
-        return 'rename'
-    return 'editing'
+def key_topic(keys, topic=None, toolsets=()):
+    """Exact chords only; unknown keys never become editing evidence."""
+    active = active_catalog(toolsets)
+    if topic is not None:
+        row = active.get(topic)
+        return topic if row and any(r['tool']['keys'] == keys for r in row['recipes']) else None
+    matches = [name for name, entry in active.items() if any(r['tool']['keys'] == keys for r in entry['recipes'])]
+    return matches[0] if len(matches) == 1 else None
 
 
-def record(topic, selection, memories=(), omitted=0):
-    catalog = CATALOG[topic]
+def record(topic, selection, memories=(), omitted=0, *, toolsets=()):
+    catalog = active_catalog(toolsets)[topic]
+    group_id = topic.rsplit('.', 1)[0] if '.' in topic else 'general'
     return {'version': VERSION, 'grade': 'key_reference_and_episode_evidence',
-        'topic': topic, 'selection': selection, 'scope': catalog['scope'],
-        'source': SOURCES[catalog['source']],
-        'recipes': [{'intent': intent, 'tool': {'action': 'key', 'keys': keys}}
-                    for intent, keys in catalog['recipes']],
-        'check': catalog.get('check', 'Recheck app/focus and visual effect.'),
+        'topic': topic, 'selection': selection, 'toolset': group_id, 'scope': catalog['scope'],
+        'source': SOURCES[catalog['sources'][0]],
+        'recipes': deepcopy(catalog['recipes']), 'check': catalog['check'],
         'memory': deepcopy(list(memories)), 'memory_omitted': omitted}
 
 
-def policy():
-    return {'version': VERSION, 'topics': list(CATALOG), 'max_key_edges': 32, 'max_memory_rows': 2,
-            'catalog_sha256': hashlib.sha256(dumps({'catalog': CATALOG, 'sources': SOURCES}).encode()).hexdigest(),
-            'selection': 'newest explicit concrete lookup or matching operation; otherwise omit; not visual detection',
-            'memory': 'same episode journal; command return/image delta distinct from semantic success'}
+def lookup_guide(toolsets=()):
+    return {'format': '<key_lookup>topic</key_lookup>', 'topics': list(active_catalog(toolsets)),
+            'check': 'Scoped topics need exact lookup; verify current app/focus.'}
+
+
+def policy(toolsets=()):
+    enabled = normalize_toolsets(toolsets)
+    return {'version': VERSION, 'platform': DATA['runtime_platform'],
+            'enabled_toolsets': ['general', *enabled], 'topics': list(active_catalog(enabled)),
+            'max_key_edges': 32, 'max_memory_rows': 2,
+            'catalog_sha256': CATALOG_SHA256,
+            'selection': 'general newest intent; scoped exact lookup only after explicit opt-in; no app detection',
+            'memory': 'same episode exact chord evidence; applicability and semantic success remain unknown'}

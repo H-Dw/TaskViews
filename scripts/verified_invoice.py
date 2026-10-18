@@ -94,8 +94,10 @@ def sources(benchmark, compiler, task_key='invoice'):
 
 
 def project_identity():
-    return {str(path.relative_to(PROJECT)): sha(path) for folder in ('ui_kobe', 'kobe_views', 'scripts')
-            for path in sorted((PROJECT / folder).rglob('*.py'))}
+    paths = [path for folder in ('ui_kobe', 'kobe_views', 'scripts')
+             for path in (PROJECT / folder).rglob('*.py')]
+    paths.extend((PROJECT / 'kobe_views/key_tools').glob('*.json'))
+    return {str(path.relative_to(PROJECT)): sha(path) for path in sorted(paths)}
 
 
 def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolute', experiment='legacy-low35',
@@ -130,6 +132,7 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
     arms = MAX40_EXPERIMENTS[experiment][1] if max40 else ARMS
     max_steps = 40 if max40 else 35
     from ui_kobe.osworld.taskviews_profiles import frozen_profile, mini_cua_contract
+    from kobe_views.keyboard_view import policy as keyboard_policy
     contract = mini_cua_contract()
     contract['coordinate_type'] = coordinate_type
     if provider == 'sx':
@@ -159,6 +162,7 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         'cua_contract': contract, 'taskviews_profile': 'mini_fixed_v1',
         'arm_profiles': {arm: frozen_profile(arm) for arm in arms},
         'controls_view': 'disabled', 'full_taskviews_feedback': False,
+        'mini_keyboard_tools': keyboard_policy(),
         'official_runner': 'lib_run_single.run_single_example', 'sleep_after_execution': 3,
         'evaluation': f'original DesktopEnv.evaluate after explicit terminal action or {max_steps} decisions',
         'score_threshold': None, 'checkpoint_resume': False,
@@ -401,6 +405,7 @@ def execute_arm(args):
     task = verify_task(plan['sources']['benchmark']['repo'], plan.get('task_key','invoice'))
     stage_cache(plan, stage, task)
     os.environ.update(UI_KOBE_TASKVIEWS_PROFILE='mini_fixed_v1', UI_KOBE_MINI_CONTROLS_VIEW='disabled',
+        UI_KOBE_MINI_KEYBOARD_TOOLS='[]',
         UI_KOBE_TASKVIEWS_FEEDBACK_V10='0', UI_KOBE_GENERATION_PROFILE=plan['generation_profile']['name'],
         UI_KOBE_CUA_CONTRACT_JSON=json.dumps(plan['cua_contract']), UI_KOBE_TASK_ID=plan['task_id'],
         UI_KOBE_TELEMETRY_DIR=str(stage / 'telemetry'), OSWORLD_FULL_RUN_ID=plan['run_ids'][args.arm])

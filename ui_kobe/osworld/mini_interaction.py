@@ -15,11 +15,6 @@ WORKFLOW_GUIDANCE = (
     'and the destination, then verify the result. Batch only predictable actions with established '
     'focus; observe again after layout/window changes.'
 )
-SCROLL_GUIDANCE = (
-    'The pinned compiler passes scroll.pixels directly as wheel ticks, not screen pixels, '
-    'and ignores its coordinate. Move the pointer into the target pane first; start with '
-    '3-5 ticks and observe before increasing. A blank page alone is not a rendering failure.'
-)
 
 
 def validate_keys(arguments, response):

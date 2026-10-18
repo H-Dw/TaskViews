@@ -29,7 +29,8 @@ def frozen_profile(arm):
 def validate_profile(plan):
     profile = plan.get('taskviews_profile', FULL_PROFILE)
     if profile == FULL_PROFILE:
-        if plan.get('mini_profile') is not None or plan.get('mini_controls_view') is not None:
+        if (plan.get('mini_profile') is not None or plan.get('mini_controls_view') is not None
+                or plan.get('mini_keyboard_tools') is not None):
             raise ValueError('Full TaskViews cannot carry a Mini profile')
         return profile
     arms = plan.get('arms', [])
@@ -44,6 +45,15 @@ def validate_profile(plan):
         from kobe_views.controls_view import policy
         if arms != ['taskviews'] or plan['mini_controls_view'] != policy():
             raise ValueError('Controls view requires its exact declared Mini extension')
+    if plan.get('mini_keyboard_tools') is not None:
+        from kobe_views.keyboard_view import policy
+        selected = plan['mini_keyboard_tools']
+        if (not isinstance(selected, dict) or not isinstance(selected.get('enabled_toolsets'), list)
+                or selected['enabled_toolsets'][:1] != ['general'] or arms != ['taskviews']
+                or selected != policy(selected['enabled_toolsets'][1:])):
+            raise ValueError('Keyboard tools require their exact declared Mini policy')
+        if plan.get('mini_controls_view') is not None and len(selected['enabled_toolsets']) > 1:
+            raise ValueError('Scoped keyboard tools cannot use the legacy controls-only packet')
     return profile
 
 

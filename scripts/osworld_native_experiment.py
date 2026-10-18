@@ -49,8 +49,10 @@ def digest(path):
 
 
 def project_snapshot():
-    return {str(p.relative_to(PROJECT)): digest(p) for folder in ("ui_kobe", "kobe_views", "scripts")
-            for p in sorted((PROJECT / folder).rglob("*.py"))}
+    paths = [p for folder in ("ui_kobe", "kobe_views", "scripts")
+             for p in (PROJECT / folder).rglob("*.py")]
+    paths.extend((PROJECT / 'kobe_views' / 'key_tools').glob('*.json'))
+    return {str(p.relative_to(PROJECT)): digest(p) for p in sorted(paths)}
 
 
 def host_status():
@@ -208,7 +210,8 @@ def require_mini_branch():
 def prepare(root, task, validation, purpose="evaluation", admission=None, profile_name="low-16k", cua_config=None,
             agent_interface='official-xml', compatibility=None, max_steps=None, checkpoints=False,
             taskviews_feedback=False, taskviews_profile='full_checkpoint', qwen_arm='taskviews',
-            inspection_minutes=None, qwen_generation_profile=None, evaluation_steps=None, completion_pipeline=None):
+            inspection_minutes=None, qwen_generation_profile=None, evaluation_steps=None, completion_pipeline=None,
+            keyboard_toolsets=None):
     from examples.osworld2_eval import official_identity
     from ui_kobe.osworld.task_examples import task_example
     from ui_kobe.osworld.runner import source_snapshot
@@ -218,6 +221,10 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         generation_profile as qwen_profile, generation_request_fields, request_policy)
     from ui_kobe.osworld.taskviews_profiles import FULL_PROFILE, MINI_PROFILE, frozen_profile, mini_cua_contract
     mini = taskviews_profile == MINI_PROFILE
+    from kobe_views.keyboard_view import policy as keyboard_policy
+    keyboard = keyboard_policy(() if keyboard_toolsets is None else keyboard_toolsets)
+    if keyboard_toolsets and (not mini or qwen_arm != 'taskviews'):
+        raise ValueError('Explicit keyboard toolsets require the Mini TaskViews arm')
     qwen = agent_interface == 'qwen-native'
     if inspection_minutes is not None and (
             not checkpoints or type(inspection_minutes) is not int or not 1 <= inspection_minutes <= 1440):
@@ -369,6 +376,8 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     plan['taskviews_profile'] = taskviews_profile
     if mini:
         plan['mini_profile'] = frozen_profile(qwen_arm)
+        if qwen_arm == 'taskviews':
+            plan['mini_keyboard_tools'] = keyboard
         plan['source_branch'] = 'mini'
         plan['source_commit'] = committed_source()
         plan['iteration_commit_required'] = True
@@ -515,6 +524,8 @@ def launch(root, arm):
         manifest['qwen_image_transport_policy'] = plan['qwen_image_transport_policy']
     if mini:
         manifest['mini_profile'] = plan['mini_profile']
+        if 'mini_keyboard_tools' in plan:
+            manifest['mini_keyboard_tools'] = plan['mini_keyboard_tools']
         manifest['source_branch'] = plan['source_branch']
     if plan.get('checkpoint_policy', {}).get('enabled'):
         if arm != 'taskviews' and not (mini and arm == 'ui_kobe_like'):
@@ -907,6 +918,8 @@ def main():
     parser.add_argument('--taskviews-feedback', action='store_true', help='Freeze the validated action feedback/pointer workflow for Qwen TaskViews')
     parser.add_argument('--taskviews-profile', choices=('full_checkpoint', 'mini_fixed_v1'), default='full_checkpoint')
     parser.add_argument('--qwen-arm', choices=('taskviews', 'ui_kobe_like'), default='taskviews')
+    parser.add_argument('--keyboard-toolset', action='append', dest='keyboard_toolsets',
+                        help='Explicit Linux keyboard toolset ID; repeat to add. Default: general only')
     parser.add_argument('--inspection-minutes', type=int, help='Freeze the requested checkpoint inspection interval')
     parser.add_argument('--qwen-generation-profile', help='Explicit Qwen generation profile; legacy default remains disabled')
     parser.add_argument('--evaluation-steps', type=int, nargs='+', help='Official evaluation after these completed decisions; last equals max-steps')
@@ -918,7 +931,7 @@ def main():
         prepare(root, args.task, args.validation, args.purpose, args.admission, args.profile, args.cua_config,
                 args.agent_interface, args.k3_compatibility, args.max_steps, args.checkpoints, args.taskviews_feedback,
                 args.taskviews_profile, args.qwen_arm, args.inspection_minutes,
-                args.qwen_generation_profile, args.evaluation_steps, args.completion_pipeline)
+                args.qwen_generation_profile, args.evaluation_steps, args.completion_pipeline, args.keyboard_toolsets)
     elif args.action == "launch":
         lock = Path.home() / ".cache/ui-kobe-osworld-experiment.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)

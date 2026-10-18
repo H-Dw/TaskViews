@@ -52,6 +52,7 @@ include = [
     "/README.md",
     "/README.upstream.md",
     "/docs",
+    "/tools",
     "/tests",
     "/examples",
     "/UPSTREAM.md",

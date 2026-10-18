@@ -3,56 +3,127 @@ from copy import deepcopy
 import json
 import re
 
-VERSION = 'mini_artifact_review_v1'
+VERSION = 'mini_artifact_review_v2'
 CHECKS = ('source_confirmed', 'content_previewed', 'name_correct', 'destination_confirmed')
 LABEL = 'artifact_review'
+MAX_REVIEW_BYTES = 2400
+MAX_CANDIDATE_CHARS = 300
+MAX_OBSERVED_CHARS = 160
+MAX_REASON_CHARS = 240
 GUIDANCE = (
     'Observation screenshots are not exports; timestamps/menu closure/returned are not content proof. '
-    'Before success preview the candidate and emit artifact_review per current.artifact.review_schema; reports stay unverified. '
+    'Before success preview the candidate; follow current.artifact.review_schema in public content. '
+    'Missing evidence: inspect, never invent. '
 )
-REVIEW_SCHEMA = ('<artifact_review>{"applicable":true,"candidate":"path",'
-    '"checks":{"CHECK":{"ref":SEQ,"observed":"evidence"}}}</artifact_review>; '
-    'CHECK=each verification key; preview ref=current.ref. No artifact: {"applicable":false,"reason":"why"}.')
+
+
+def tagged_review(value):
+    """Serialize an explicit report/template; never supply missing evidence."""
+    return f'<{LABEL}>' + json.dumps(value, ensure_ascii=False, separators=(',', ':')) + f'</{LABEL}>'
+
+
+def review_schema():
+    # A complete JSON example avoids requiring the actor to expand CHECK/SEQ.
+    # Its values are placeholders, not observations or a successful report.
+    example = {'applicable': True, 'candidate': 'PATH', 'checks': {
+        key: {'ref': 1, 'observed': 'FACT'} for key in CHECKS}}
+    return (
+        'Success: ONE tagged JSON in assistant.content + native terminate; not reasoning/tool args. '
+        'Replace ALL example values. All 4 checks; '
+        'refs=positive same-task observation seq; content_previewed.ref=current.ref. '
+        f'No extra keys; candidate 1..{MAX_CANDIDATE_CHARS}, observed 1..{MAX_OBSERVED_CHARS} chars '
+        f'(aim<=80); JSON<={MAX_REVIEW_BYTES} UTF8 bytes. '
+        + tagged_review(example) + ' No-file tasks only: '
+        + tagged_review({'applicable': False, 'reason': 'WHY'})
+        + f'; reason 1..{MAX_REASON_CHARS} chars.')
+
+
+REVIEW_SCHEMA = review_schema()
+
+
+class ReviewError(ValueError):
+    """Bounded diagnostics contain field names/counts, never submitted prose."""
+
+    def __init__(self, code, detail):
+        self.code = code
+        super().__init__(f'{code}: {detail}')
 
 
 def unknown_checks():
     return dict.fromkeys(CHECKS, 'unknown')
 
 
-def parse_review(text):
-    """Accept one bounded public note, not prose, booleans or claimed truth grades."""
-    if not isinstance(text, str):
-        return None
+def validate_review(text, *, final=False):
+    """Validate without rewriting; diagnose every field error after JSON parses."""
+    if not isinstance(text, str) or f'<{LABEL}>' not in text:
+        raise ReviewError('missing_tag', 'Put one <artifact_review>...</artifact_review> in assistant.content')
     matches = re.findall(r'<artifact_review>(.*?)</artifact_review>', text, re.S)
-    if len(matches) != 1 or len(matches[0].encode()) > 2400:
-        return None
+    if len(matches) != 1 or text.count(f'<{LABEL}>') != 1 or text.count(f'</{LABEL}>') != 1:
+        raise ReviewError('tag_count', 'Exactly one complete <artifact_review>...</artifact_review> is required')
+    size = len(matches[0].encode('utf-8'))
+    if size > MAX_REVIEW_BYTES:
+        raise ReviewError('report_bytes', f'Inner JSON has {size} UTF8 bytes; maximum {MAX_REVIEW_BYTES}')
     try:
         value = json.loads(matches[0])
-    except (ValueError, TypeError):
-        return None
+    except json.JSONDecodeError as exc:
+        raise ReviewError('invalid_json', f'{exc.msg} at line {exc.lineno}, column {exc.colno}; '
+                          'return complete JSON with all objects closed') from exc
+    except (ValueError, RecursionError) as exc:
+        raise ReviewError('invalid_json', 'Return the shallow JSON object in review_schema') from exc
     if not isinstance(value, dict) or type(value.get('applicable')) is not bool:
-        return None
+        raise ReviewError('report_shape', 'Expected an object with boolean applicable')
+    issues = []
+
+    def bounded_text(item, field, limit):
+        if not isinstance(item, str):
+            issues.append(f'{field}: expected string of 1..{limit} chars')
+        elif not 0 < len(item.strip()) <= limit:
+            issues.append(f'{field}: {len(item.strip())} chars; allowed 1..{limit}')
+
     if value['applicable'] is False:
-        reason = value.get('reason')
-        return value if (set(value) == {'applicable', 'reason'} and isinstance(reason, str)
-                         and 0 < len(reason.strip()) <= 240) else None
-    if set(value) != {'applicable', 'candidate', 'checks'}:
-        return None
-    if not isinstance(value['candidate'], str) or not 0 < len(value['candidate'].strip()) <= 300:
-        return None
-    checks = value['checks']
-    if not isinstance(checks, dict) or not set(checks) <= set(CHECKS):
-        return None
-    for check in checks.values():
-        if (not isinstance(check, dict) or set(check) != {'ref', 'observed'}
-                or type(check['ref']) is not int or check['ref'] < 1
-                or not isinstance(check['observed'], str) or not 0 < len(check['observed'].strip()) <= 160):
-            return None
+        if set(value) != {'applicable', 'reason'}:
+            issues.append('no-file report keys must be exactly applicable,reason')
+        bounded_text(value.get('reason'), 'reason', MAX_REASON_CHARS)
+    else:
+        if set(value) != {'applicable', 'candidate', 'checks'}:
+            issues.append('artifact report keys must be exactly applicable,candidate,checks')
+        bounded_text(value.get('candidate'), 'candidate', MAX_CANDIDATE_CHARS)
+        checks = value.get('checks')
+        if not isinstance(checks, dict):
+            issues.append('checks: expected object with the 4 review keys')
+        else:
+            if not set(checks) <= set(CHECKS):
+                issues.append('checks: unknown keys; use only the 4 review keys')
+            if final and (missing := [key for key in CHECKS if key not in checks]):
+                issues.append('checks missing: ' + ','.join(missing))
+            for key in CHECKS:
+                if key not in checks:
+                    continue  # Partial reports can be recorded before success.
+                check = checks[key]
+                if not isinstance(check, dict) or set(check) != {'ref', 'observed'}:
+                    issues.append(f'{key}: keys must be exactly ref,observed')
+                    continue
+                if type(check['ref']) is not int or check['ref'] < 1:
+                    issues.append(f'{key}.ref: expected positive integer observation seq')
+                bounded_text(check['observed'], f'{key}.observed', MAX_OBSERVED_CHARS)
+    if issues:
+        raise ReviewError('report_fields', '; '.join(issues))
     return deepcopy(value)
+
+
+def parse_review(text):
+    """Optional historical notes keep the original None-on-invalid interface."""
+    try:
+        return validate_review(text)
+    except ReviewError:
+        return None
 
 
 def policy():
     return {'version': VERSION, 'checks': list(CHECKS), 'default': 'unknown',
             'model_reports': 'unverified, bound to same-episode observation references',
             'success_gate': 'public review of all checks; current-frame candidate-content review',
+            'format_limits': {'json_utf8_bytes': MAX_REVIEW_BYTES, 'candidate_chars': MAX_CANDIDATE_CHARS,
+                              'observed_chars': MAX_OBSERVED_CHARS, 'reason_chars': MAX_REASON_CHARS},
+            'diagnostics': 'typed format/reference errors; no report rewriting',
             'semantic_certification': False, 'extra_role_requests': 0}

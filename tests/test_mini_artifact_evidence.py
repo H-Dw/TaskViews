@@ -150,17 +150,17 @@ def test_no_concrete_operation_omits_keyboard_instead_of_guessing(text):
 
 def test_rename_reference_explains_selection_and_extension_once():
     from kobe_views.keyboard_view import record
-    topic, reason = select_topic(['Rename the selected file'])
-    value = record(topic, reason)
+    topic, reason = select_topic(['<key_lookup>type.file_manager.rename</key_lookup>'], ['type.file_manager'])
+    value = record(topic, reason, toolsets=['type.file_manager'])
     assert 'basename' in value['scope'] and 'extension exactly once' in value['check']
-    assert {'window_maximize','window_minimize','window_switch'} <= set(CATALOG)
+    assert 'window_switch' in CATALOG and 'window_maximize' not in CATALOG and 'rename' not in CATALOG
 
 
 def test_old_checkpoint_does_not_gain_new_review_semantics(monkeypatch, tmp_path):
     actor, obs, _ = make_actor(monkeypatch, tmp_path)
     predict(actor, obs)
     state = deepcopy(actor.checkpoint_state())
-    assert state['contract']['implementation_revision'] == REVISION == 'mini_artifact_evidence_v4'
+    assert state['contract']['implementation_revision'] == REVISION == 'mini_artifact_protocol_v6'
     state['contract']['implementation_revision'] = 'mini_keyboard_memory_v3'
     from ui_kobe.osworld.checkpoints import ReadAnomaly
     with pytest.raises(ReadAnomaly):
