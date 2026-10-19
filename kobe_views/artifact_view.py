@@ -3,7 +3,7 @@ from copy import deepcopy
 import json
 import re
 
-VERSION = 'mini_artifact_review_v2'
+VERSION = 'mini_artifact_review_v3'
 CHECKS = ('source_confirmed', 'content_previewed', 'name_correct', 'destination_confirmed')
 LABEL = 'artifact_review'
 MAX_REVIEW_BYTES = 2400
@@ -23,18 +23,17 @@ def tagged_review(value):
 
 
 def review_schema():
-    # A complete JSON example avoids requiring the actor to expand CHECK/SEQ.
-    # Its values are placeholders, not observations or a successful report.
-    example = {'applicable': True, 'candidate': 'PATH', 'checks': {
-        key: {'ref': 1, 'observed': 'FACT'} for key in CHECKS}}
+    # One object to close. Pairs preserve each fact's own observation without
+    # the applicable/checks/ref/observed wrappers in every generated report.
+    example = {'candidate': 'PATH', **{key: [1, 'FACT'] for key in CHECKS}}
     return (
-        'Success: ONE tagged JSON in assistant.content + native terminate; not reasoning/tool args. '
-        'Replace ALL example values. All 4 checks; '
-        'refs=positive same-task observation seq; content_previewed.ref=current.ref. '
+        'Success: assistant.content ONE tagged JSON + terminate; not reasoning/tool args. '
+        'Replace ALL example values; 4 pairs=[same-task obs seq>=1,fact]; '
+        'content_previewed[0]=current.ref. '
         f'No extra keys; candidate 1..{MAX_CANDIDATE_CHARS}, observed 1..{MAX_OBSERVED_CHARS} chars '
-        f'(aim<=80); JSON<={MAX_REVIEW_BYTES} UTF8 bytes. '
+        f'; JSON<={MAX_REVIEW_BYTES} UTF8 bytes. '
         + tagged_review(example) + ' No-file tasks only: '
-        + tagged_review({'applicable': False, 'reason': 'WHY'})
+        + tagged_review({'no_artifact': 'WHY'})
         + f'; reason 1..{MAX_REASON_CHARS} chars.')
 
 
@@ -51,6 +50,31 @@ class ReviewError(ValueError):
 
 def unknown_checks():
     return dict.fromkeys(CHECKS, 'unknown')
+
+
+def normalize_report(value):
+    """Normalize explicit flat fields, never fill facts or repair malformed JSON.
+
+    Strict v2 input remains readable for original journal records and older
+    model responses. Only the flat form is advertised in new actor prompts.
+    """
+    if not isinstance(value, dict) or 'applicable' in value:
+        return value
+    if 'no_artifact' in value:
+        if set(value) != {'no_artifact'}:
+            raise ReviewError('report_fields', 'no-file report keys must be exactly no_artifact')
+        return {'applicable': False, 'reason': value['no_artifact']}
+    if not set(value) <= {'candidate', *CHECKS} or 'candidate' not in value:
+        raise ReviewError('report_fields', 'Use candidate and only the 4 review keys')
+    checks = {}
+    for key in CHECKS:
+        if key not in value:
+            continue
+        pair = value[key]
+        if not isinstance(pair, list) or len(pair) != 2:
+            raise ReviewError('report_fields', f'{key}: expected [observation seq, short fact]')
+        checks[key] = {'ref': pair[0], 'observed': pair[1]}
+    return {'applicable': True, 'candidate': value['candidate'], 'checks': checks}
 
 
 def validate_review(text, *, final=False):
@@ -70,6 +94,7 @@ def validate_review(text, *, final=False):
                           'return complete JSON with all objects closed') from exc
     except (ValueError, RecursionError) as exc:
         raise ReviewError('invalid_json', 'Return the shallow JSON object in review_schema') from exc
+    value = normalize_report(value)
     if not isinstance(value, dict) or type(value.get('applicable')) is not bool:
         raise ReviewError('report_shape', 'Expected an object with boolean applicable')
     issues = []
@@ -125,5 +150,8 @@ def policy():
             'success_gate': 'public review of all checks; current-frame candidate-content review',
             'format_limits': {'json_utf8_bytes': MAX_REVIEW_BYTES, 'candidate_chars': MAX_CANDIDATE_CHARS,
                               'observed_chars': MAX_OBSERVED_CHARS, 'reason_chars': MAX_REASON_CHARS},
-            'diagnostics': 'typed format/reference errors; no report rewriting',
+            'wire_format': 'flat candidate + 4 [observation seq, fact] pairs; or no_artifact reason',
+            'legacy_read': 'strict v2 report; no malformed JSON rewriting',
+            'recovery': 'Mini report feedback only; shared executor repair/time/output pool',
+            'diagnostics': 'typed format/reference errors, separate from native tool errors',
             'semantic_certification': False, 'extra_role_requests': 0}

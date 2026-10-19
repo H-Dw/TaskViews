@@ -214,18 +214,15 @@ class MiniTaskViewsContext:
             raise ReviewError('stale_preview', 'content_previewed.ref must equal current.ref; '
                               'preview candidate contents on the current observation before success')
 
-    def require_final_review(self, content, response):
-        from ui_kobe.api.kimi_stream import StreamProtocolError
+    def require_final_review(self, content):
         try:
             note = validate_review(content, final=True)
             self.validate_review_references(note, final=True)
         except ReviewError as exc:
             telemetry.emit('mini_artifact_review_rejected', failure=exc.code, action_executed=False)
-            feedback = (f'Mini public artifact report failed: {exc}. '
-                        'Correct assistant.content per current.artifact.review_schema; keep native tool syntax. '
-                        'If evidence is missing, inspect before success.')
-            raise StreamProtocolError(feedback, code='mini_artifact_review', observed_response=response.model_dump(),
-                                      retryable=True) from exc
+            # This is an auxiliary report failure, not a native tool protocol
+            # failure. Mini's bounded loop handles it without reasoning replay.
+            raise
         telemetry.emit('mini_artifact_review', applicable_reported=note['applicable'],
             checks_reported=list(note.get('checks', {})), verification=unknown_checks(),
             grade='model_report_not_independent_verification', extra_role_requests=0)

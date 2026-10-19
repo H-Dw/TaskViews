@@ -9,7 +9,6 @@ from kobe_views import artifact_view as artifact
 from kobe_views.fixed_views import MAX_BYTES, materialize
 from kobe_views.model import dumps
 from ui_kobe.api.kimi_stream import Completion
-from ui_kobe.osworld.checkpoints import ReadAnomaly
 from test_mini_taskviews import make_actor, packet, predict
 
 
@@ -48,7 +47,7 @@ def test_complete_examples_and_limits_share_the_validator_contract(monkeypatch):
     assert tuple(example['checks']) == artifact.CHECKS
     assert no_file == {'applicable': False, 'reason': 'WHY'}
     assert 'assistant.content' in schema and 'not reasoning/tool args' in schema
-    assert 'content_previewed.ref=current.ref' in schema
+    assert 'content_previewed[0]=current.ref' in schema
     assert 'ALL example values' in schema and 'No-file tasks only' in schema
     value = report()
     with pytest.raises(artifact.ReviewError, match='allowed 1..17'):
@@ -117,8 +116,8 @@ def test_first_success_uses_actual_prompt_template_without_a_repair(monkeypatch,
         schema = current['artifact']['review_schema']
         example = json.loads(re.findall(r'<artifact_review>(.*?)</artifact_review>', schema)[0])
         example['candidate'] = '/work/synthetic.ext'
-        for check in example['checks'].values():
-            check.update(ref=current['ref'], observed='Synthetic fixture evidence')
+        for key in artifact.CHECKS:
+            example[key] = [current['ref'], 'Synthetic fixture evidence']
         assert current['artifact']['verification'] == artifact.unknown_checks()
         return artifact.tagged_review(example)
     annotate(transport, from_prompt, reasoning_chars=16939)
@@ -132,7 +131,7 @@ def test_first_success_uses_actual_prompt_template_without_a_repair(monkeypatch,
 
 @pytest.mark.parametrize('failure,expected', [('missing_tag', 'missing_tag'), ('invalid_json', 'invalid_json'),
                                           ('too_long', 'observed: 161 chars; allowed 1..160')])
-def test_shared_repair_gets_specific_public_content_feedback(monkeypatch, tmp_path, failure, expected):
+def test_mini_report_feedback_is_separate_from_native_tool_repair(monkeypatch, tmp_path, failure, expected):
     actor, obs, transport = make_actor(monkeypatch, tmp_path,
         actions=[{'action': 'terminate', 'status': 'success'}] * 2)
     def content(request, attempt):
@@ -148,8 +147,12 @@ def test_shared_repair_gets_specific_public_content_feedback(monkeypatch, tmp_pa
     assert predict(actor, obs) == ['DONE']
     assert len(transport.requests) == 2 and actor.total_steps == 1
     repair = transport.requests[1]['messages']
-    receipt = next(m for m in repair if m.get('tool_call_id') == 'original-1')
-    assert expected in receipt['content'] and 'Correct assistant.content' in receipt['content']
+    assert not any(m.get('tool_call_id') == 'original-1' or m.get('role') == 'assistant' for m in repair)
+    feedback = next(p['text'] for m in repair if m.get('role') == 'user' and isinstance(m.get('content'), list)
+                    for p in m['content'] if 'Mini auxiliary report rejected' in p.get('text', ''))
+    assert expected in feedback and 'Correct assistant.content' in feedback
+    assert actor.last_trace['mini_recovery']['report_rejections'] == 1
+    assert actor.last_trace['mini_recovery']['native_rejections'] == 0
     assert actor.pending == 'original-2' and actor.contract.tool_repair_retries == 2
     assert actor.execution_journal.position == 1  # Only the accepted DONE was dispatched by the fixture.
     actor.close()
@@ -172,13 +175,14 @@ def test_reference_errors_identify_the_field_without_inventing_evidence(monkeypa
     actor.close()
 
 
-def test_large_bad_repair_is_still_blocked_before_an_extra_model_request(monkeypatch, tmp_path):
+def test_large_bad_report_does_not_replay_reasoning_into_native_repair(monkeypatch, tmp_path):
     actor, obs, transport = make_actor(monkeypatch, tmp_path,
-        actions=[{'action': 'terminate', 'status': 'success'}])
-    annotate(transport, lambda request, attempt: 'No tagged report', reasoning_chars=33000)
-    with pytest.raises(ReadAnomaly, match='Mandatory native history'):
-        predict(actor, obs)
-    assert len(transport.requests) == 1 and actor.contract.context_max_text_chars == 32000
+        actions=[{'action': 'terminate', 'status': 'success'}] * 2)
+    annotate(transport, lambda request, attempt: 'No tagged report' if attempt == 1 else artifact.tagged_review(
+        report(request_packet(request)['views']['current']['records'][0]['ref'])), reasoning_chars=33000)
+    assert predict(actor, obs) == ['DONE']
+    assert len(transport.requests) == 2 and actor.contract.context_max_text_chars == 32000
+    assert not any('reasoning_content' in message for message in transport.requests[1]['messages'])
     actor.close()
 
 

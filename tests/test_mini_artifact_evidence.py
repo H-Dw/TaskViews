@@ -4,10 +4,10 @@ import json
 
 import pytest
 
-from kobe_views.artifact_view import CHECKS, parse_review, unknown_checks
+from kobe_views.artifact_view import CHECKS, ReviewError, parse_review, unknown_checks
 from kobe_views.fixed_views import MAX_BYTES, REVISION
 from kobe_views.keyboard_view import CATALOG, select_topic
-from ui_kobe.api.kimi_stream import Completion, StreamProtocolError
+from ui_kobe.api.kimi_stream import Completion
 from ui_kobe.osworld.qwen_native_base import QwenNativeAgent
 from test_mini_taskviews import TASK, make_actor, original_event, packet, predict
 
@@ -91,8 +91,8 @@ def test_bare_success_is_rejected_before_dispatch_and_repairs_in_original_pool(m
     assert len(transport.requests) == 2 and actor.total_steps == 1
     assert actor.last_trace['step_tokens']['semantic_regenerations'] == 1
     assert actor.contract.tool_repair_retries == 2
-    assert any(m.get('tool_call_id') == 'original-1' and 'review' in m.get('content', '').lower()
-               for m in transport.requests[-1]['messages'])
+    assert not any(m.get('tool_call_id') == 'original-1' for m in transport.requests[-1]['messages'])
+    assert actor.last_trace['mini_recovery']['report_rejections'] == 1
     actor.close()
 
 
@@ -113,7 +113,7 @@ def test_missing_or_stale_content_review_cannot_terminate_success(monkeypatch, t
     predict(actor, obs)
     old = packet(transport)['views']['current']['records'][0]['ref']
     annotate(transport, lambda request: review(old if bad_reference=='old' else bad_reference))
-    with pytest.raises(StreamProtocolError):
+    with pytest.raises(ReviewError):
         predict(actor, obs)
     assert actor.execution_journal.decision is None and actor.executions == []
     assert actor.total_steps == 2 and len(transport.requests) == 4
@@ -160,7 +160,7 @@ def test_old_checkpoint_does_not_gain_new_review_semantics(monkeypatch, tmp_path
     actor, obs, _ = make_actor(monkeypatch, tmp_path)
     predict(actor, obs)
     state = deepcopy(actor.checkpoint_state())
-    assert state['contract']['implementation_revision'] == REVISION == 'mini_artifact_protocol_v6'
+    assert state['contract']['implementation_revision'] == REVISION == 'mini_report_recovery_v7'
     state['contract']['implementation_revision'] = 'mini_keyboard_memory_v3'
     from ui_kobe.osworld.checkpoints import ReadAnomaly
     with pytest.raises(ReadAnomaly):

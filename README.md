@@ -1,5 +1,7 @@
 # OSWorld K3 TaskViews
 
+2026-10-18：Mini 修订为 `mini_report_recovery_v7`。辅助产物报告错误与原生工具错误分流，前者只追加简短反馈，不回填被拒回复及推理；同轮修复按真实输入重新准入，只裁剪完整旧轮，保留任务、当前观察和工具 ID 配对。报告改为扁平四项结构，继续共用原重试池、截止时间和输出预算。实现与真实失败输入的离线验证见 [v7 恢复说明](docs/taskviews-mini-report-recovery-v7.md)。本次不启动线上评测。
+
 2026-10-18：Mini 修订为 `mini_artifact_protocol_v6`，继承 v5 按键目录。产物报告使用完整 JSON 模板和统一长度规则，返回具体格式／引用错误，澄清 unknown 与模型复核的区别，并在原 3000 bytes 内去掉重复元数据、优先保留操作证据。详见 [v6 修复与离线验收](docs/taskviews-mini-artifact-protocol-v6.md)。本次不启动线上评测。
 
 2026-10-17：Mini 按键 View 更新为 `mini_keyboard_tools_v5`。检索 14 类 CUA 评测来源，按通用、软件类型、平台和具体软件整理 51 份 tools 文档、34 个软件条目、190 条配方；默认仅启用 `general`，专用目录须显式选择并按名称检索。见 [按键 tools 入口](tools/keyboard/README.md)、[分类索引](tools/keyboard/index.md)和[评测软件检索](tools/keyboard/survey.md)。这是文档与离线实现更新，旧冻结计划和检查点不自动迁移。

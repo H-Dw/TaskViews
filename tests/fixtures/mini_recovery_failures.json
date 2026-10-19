@@ -1,0 +1,24 @@
+{
+  "kind": "lengths_and_hashes_only_no_private_prompts_or_reasoning",
+  "v4": {
+    "commit": "0d7fc69798c4044dbcaf9e0b15165cb0177682ca",
+    "step": 10,
+    "base_native_text_chars": 19923,
+    "old_blocked_text_chars": 43936,
+    "events_sha256": "c52e89dab92602b325ef5a287d50be71c2b618809fd5467b6979986cebda7354",
+    "responses": [
+      {"failure": "missing_tag", "content_chars": 1311, "reasoning_chars": 3617, "tool_calls_chars": 168, "completion_tokens": 1255, "raw_sse_sha256": "3cd80c80ae49685cd81afa3e075b9cef2de22aeb8c9bbb095b9a8853c9b2af0e"},
+      {"failure": "invalid_json", "content_chars": 1130, "reasoning_chars": 16939, "tool_calls_chars": 168, "completion_tokens": 4541, "raw_sse_sha256": "6cc0f99f74692fa39732372dbbe20044c5990b768652beed81d296e2feb5ec1e"}
+    ]
+  },
+  "v6": {
+    "commit": "8e9d01d0f1a46224e6ad7ac06bd160e1b40086c8",
+    "step": 15,
+    "base_native_text_chars": 16207,
+    "old_blocked_text_chars": 40454,
+    "events_sha256": "c6d04f4272197d47bcf3d85a3e57c3999ad69c14a8478b737bfd7eb36a6b03c8",
+    "responses": [
+      {"failure": "invalid_json", "content_chars": 1074, "reasoning_chars": 22307, "tool_calls_chars": 168, "completion_tokens": 5908, "raw_sse_sha256": "a45bc1b5deea5af318da0c501f8d8175e70e1d62b5645ec8634e1434e8965b04"}
+    ]
+  }
+}

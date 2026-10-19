@@ -254,7 +254,7 @@ def test_oversized_repair_history_pauses_without_an_extra_supplier_call(monkeypa
         return Completion(result)
 
     transport.create = large_candidate
-    with pytest.raises(ReadAnomaly, match='Mandatory native history'):
+    with pytest.raises(ReadAnomaly, match='required current input and native pairs'):
         predict(actor, obs)
     assert len(transport.requests) == 1
     actor.close()

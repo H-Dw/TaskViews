@@ -1,4 +1,4 @@
-"""M0 fixed TaskViews on the unchanged shared native actor and compiler."""
+"""Mini views and bounded recovery on the shared native predict/compiler."""
 import json
 import os
 
@@ -12,6 +12,7 @@ from .qwen_native_base import QwenNativeProvider
 from .mini_interaction import validate_keys
 from kobe_views.artifact_view import GUIDANCE as ARTIFACT_GUIDANCE
 from kobe_views.keyboard_view import normalize_toolsets, policy as keyboard_policy
+from .mini_recovery import generate_candidate as generate_mini_candidate
 
 
 FRAME_CONTRACT_PREFIX = 'Trusted screenshot/coordinate contract: '
@@ -44,7 +45,7 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
         result = super().validate_actor_candidate(response)
         validate_keys(result[0], response)
         if result[1].terminal_status == 'success':
-            self.mini_context.require_final_review(response.model_dump()['choices'][0]['message'].get('content'), response)
+            self.mini_context.require_final_review(response.model_dump()['choices'][0]['message'].get('content'))
         if self.controls_view_enabled:
             content = response.model_dump()['choices'][0]['message'].get('content')
             telemetry.emit('mini_controls_candidate', frame_id=self.frame.metadata['frame_id'],
@@ -52,6 +53,11 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
                 view_delivered=self.mini_context.trace.get('delivered', False),
                 effect_status='unknown', extra_role_requests=0)
         return result
+
+    def generate_candidate(self, transport, role, deadline, request, validator):
+        if role != 'executor':
+            return super().generate_candidate(transport, role, deadline, request, validator)
+        return generate_mini_candidate(self, transport, role, deadline, request, validator)
 
     def current_frame_content(self):
         # Mandatory before history admission; an optional view being omitted
@@ -93,6 +99,7 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
 
     def context_trace(self):
         self.last_trace['taskviews_mini'] = self.mini_context.trace
+        self.last_trace['mini_recovery'] = self.mini_recovery_trace
 
     def flush_execution(self):
         if self.execution_journal is not None:

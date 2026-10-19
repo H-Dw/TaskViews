@@ -6,12 +6,13 @@ from .keyboard_view import policy as keyboard_policy
 from .artifact_view import policy as artifact_policy
 
 PROFILE = 'mini_fixed_v1'
-REVISION = 'mini_artifact_protocol_v6'
+REVISION = 'mini_report_recovery_v7'
 MAX_BYTES = 3000
 VIEW_IDS = ('current', 'keyboard', 'attempts', 'lessons')
 SELECTORS = {'current': 'current_frame_and_artifact_checks', 'attempts': 'active_operations_with_followup_observations',
              'lessons': 'unresolved_checks_errors_and_unverified_reviews',
-             'keyboard': 'intent_key_lookup_and_episode_keyboard_memory'}
+             'keyboard': 'intent_key_lookup_and_episode_keyboard_memory',
+             'controls': 'documented_bindings_and_same_actor_notes'}
 
 
 def profile_contract():
@@ -22,6 +23,7 @@ def profile_contract():
             'interaction': 'mini_interaction_v1; reject known silent key aliases before dispatch; no rewrite',
             'keyboard': keyboard_policy(),
             'artifact': artifact_policy(),
+            'repair_admission': 'Mini-only; actual native input + cached views; whole old turns; task/current/native IDs preserved',
             'packing_priority': 'current/checks/full review protocol; active operation+followup; unresolved error/review; relevant keyboard; other history; generic reminders',
             'packet_metadata': 'selectors/control source URLs in profile; current geometry in native frame contract; image hash via current ref',
             'view_ids': list(VIEW_IDS), 'selectors': dict(SELECTORS),
@@ -90,9 +92,10 @@ def materialize(*, episode_id, frame_id, current, attempts, lessons, totals, max
 
     bind_sources(packet)
     if controls is not None:
-        packet['extensions'] = {'controls': controls['version']}
-        packet['views']['controls'] = {'selector': 'documented_bindings_and_same_actor_notes',
-                                      'records': [deepcopy(controls)], 'omitted_records': 0}
+        # As for the four default views, selectors live in the profile. The
+        # controls record already carries its version; don't duplicate it in
+        # an outer extension map at the expense of literal operation evidence.
+        packet['views']['controls'] = {'records': [deepcopy(controls)], 'omitted_records': 0}
         if len(dumps(packet).encode()) > limit and controls.get('previous_note') is not None:
             previous = packet['views']['controls']['records'][0]['previous_note']
             packet['views']['controls']['records'][0]['previous_note'] = {

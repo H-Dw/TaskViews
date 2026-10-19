@@ -1,6 +1,8 @@
 # TaskViews Mini M0
 
-2026-10-18 当前实现修订为 `mini_artifact_protocol_v6`，保留 v5 按键工具，修复成功报告的指引／校验不一致和错误反馈不具体的问题。完整报告模板、长度限制与关键证据共用原 3000 UTF-8 bytes；原生修复次数、输入预算、模型与官方执行／评分代码不变。详见 [v6 实现与离线验证](taskviews-mini-artifact-protocol-v6.md)。以下版本记录保留为历史。
+2026-10-18 当前实现为 `mini_report_recovery_v7`：Mini 单独处理辅助报告错误，同轮请求按完整旧轮重新准入；保留共同的 predict、传输、官方执行／评分和原预算，只有 Mini 使用独立的有界候选循环。报告采用扁平结构，旧 v2 合规报告仍可读取，unknown 不升级。详见 [v7 恢复与离线验证](taskviews-mini-report-recovery-v7.md)。以下版本记录保留为历史。
+
+2026-10-18 `mini_artifact_protocol_v6` 修复成功报告的指引／校验不一致和错误反馈不具体的问题，但未解决长回复触发同轮修复后的输入超限。其实现与当时的离线验证见 [v6 历史记录](taskviews-mini-artifact-protocol-v6.md)。
 
 2026-10-17 当前按键实现修订为 `mini_keyboard_tools_v5`：默认只检索跨软件通用控制，Evince 翻页/缩放、文件管理器重命名与 GNOME 窗口绑定移入显式目录。软件类型、平台和软件名称分别建档，配方保持原生 `action:key / keys:[...]` 格式。四个 View、3000 UTF-8 bytes 与额外角色请求数 0 保持。使用、分类、研究来源和迁移边界见 [按键 tools](../tools/keyboard/README.md)、[索引](../tools/keyboard/index.md)与[检索记录](../tools/keyboard/survey.md)。下文的 v4、v3 与 M0 搭建记录保留为历史。
 
@@ -10,7 +12,7 @@
 
 2026-10-15 更新：当前实现修订为 `mini_cua_feedback_v2`，修复空错误误分类，默认提供重复操作证据，并在正式 Mini 输入中明确坐标与结果检查要求。详见[本次修复及验证记录](taskviews-mini-cua-feedback-20261015.md)。下文保留最初 M0 搭建时的配置与验证记录；最新随想发票任务的 35 轮、0/0 分结果见[正式结果](osworld-verified-invoice-sx-flash-results-20261015.md)，不应与旧 Task059/Pinggy 配置混用。
 
-Mini 在 `mini` 分支实现。它直接复用共同 `KimiNativeAgent.predict/generate_candidate` 和机械提取的 Qwen provider，不继承完整 TaskViews agent。执行仍由原 native tool schema、官方完整批次 compiler 和 controller 完成。没有模型驱动的分类、perception/controller/planner、DAG、语义图或 pointer guard。
+Mini 在 `mini` 分支实现。它复用共同 `KimiNativeAgent.predict` 和机械提取的 Qwen provider，不继承完整 TaskViews agent；v7 的 `generate_candidate` 只在 Mini 内分流错误并重做输入准入。执行仍由原 native tool schema、官方完整批次 compiler 和 controller 完成。没有模型驱动的分类、perception/controller/planner、DAG、语义图或 pointer guard。
 
 本次交付是代码搭建与离线验证。没有启动新的正式 episode、VM、模型 API 或官方评分；当前 V12 继续暂停。V12 原230已执行而安全检查点229，不能把 Mini 装入旧 episode 或用恢复229重放230。
 
