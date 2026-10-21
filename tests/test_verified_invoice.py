@@ -148,7 +148,7 @@ def test_unsupported_cache_hint_keeps_full_image_verification(tmp_path, monkeypa
 
 
 def test_frozen_low35_comparison_has_no_implicit_execution():
-    plan = specification()
+    plan = specification('qwen')
     assert plan['arms'] == ['ui_kobe_like', 'taskviews']
     assert plan['max_steps'] == 35 and plan['model'] == 'qwen3.8-max'
     assert plan['generation_fields'] == {
@@ -210,7 +210,7 @@ def test_serial_dispatch_waits_for_cleanup_and_stops_on_failure(tmp_path, monkey
     from scripts import verified_invoice as module
     from scripts import osworld_native_experiment
     monkeypatch.setattr(osworld_native_experiment, 'require_scope', lambda limit: tmp_path)
-    monkeypatch.setattr(module, 'validate_plan', lambda root: specification())
+    monkeypatch.setattr(module, 'validate_plan', lambda root: specification('qwen'))
     module.write(tmp_path / 'state.json', {'status': 'prepared_not_started'})
     called = []
     def run(command, check):

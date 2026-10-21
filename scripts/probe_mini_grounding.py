@@ -1,4 +1,4 @@
-"""Opt-in synthetic grounding probe through the real SX Mini predict path.
+"""Opt-in synthetic grounding probe through the declared Mini predict path.
 
 No VM, GUI dispatch, benchmark task, gold data, or scoring. Each fresh actor
 returns a candidate mouse move; its compiled point must be inside the target.
@@ -68,11 +68,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--live', action='store_true', help='Explicitly send bounded, billable synthetic API requests')
     parser.add_argument('--coordinate-type', choices=('absolute','relative'), default='absolute')
+    parser.add_argument('--provider', choices=('autodl', 'sx'), default='autodl')
     from scripts.verified_invoice import EXPERIMENTS
-    parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
+    parser.add_argument('--experiment', choices=EXPERIMENTS)
     parser.add_argument('--sx-url-env', choices=('SX_URL','SX_URL_SB'), default='SX_URL_SB')
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--root', type=Path, help='Optional new frozen SX plan to receive this prerequisite proof')
+    parser.add_argument('--root', type=Path, help='Optional new frozen plan to receive this prerequisite proof')
     parser.add_argument('--compiler-repo', type=Path, default=Path.home()/'osworld2/OSWorld-V2')
     args = parser.parse_args()
     if not args.live:
@@ -82,11 +83,12 @@ def main():
     from scripts.verified_invoice import project_identity, specification, validate_plan, write
     from ui_kobe.osworld.official_base import verify_official_base
     from ui_kobe.osworld.transitions import TransitionJournal
-    from ui_kobe.osworld.sx_native import SXMiniTaskViewsNativeAgent
+    from scripts.run_official_native_tasks import agent_class
     from ui_kobe.osworld.cua_contract import CUAContract
-    plan = validate_plan(args.root) if args.root else specification('sx', args.sx_url_env, args.coordinate_type, args.experiment)
-    if plan['provider'] != 'sx':
-        raise ValueError('This grounding probe is for the declared SX Mini actor only')
+    plan = validate_plan(args.root) if args.root else specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment)
+    if plan['provider'] != args.provider:
+        raise ValueError('Grounding probe provider differs from frozen plan')
+    selected = agent_class(plan['interface'], 'taskviews', plan['taskviews_profile'])
     policy = plan.get('mini_grounding_check_policy', 'all_targets_within30px')
     collect_all = policy == 'collect_all_record_accuracy'
     contract = CUAContract(**plan['cua_contract'])
@@ -101,7 +103,12 @@ def main():
               'benchmark_launch_qualification':False}
     os.environ.update(UI_KOBE_TASKVIEWS_PROFILE='mini_fixed_v1', UI_KOBE_MINI_CONTROLS_VIEW='disabled',
         UI_KOBE_TASKVIEWS_FEEDBACK_V10='0', UI_KOBE_GENERATION_PROFILE=plan['generation_profile']['name'],
-        UI_KOBE_SX_URL_ENV=plan['base_url_env'], UI_KOBE_CUA_CONTRACT_JSON=json.dumps(contract.snapshot()))
+        UI_KOBE_CUA_CONTRACT_JSON=json.dumps(contract.snapshot()),
+        UI_KOBE_MINI_KEYBOARD_TOOLS='[]')
+    from kobe_views.task_keyboard import environment
+    os.environ.update(environment({}, arm='taskviews'))
+    if plan['provider'] == 'sx':
+        os.environ['UI_KOBE_SX_URL_ENV'] = plan['base_url_env']
     actor = None
     try:
         write(args.output/'report.json', report)
@@ -112,7 +119,7 @@ def main():
             os.environ['UI_KOBE_TELEMETRY_DIR'] = str(path)
             from ui_kobe.osworld import telemetry
             telemetry.install_api(path)
-            actor = SXMiniTaskViewsNativeAgent(model=plan['model'],base_url=plan['base_url'],
+            actor = selected(model=plan['model'],base_url=plan['base_url'],
                 temperature=0,max_tokens=16000,max_api_retries=1,retry_sleep_cap=15.0)
             actor.execution_journal = TransitionJournal(path/'journal',task_id='synthetic-localization',
                                                          run_id=f'synthetic-{index}',contract=contract)

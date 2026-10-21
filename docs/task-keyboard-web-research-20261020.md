@@ -2,6 +2,8 @@
 
 2026-10-20。新增用户 skill `task-keyboard-research`，安装于 `C:/Users/Wei/.codex/skills/task-keyboard-research/SKILL.md`；TaskViews-mini 新增默认关闭的 `--keyboard-research` 准备开关。实现版本为 `task_keyboard_research_v1`。
 
+2026-10-21 补充：当前默认 actor 已改为 AutoDL。其公开示例只确认 Chat Completions，尚无本项目验证过的 Responses/web search 支持，因此 AutoDL 任务开启研究时必须显式提供 `--keyboard-research-config`，包含研究端点、协议、模型及密钥环境变量；不自动继承 AutoDL 聊天端点。下面的默认继承行为适用于此前 provider。
+
 ## 开关与使用方式
 
 在已有的新实验准备命令后附加：

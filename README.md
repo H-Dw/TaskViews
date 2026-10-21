@@ -1,5 +1,7 @@
 # TaskViews
 
+2026-10-21 接口更新：当前 Mini 的 `scripts/verified_invoice.py` 入口默认使用 **AutoDL / Qwen3.5-397B-A17B**，API 地址为 `https://www.autodl.art/api/v1`，密钥从 `AUTODL_API_KEY` 读取，采用流式 Chat Completions。默认准备 `autodl-mini40`（Mini 单组、最多 40 轮）；`autodl-pair40` 提供 baseline/Mini 对照。支持现有 invoice、GIMP、VLC 任务。接入、离线验证与实际接口检查步骤见 [AutoDL 使用说明](docs/autodl-taskviews-mini-20261021.md)。旧 provider 与冻结实验配置保留。
+
 2026-10-21：最新 **TaskViews-mini** 已迁入 `main`；旧 `main` 保留为 `backup/main-20261021`。项目仓库为 [H-Dw/TaskViews](https://github.com/H-Dw/TaskViews)。Mini 的准备、启动、恢复和离线校验入口使用 `main`；旧实验保留原分支及源码记录。
 
 2026-10-20：扩充通用按键指引，新增按任务软件名称选择目录，以及默认关闭的任务级联网按键调研。开启 `--keyboard-research` 后，先通过 API 搜索软件指引并保存 Markdown，再生成仅供当前任务读取的临时按键目录；额外研究调用单独记账。详见[自动目录选择](docs/taskviews-keyboard-auto-selection-20261020.md)、[联网调研使用说明](docs/task-keyboard-web-research-20261020.md)和[通用按键与 v7 审计](docs/taskviews-mini-v7-keyboard-audit-20261020.md)。

@@ -1,5 +1,7 @@
 # TaskViews Mini M0
 
+2026-10-21 默认接口更新：当前 Verified Mini 入口默认使用 [AutoDL / Qwen3.5-397B-A17B](autodl-taskviews-mini-20261021.md)，通过 `AUTODL_API_KEY` 环境变量认证。以下旧版本的模型、接口和验证结果保留为历史记录。
+
 2026-10-21：最新 Mini 迁入 `main`，旧主分支备份为 `backup/main-20261021`。当前准备、启动、恢复和离线验证入口要求 `main`；新计划记录 `source_branch=main`，历史计划的 `source_branch=mini` 保留原值用于审计，仍受原源码与检查点一致性校验约束。
 
 2026-10-20 可选增加[任务级按键联网调研](task-keyboard-web-research-20261020.md)：默认关闭，开启后在新计划准备阶段识别软件、通过 API web search 保存 Markdown，再生成隔离的临时按键目录。准备调用单独计费和记录，正式 actor 保持原 View 预算。下文的历史版本与旧实验条件不包含该扩展。

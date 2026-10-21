@@ -15,6 +15,11 @@ DEFAULTS = {'protocol': 'responses', 'max_apps': 4, 'topics_per_app': 2,
 
 def settings(actor, overrides=None):
     overrides = dict(overrides or {})
+    if actor.get('provider') == 'autodl' and not (
+            {'protocol', 'model', 'api_key_env'} <= overrides.keys()
+            and ('base_url' in overrides or 'base_url_env' in overrides)):
+        raise ValueError('AutoDL Chat Completions has no verified web-search API; '
+                         'provide an explicit keyboard research endpoint, protocol, model and key environment')
     allowed = {*DEFAULTS, 'model', 'base_url', 'base_url_env', 'api_key_env'}
     if overrides.keys() - allowed:
         raise ValueError('Unknown keyboard research settings; credentials must use an environment variable')

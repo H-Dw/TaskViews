@@ -26,10 +26,10 @@ def main():
     parser.add_argument('--arm', choices=ALL_ARMS, required=True)
     parser.add_argument('--case', choices=('limit', 'terminate', 'empty'), default='limit')
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--provider', choices=('qwen', 'tinker', 'openrouter', 'sx'), default='qwen')
+    parser.add_argument('--provider', choices=('autodl', 'qwen', 'tinker', 'openrouter', 'sx'), default='autodl')
     parser.add_argument('--sx-url-env', choices=('SX_URL', 'SX_URL_SB'), default='SX_URL')
     parser.add_argument('--coordinate-type', choices=('absolute', 'relative'), default='absolute')
-    parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
+    parser.add_argument('--experiment', choices=EXPERIMENTS)
     parser.add_argument('--task', choices=tuple(TASKS), default='invoice')
     parser.add_argument('--keyboard-mode', choices=('task_names', 'manual'), default='task_names')
     parser.add_argument('--keyboard-toolset', action='append', default=[])
@@ -56,7 +56,10 @@ def main():
     env_module, runner, qwen = load_runtime(args.benchmark_repo, args.compiler_repo, args.task)
     from scripts.run_official_native_tasks import agent_class
     from ui_kobe.osworld import telemetry
-    if args.provider == 'sx':
+    if args.provider == 'autodl':
+        from ui_kobe.osworld.autodl_native import AutoDLNativeProvider as Provider
+        from ui_kobe.api.autodl_native import AutoDLNativeClient as Client
+    elif args.provider == 'sx':
         from ui_kobe.osworld.sx_native import SXNativeProvider as Provider
         from ui_kobe.api.sx_native import SXNativeClient as Client
         os.environ['UI_KOBE_SX_URL_ENV'] = args.sx_url_env
@@ -89,7 +92,7 @@ def main():
     Image.new('RGB', (1920, 1080), 'white').save(image, format='PNG')
     observation = {'screenshot': image.getvalue()}
     initial_observation = observation
-    large_frame_fixture = args.provider == 'sx' and args.case == 'terminate'
+    large_frame_fixture = args.provider in ('sx', 'autodl') and args.case == 'terminate'
     if large_frame_fixture:
         import random
         noise = bytes(value & 31 for value in random.Random(0).randbytes(1920 * 1080 * 3))
@@ -119,7 +122,7 @@ def main():
         cap = plan['request_policy']['output_field']
         assert body[cap] == 16000
         assert ('max_tokens' if cap == 'max_completion_tokens' else 'max_completion_tokens') not in body
-        if args.provider in ('tinker', 'openrouter') or (args.provider == 'sx' and args.experiment=='legacy-low35'):
+        if args.provider in ('tinker', 'openrouter', 'autodl') or (args.provider == 'sx' and plan['experiment']=='legacy-low35'):
             assert 'enable_thinking' not in body and 'preserve_thinking' not in body
         if args.provider == 'openrouter':
             for message in body['messages']:

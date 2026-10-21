@@ -123,6 +123,13 @@ def options_contract(options, *, provider='kimi', generation_profile=None):
         from ui_kobe.api.sx_native import generation_request_fields
         generation_request_fields(generation_profile)
         required.update(top_p=0.9)
+    elif provider == 'autodl':
+        from ui_kobe.api.autodl_native import generation_request_fields
+        generation_request_fields(generation_profile)
+        required.update(top_p=0.9)
+        if 'enable_thinking' in values:
+            raise ValueError('AutoDL thinking is provider-controlled; omit enable_thinking')
+        required.pop('enable_thinking')
     elif provider != 'kimi':
         raise ValueError('Unknown native provider')
     for name, expected in required.items():
@@ -138,15 +145,15 @@ def options_contract(options, *, provider='kimi', generation_profile=None):
                       "endless_min_chars", "endless_retry_limit")
     inactive = {name: values.pop(name) for name in inactive_names if name in values}
     api_key = values.pop("api_key", None)
-    if provider in ('qwen', 'tinker', 'openrouter', 'sx'):
+    if provider in ('qwen', 'tinker', 'openrouter', 'sx', 'autodl'):
         from ui_kobe.api.qwen_native import QwenTransportBudget
         budget_class = QwenTransportBudget
     else:
         budget_class = StreamBudget
-    budget = budget_class(attempts=values.pop("max_api_retries", 6 if provider in ('qwen', 'tinker', 'openrouter', 'sx') else 2),
+    budget = budget_class(attempts=values.pop("max_api_retries", 6 if provider in ('qwen', 'tinker', 'openrouter', 'sx', 'autodl') else 2),
                           generation_s=values.pop("generation_timeout", 600),
                           total_s=values.pop("request_timeout", 900))
-    expected_retry_cap = 60.0 if provider in ('qwen', 'tinker', 'openrouter', 'sx') and budget.attempts > 2 else 15.0
+    expected_retry_cap = 60.0 if provider in ('qwen', 'tinker', 'openrouter', 'sx', 'autodl') and budget.attempts > 2 else 15.0
     retry_base, retry_cap = values.pop("retry_sleep_base", 3.0), values.pop("retry_sleep_cap", expected_retry_cap)
     if (retry_base, retry_cap) != (3.0, expected_retry_cap):
         raise ValueError(f"Native transport supports retry_sleep_base=3 / cap={expected_retry_cap:g}")

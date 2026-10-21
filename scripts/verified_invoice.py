@@ -37,7 +37,9 @@ MAX40_EXPERIMENTS = {
     'sx-max-low40': ('low', ('baseline', 'taskviews')),
     'sx-pair-max-high40': ('high', ('baseline', 'taskviews')),
 }
-EXPERIMENTS = ('legacy-low35', *MAX40_EXPERIMENTS)
+DEFAULT_PROVIDER = 'autodl'
+AUTODL_EXPERIMENTS = {'autodl-mini40': ('taskviews',), 'autodl-pair40': ('baseline', 'taskviews')}
+EXPERIMENTS = ('legacy-low35', *MAX40_EXPERIMENTS, *AUTODL_EXPERIMENTS)
 GENERATION = 'qwen-sse-low-total16k'
 
 
@@ -101,18 +103,25 @@ def project_identity():
     return {str(path.relative_to(PROJECT)): sha(path) for path in sorted(paths)}
 
 
-def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolute', experiment='legacy-low35',
+def specification(provider=DEFAULT_PROVIDER, sx_url_env='SX_URL', coordinate_type='absolute', experiment=None,
                   task_key='invoice', *, keyboard_task=None, keyboard_mode='task_names', keyboard_toolsets=()):
+    if experiment is None:
+        experiment = 'autodl-mini40' if provider == 'autodl' else 'legacy-low35'
     task_spec = TASKS[task_key]
+    autodl = experiment in AUTODL_EXPERIMENTS
     single_vlc_mini = task_key == 'vlc' and experiment == 'sx-mini-max-high40'
-    if task_key != 'invoice' and experiment != 'sx-pair-max-high40' and not single_vlc_mini:
+    if task_key != 'invoice' and experiment != 'sx-pair-max-high40' and not single_vlc_mini and not autodl:
         raise ValueError('GIMP/VLC require the explicit baseline/Mini Max/high40 experiment')
     max40 = experiment in MAX40_EXPERIMENTS
-    if experiment not in EXPERIMENTS or (max40 and provider != 'sx'):
+    if (experiment not in EXPERIMENTS or (max40 and provider != 'sx')
+            or autodl != (provider == 'autodl')):
         raise ValueError('Unknown experiment or provider incompatible with frozen experiment')
     if coordinate_type not in ('absolute', 'relative'):
         raise ValueError('Coordinate type must be explicitly absolute or relative')
-    if provider == 'qwen':
+    if provider == 'autodl':
+        from ui_kobe.api import autodl_native as api
+        generation, key_env = api.GENERATION, api.API_KEY_ENV
+    elif provider == 'qwen':
         from ui_kobe.api import qwen_native as api
         generation, key_env = GENERATION, 'QWEN_API_KEY'
     elif provider == 'tinker':
@@ -130,21 +139,21 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         effort = MAX40_EXPERIMENTS[experiment][0]
         generation = getattr(api, 'MAX_' + effort.upper() + '_GENERATION')
     profile = api.generation_profile(generation)
-    arms = MAX40_EXPERIMENTS[experiment][1] if max40 else ARMS
-    max_steps = 40 if max40 else 35
+    arms = AUTODL_EXPERIMENTS[experiment] if autodl else MAX40_EXPERIMENTS[experiment][1] if max40 else ARMS
+    max_steps = 40 if max40 or autodl else 35
     from ui_kobe.osworld.taskviews_profiles import frozen_profile, mini_cua_contract
     from kobe_views.keyboard_selection import task_keyboard_policy
     keyboard = task_keyboard_policy(keyboard_task if keyboard_task is not None else {},
                                     mode=keyboard_mode, requested=keyboard_toolsets)
     contract = mini_cua_contract()
     contract['coordinate_type'] = coordinate_type
-    if provider == 'sx':
+    if provider in ('sx', 'autodl'):
         # One full lossless frame can exceed 2M base64 characters. Allow the
         # existing 8MiB PNG transport bound, without increasing text/history,
         # image count, view bytes or output tokens in either comparison arm.
         contract['context_max_payload_chars'] = 12_000_000
     from ui_kobe.osworld.verified_resources import resource_policy
-    return {'version': ('osworld-verified-invoice-v5' if task_key == 'invoice' else
+    return {'version': ('osworld-verified-autodl-v1' if autodl else 'osworld-verified-invoice-v5' if task_key == 'invoice' else
                         'osworld-verified-vlc-mini-v4-v1' if single_vlc_mini else 'osworld-verified-media-v1'),
         'provider': provider, 'experiment': experiment,
         'interface': provider + '-native', 'benchmark': 'OSWorld-Verified (OSWorld-1)',
@@ -157,10 +166,11 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         'request_policy': api.request_policy(profile),
         'generation_fields': api.generation_request_fields(profile),
         'transport_policy': api.transport_policy(), 'api_key_env': key_env,
-        'live_provider_check_required': provider in ('tinker', 'openrouter', 'sx'),
-        'mini_grounding_check_required': provider == 'sx', 'coordinate_type': coordinate_type,
+        'live_provider_check_required': provider in ('tinker', 'openrouter', 'sx', 'autodl'),
+        'mini_grounding_check_required': provider in ('sx', 'autodl'), 'coordinate_type': coordinate_type,
         'mini_grounding_check_policy': ('collect_all_record_accuracy' if experiment in
-                                       ('sx-mini-max-high40', 'sx-max-medium40', 'sx-max-low40', 'sx-pair-max-high40')
+                                       ('sx-mini-max-high40', 'sx-max-medium40', 'sx-max-low40', 'sx-pair-max-high40',
+                                        *AUTODL_EXPERIMENTS)
                                         else 'all_targets_within30px'),
         'cua_contract': contract, 'taskviews_profile': 'mini_fixed_v1',
         'arm_profiles': {arm: frozen_profile(arm) for arm in arms},
@@ -551,12 +561,13 @@ def main():
     parser.add_argument('--image', type=Path, default=Path.home() / 'osworld-verified/images/Ubuntu.qcow2')
     parser.add_argument('--image-proof', type=Path, default=PROJECT.parent / 'osworld_verified_setup/image-proof.json')
     parser.add_argument('--validation-dir', type=Path)
-    parser.add_argument('--provider', choices=('qwen', 'tinker', 'openrouter', 'sx'), default='qwen',
+    parser.add_argument('--provider', choices=('autodl', 'qwen', 'tinker', 'openrouter', 'sx'), default=DEFAULT_PROVIDER,
                         help='Used by prepare; later commands use the frozen plan provider')
     parser.add_argument('--sx-url-env', choices=('SX_URL', 'SX_URL_SB'), default='SX_URL')
     parser.add_argument('--coordinate-type', choices=('absolute', 'relative'), default='absolute',
                         help='Prepare only: freeze one coordinate mode for both arms; never auto-switch')
-    parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
+    parser.add_argument('--experiment', choices=EXPERIMENTS,
+                        help='Defaults to autodl-mini40 for AutoDL; legacy-low35 for older providers')
     parser.add_argument('--task', choices=tuple(TASKS), default='invoice', help='Prepare only; later commands use plan')
     parser.add_argument('--keyboard-mode', choices=('task_names', 'manual'), default='task_names',
                         help='Prepare only: match public task names, or use only explicitly selected directories')

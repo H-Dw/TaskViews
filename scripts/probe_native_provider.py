@@ -43,13 +43,13 @@ def vision_frame(contract, *, large=False):
         image.close()
 
 
-def main(default_provider='tinker'):
+def main(default_provider='autodl'):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--provider', choices=('tinker', 'openrouter', 'sx'), default=default_provider)
+    parser.add_argument('--provider', choices=('autodl', 'tinker', 'openrouter', 'sx'), default=default_provider)
     parser.add_argument('--sx-url-env', choices=('SX_URL', 'SX_URL_SB'), default='SX_URL')
     parser.add_argument('--coordinate-type', choices=('absolute', 'relative'), default='absolute')
-    parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
+    parser.add_argument('--experiment', choices=EXPERIMENTS)
     parser.add_argument('--root', type=Path, help='Optional immutable comparison plan to qualify for launch')
     parser.add_argument('--benchmark-repo', type=Path, default=Path.home() / 'osworld-verified/OSWorld')
     parser.add_argument('--compiler-repo', type=Path, default=Path.home() / 'osworld2/OSWorld-V2')
@@ -59,7 +59,9 @@ def main(default_provider='tinker'):
         raise ValueError('Probe provider differs from frozen plan')
     if not os.environ.get(plan['api_key_env']):
         raise ValueError(plan['api_key_env'] + ' missing from Linux environment')
-    if args.provider == 'sx':
+    if args.provider == 'autodl':
+        from ui_kobe.api.autodl_native import AutoDLNativeClient as Client, generation_profile
+    elif args.provider == 'sx':
         from ui_kobe.api.sx_native import SXNativeClient as Client, generation_profile
         os.environ['UI_KOBE_SX_URL_ENV'] = plan['base_url_env']
     elif args.provider == 'openrouter':
