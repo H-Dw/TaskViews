@@ -60,7 +60,9 @@ def configure_profile(plan, manifest):
         if (manifest.get('mini_profile') != plan['mini_profile']
                 or manifest.get('source_branch') != plan['source_branch']
                 or manifest.get('mini_controls_view') != plan.get('mini_controls_view')
-                or manifest.get('mini_keyboard_tools') != plan.get('mini_keyboard_tools')):
+                or manifest.get('mini_keyboard_tools') != plan.get('mini_keyboard_tools')
+                or manifest.get('mini_keyboard_selection') != plan.get('mini_keyboard_selection')
+                or manifest.get('mini_keyboard_research') != plan.get('mini_keyboard_research')):
             raise RuntimeError('Manifest fixed-view contract differs from frozen Mini plan')
         require_mini_branch()
     os.environ['UI_KOBE_TASKVIEWS_PROFILE'] = profile
@@ -68,6 +70,8 @@ def configure_profile(plan, manifest):
         if plan.get('mini_controls_view') is not None else 'disabled')
     os.environ['UI_KOBE_MINI_KEYBOARD_TOOLS'] = json.dumps(
         plan['mini_keyboard_tools']['enabled_toolsets'][1:] if plan.get('mini_keyboard_tools') else [])
+    from kobe_views.task_keyboard import environment
+    os.environ.update(environment(plan, arm=manifest.get('arm', plan.get('arms', [''])[0])))
     return profile
 
 

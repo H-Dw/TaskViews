@@ -1,0 +1,11 @@
+{
+  "protocol": "dashscope",
+  "base_url_env": "KEYBOARD_RESEARCH_BASE_URL",
+  "api_key_env": "DASHSCOPE_API_KEY",
+  "model": "qwen-plus",
+  "max_apps": 4,
+  "topics_per_app": 2,
+  "max_output_tokens": 4096,
+  "timeout_seconds": 90,
+  "total_seconds": 600
+}

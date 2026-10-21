@@ -31,6 +31,8 @@ def main():
     parser.add_argument('--coordinate-type', choices=('absolute', 'relative'), default='absolute')
     parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
     parser.add_argument('--task', choices=tuple(TASKS), default='invoice')
+    parser.add_argument('--keyboard-mode', choices=('task_names', 'manual'), default='task_names')
+    parser.add_argument('--keyboard-toolset', action='append', default=[])
     parser.add_argument('--benchmark-repo', type=Path, default=Path.home() / 'osworld-verified/OSWorld')
     parser.add_argument('--compiler-repo', type=Path, default=Path.home() / 'osworld2/OSWorld-V2')
     args = parser.parse_args()
@@ -38,7 +40,10 @@ def main():
         raise FileExistsError('Keep prior validation evidence; use a new directory')
     args.output.mkdir(parents=True)
     before = sources(args.benchmark_repo, args.compiler_repo, args.task)
-    plan = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment, args.task)
+    task = verify_task(args.benchmark_repo, args.task)
+    plan = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment, args.task,
+                         keyboard_task=task, keyboard_mode=args.keyboard_mode,
+                         keyboard_toolsets=args.keyboard_toolset)
     actor_scope = None
     if args.task != 'invoice':
         from scripts.osworld_native_experiment import require_scope
@@ -47,7 +52,6 @@ def main():
         actor_scope = require_scope(plan['service_memory_bytes'])
     if args.arm not in plan['arms']:
         raise ValueError('Arm absent from the declared experiment')
-    task = verify_task(args.benchmark_repo, args.task)
     from ui_kobe.osworld.verified_runtime import load_runtime, reset_compatible
     env_module, runner, qwen = load_runtime(args.benchmark_repo, args.compiler_repo, args.task)
     from scripts.run_official_native_tasks import agent_class
@@ -70,9 +74,13 @@ def main():
     import httpx
 
     os.environ[plan['api_key_env']] = 'offline-fixture-only'
+    from kobe_views.task_keyboard import environment
+    os.environ.update(environment({}, arm=args.arm))  # Synthetic validation must not inherit another task's archive.
     os.environ.update(UI_KOBE_GENERATION_PROFILE=plan['generation_profile']['name'],
         UI_KOBE_CUA_CONTRACT_JSON=json.dumps(plan['cua_contract']), UI_KOBE_TASKVIEWS_PROFILE='mini_fixed_v1',
         UI_KOBE_MINI_CONTROLS_VIEW='disabled', UI_KOBE_TASKVIEWS_FEEDBACK_V10='0',
+        UI_KOBE_MINI_KEYBOARD_TOOLS=json.dumps(
+            plan['mini_keyboard_tools']['enabled_toolsets'][1:] if args.arm == 'taskviews' else []),
         UI_KOBE_TELEMETRY_DIR=str(args.output / 'telemetry'), UI_KOBE_TASK_ID='synthetic-offline-fixture',
         OSWORLD_FULL_RUN_ID='synthetic-' + args.arm)
     selected = reset_compatible(agent_class(plan['interface'], args.arm, 'mini_fixed_v1'))
@@ -214,6 +222,7 @@ def main():
         'counts': counts, 'round_limit': plan['max_steps'], 'view_sets': sorted(set(tuple(v) for v in view_sets)),
         'model':plan['model'], 'generation_fields':plan['generation_fields'], 'max_steps':plan['max_steps'],
         'experiment':plan['experiment'], 'task_key':plan['task_key'], 'task_id':plan['task_id'], 'domain':plan['domain'],
+        'mini_keyboard_tools':plan['mini_keyboard_tools'], 'mini_keyboard_selection':plan['mini_keyboard_selection'],
         'media_metric_tested_separately':args.task != 'invoice',
         'scope_limit_bytes':int((actor_scope/'memory.max').read_text()) if actor_scope else None,
         'scope_peak_bytes':int((actor_scope/'memory.peak').read_text()) if actor_scope else None,

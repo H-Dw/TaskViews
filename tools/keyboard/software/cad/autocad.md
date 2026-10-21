@@ -6,6 +6,8 @@
 
 已核对的适用对象：AutoCAD。
 
+任务说明中的匹配别名：`Autodesk AutoCAD`、`AutoCAD`。匹配规则与平台过滤见 [使用说明](../../README.md)。
+
 2023 官方默认 CUIx；基准任务可能使用更早版本，须核对实际 keymap。命令别名需要 type 后确认，不能当作 chord。
 
 此目录不会自动继承或覆盖 general；启用一个软件也不会隐式启用同类软件。

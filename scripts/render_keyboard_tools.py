@@ -26,12 +26,19 @@ def render_documents():
     for key, value in TOOLSETS.items():
         path = document_path(key, value)
         usable = bool(value['topics']) and not value['reference_only'] and DATA['runtime_platform'] in value['platforms']
+        aliases = DATA['task_aliases'].get(key, [])
         status = ('默认启用' if key == 'general' else '分类说明；无可启用配方' if not value['topics']
+                  else '任务名匹配或显式选择后可检索' if usable and aliases
                   else '显式选择后可检索' if usable else '参考资料；当前 Linux/X11 不可启用')
+        researched_on = value.get('researched_on', DATA['researched_on'])
         lines = [f"# {value['title']}", '', f"目录 ID：`{key}`。类型：`{value['category']}`。平台：`{' / '.join(value['platforms'])}`。", '',
-                 f'状态：{status}。资料核对日期：{DATA["researched_on"]}；快捷键未在 guest 中逐项实测。', '']
+                 f'状态：{status}。资料核对日期：{researched_on}；快捷键未在 guest 中逐项实测。', '']
         if value['members']:
             lines += ['已核对的适用对象：' + '、'.join(value['members']) + '。', '']
+        if aliases:
+            lines += ['任务说明中的匹配别名：' + '、'.join(f'`{alias}`' for alias in aliases)
+                      + '。匹配规则与平台过滤见 [使用说明]('
+                      + ('../../README.md' if key.startswith('app.') else '../README.md') + ')。', '']
         if value['note']:
             lines += [value['note'], '']
         if key != 'general':
@@ -51,11 +58,13 @@ def render_documents():
         recipes = sum(len(entry['recipes']) for entry in value['topics'].values())
         rows.append(f"| `{key}` | [{value['title']}]({path.as_posix()}) | {recipes} | {status} |")
     total = sum(len(entry['recipes']) for value in TOOLSETS.values() for entry in value['topics'].values())
+    latest = max(value.get('researched_on', DATA['researched_on']) for value in TOOLSETS.values())
     result[Path('index.md')] = '\n'.join([
         '# 按键 tools 目录', '',
-        f"核对日期：{DATA['researched_on']}。{len(TOOLSETS)} 份分类文档，"
+        f"最近目录核对：{latest}；各目录日期见对应文档。{len(TOOLSETS)} 份分类文档，"
         f"{sum(key.startswith('app.') for key in TOOLSETS)} 份软件文档，{total} 条配方（包含不同范围下的重复组合键）。", '',
-        '默认只启用 general。类型、平台和软件目录需要显式配置；不根据任务文案自动识别应用。', '',
+        '新 Mini 计划默认保留 general，并依据任务说明及 related_apps 匹配可用的软件目录；'
+        '未匹配目录仍需显式配置。窗口与焦点继续由当前截图确认。', '',
         '[使用与分类规则](README.md) · [评测集检索与覆盖缺口](survey.md)', '',
         '| 目录 ID | tools 文档 | 配方数 | 当前 Mini 状态 |', '| --- | --- | ---: | --- |', *rows, ''])
     return result

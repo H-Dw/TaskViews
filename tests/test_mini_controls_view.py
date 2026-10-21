@@ -84,7 +84,7 @@ def test_note_identity_and_native_guard_are_not_overridden(monkeypatch, tmp_path
 def test_profile_extension_requires_exact_plan_manifest_and_has_disabled_default(monkeypatch):
     monkeypatch.setenv('UI_KOBE_MINI_CONTROLS_VIEW', 'disabled')
     plan = mini_plan()
-    manifest = {'taskviews_profile': plan['taskviews_profile'], 'mini_profile': plan['mini_profile'], 'source_branch': 'mini'}
+    manifest = {'taskviews_profile': plan['taskviews_profile'], 'mini_profile': plan['mini_profile'], 'source_branch': 'main'}
     monkeypatch.setattr('scripts.osworld_native_experiment.require_mini_branch', lambda: None)
     configure_profile(plan, manifest)
     import os

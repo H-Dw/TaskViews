@@ -24,7 +24,7 @@ def mini_plan(arm='taskviews'):
         'api_key_env': 'QWEN_API_KEY', 'generation_profile': QwenGenerationProfile().__dict__,
         'provider_compatibility': {'compatible': True}, 'checkpoint_policy': {'enabled': True},
         'taskviews_profile': PROFILE, 'mini_profile': frozen_profile(arm), 'taskviews_feedback': False,
-        'cua_contract': mini_cua_contract(), 'source_branch': 'mini'}
+        'cua_contract': mini_cua_contract(), 'source_branch': 'main'}
 
 
 @pytest.mark.parametrize('arm,cls', [('taskviews', QwenMiniTaskViewsNativeAgent),
@@ -44,7 +44,7 @@ def test_explicit_factory_and_frozen_mini_profile(arm, cls):
 
 @pytest.mark.parametrize('change', [
     {'taskviews_feedback': True}, {'arms': ['taskviews', 'ui_kobe_like']},
-    {'source_branch': 'main'}, {'mini_profile': {'profile': PROFILE}},
+    {'source_branch': 'backup/main-20261021'}, {'mini_profile': {'profile': PROFILE}},
     {'taskviews_profile': FULL_PROFILE}, {'taskviews_profile': 'implicit'},
     {'cua_contract': {**mini_cua_contract(), 'context_max_text_chars': 64000}},
     {'implementation_version': 9}, {'task_id': '046'}, {'checkpoint_policy': {}},
@@ -55,17 +55,26 @@ def test_mixed_profiles_or_larger_budgets_rejected_before_runtime(change):
         experiment.check_interface(plan)
 
 
-@pytest.mark.parametrize('branch', ['main', '', 'another-mini'])
+@pytest.mark.parametrize('branch', ['mini', 'backup/main-20261021', '', 'another-mini'])
 def test_branch_admission_rejects_other_or_detached_checkouts(monkeypatch, branch):
     monkeypatch.setattr(experiment.subprocess, 'check_output', lambda *a, **k: branch)
-    with pytest.raises(RuntimeError, match='Switch Git to mini'):
+    with pytest.raises(RuntimeError, match='Switch Git to main'):
         experiment.require_mini_branch()
+
+
+def test_main_branch_admitted_and_legacy_plan_metadata_preserved(monkeypatch):
+    monkeypatch.setattr(experiment.subprocess, 'check_output', lambda *a, **k: 'main\n')
+    experiment.require_mini_branch()
+    legacy = {**mini_plan(), 'source_branch': 'mini'}
+    before = deepcopy(legacy)
+    assert validate_profile(legacy) == PROFILE
+    assert legacy == before
 
 
 def test_runner_contract_cannot_mix_manifest_and_plan(monkeypatch):
     monkeypatch.setenv('UI_KOBE_TASKVIEWS_PROFILE', FULL_PROFILE)
     plan = mini_plan()
-    manifest = {'taskviews_profile': PROFILE, 'mini_profile': plan['mini_profile'], 'source_branch': 'mini'}
+    manifest = {'taskviews_profile': PROFILE, 'mini_profile': plan['mini_profile'], 'source_branch': 'main'}
     calls = []
     monkeypatch.setattr(experiment, 'require_mini_branch', lambda: calls.append('branch'))
     assert configure_profile(plan, manifest) == PROFILE and calls == ['branch']
@@ -83,7 +92,8 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
     from examples import osworld2_eval
     from ui_kobe.osworld import official_base, task_examples, runner
     monkeypatch.setattr(official_base, 'verify_official_base', lambda *a: None)
-    monkeypatch.setattr(osworld2_eval, 'official_identity', lambda *a: {'task': '059'})
+    monkeypatch.setattr(osworld2_eval, 'official_identity',
+                        lambda *a: {'task': '059', 'instruction': 'Use VLC and Chrome.'})
     monkeypatch.setattr(task_examples, 'task_example', lambda *a: SimpleNamespace(assets=[]))
     monkeypatch.setattr(runner, 'source_snapshot', lambda *a: {})
     monkeypatch.setattr(experiment, 'project_snapshot', lambda: {})
@@ -108,9 +118,14 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
     assert plan['qwen_image_transport_policy'] == image_policy()
     assert plan['arms'] == [arm] and plan['implementation_version'] == 10
     assert plan['mini_profile'] == frozen_profile(arm) and plan['taskviews_feedback'] is False
-    assert plan['source_branch'] == 'mini' and plan['iteration_commit_required']
+    assert plan['source_branch'] == 'main' and plan['iteration_commit_required']
     assert plan['cua_contract'] == mini_cua_contract() and plan['max_steps'] == (50 if low50 else 500)
     assert plan['checkpoint_policy']['inspection_minutes'] == (30 if inspection is None else inspection)
+    if arm == 'taskviews':
+        assert plan['mini_keyboard_tools']['enabled_toolsets'] == ['general', 'app.chrome', 'app.vlc']
+        assert plan['mini_keyboard_selection']['mode'] == 'task_names'
+    else:
+        assert 'mini_keyboard_tools' not in plan and 'mini_keyboard_selection' not in plan
     if low50:
         assert plan['generation_profile']['reasoning_effort'] == effort
         assert plan['provider_request']['enable_thinking'] is True and plan['provider_request']['stream'] is True
@@ -129,9 +144,11 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
     experiment.launch(root, arm)
     manifest = experiment.load(root / arm / 'manifest.json')
     assert manifest['mini_profile'] == plan['mini_profile'] and manifest['taskviews_profile'] == PROFILE
-    assert manifest['source_branch'] == 'mini' and manifest['checkpoint_policy'] == plan['checkpoint_policy']
+    assert manifest['source_branch'] == 'main' and manifest['checkpoint_policy'] == plan['checkpoint_policy']
     assert manifest['qwen_request_policy'] == plan['qwen_request_policy']
     assert manifest['qwen_image_transport_policy'] == plan['qwen_image_transport_policy']
+    assert manifest.get('mini_keyboard_selection') == plan.get('mini_keyboard_selection')
+    assert manifest.get('mini_keyboard_tools') == plan.get('mini_keyboard_tools')
     assert manifest['official_arguments'][manifest['official_arguments'].index('--max_steps') + 1] == str(50 if low50 else 500)
     if low50:
         assert manifest['evaluation_policy'] == plan['evaluation_policy']

@@ -1,0 +1,306 @@
+{
+  "audited_on": "2026-10-20",
+  "timezone": "Asia/Shanghai",
+  "experiment": {
+    "run_directory": "runs/verified-vlc-mini-v7-sx-max-high40-20261019-v1",
+    "project_commit": "ae27018a99f67329c1d3547f66017e55bf3cd03b",
+    "mini_revision": "mini_report_recovery_v7",
+    "frozen_keyboard_policy": {
+      "version": "mini_keyboard_tools_v3",
+      "platform": "linux",
+      "enabled_toolsets": [
+        "general"
+      ],
+      "topics": [
+        "editing",
+        "clipboard",
+        "undo",
+        "focus_navigation",
+        "control_activation",
+        "popup_dismiss",
+        "context_menu",
+        "page_navigation",
+        "cursor_navigation",
+        "text_selection",
+        "window_switch"
+      ],
+      "max_key_edges": 32,
+      "max_memory_rows": 2,
+      "catalog_sha256": "bccce6d82bf85b0b8f48e3678776f271fe17043e48b03f58b3b2c1ce26c457dd",
+      "selection": "general newest intent; scoped exact lookup only after explicit opt-in; no app detection",
+      "memory": "same episode exact chord evidence; applicability and semantic success remain unknown"
+    },
+    "unchanged_evidence_sha256": {
+      "plan.json": "bda6a92e8b83a1a5b773b3522a77d83bdcf7289ca0117f280f5f9795d368cac4",
+      "source-freeze.json": "f4a772641bcef5be6e1040dec58435b0661fa63552321adfe69e0c608b829cd6",
+      "taskviews/telemetry/events-7168.jsonl": "10059e14137127a36a368c8c6d88d8cdf6af622ca53f6329fc3a5566b1de87be"
+    },
+    "actual_request_keyboard_records": [
+      {
+        "step": 1,
+        "keyboard": {
+          "omitted_records": 0,
+          "records": []
+        },
+        "lookup_guide_present": true
+      },
+      {
+        "step": 2,
+        "keyboard": {
+          "omitted_records": 0,
+          "records": []
+        },
+        "lookup_guide_present": false
+      },
+      {
+        "step": 3,
+        "keyboard": {
+          "omitted_records": 0,
+          "records": []
+        },
+        "lookup_guide_present": false
+      },
+      {
+        "step": 4,
+        "keyboard": {
+          "omitted_records": 0,
+          "records": []
+        },
+        "lookup_guide_present": false
+      },
+      {
+        "step": 5,
+        "keyboard": {
+          "omitted_records": 0,
+          "records": []
+        },
+        "lookup_guide_present": false
+      },
+      {
+        "step": 6,
+        "keyboard": {
+          "omitted_records": 0,
+          "records": [
+            {
+              "check": "Recheck app/focus, enabled state and visible effect.",
+              "grade": "key_reference_and_episode_evidence",
+              "memory": [],
+              "memory_omitted": 2,
+              "recipes": [
+                {
+                  "intent": "copy selection",
+                  "tool": {
+                    "action": "key",
+                    "keys": [
+                      "ctrl",
+                      "c"
+                    ]
+                  }
+                },
+                {
+                  "intent": "cut selection",
+                  "tool": {
+                    "action": "key",
+                    "keys": [
+                      "ctrl",
+                      "x"
+                    ]
+                  }
+                },
+                {
+                  "intent": "paste clipboard",
+                  "tool": {
+                    "action": "key",
+                    "keys": [
+                      "ctrl",
+                      "v"
+                    ]
+                  }
+                }
+              ],
+              "scope": "selected text/items in a conventional GUI; paste replaces a selection",
+              "selection": "recent_model_intent_not_visual_detection",
+              "source": "https://help.gnome.org/gnome-help/shell-keyboard-shortcuts.html",
+              "toolset": "general",
+              "topic": "clipboard",
+              "version": "mini_keyboard_tools_v3"
+            }
+          ]
+        },
+        "lookup_guide_present": false
+      },
+      {
+        "step": 7,
+        "keyboard": {
+          "omitted_records": 0,
+          "records": []
+        },
+        "lookup_guide_present": false
+      },
+      {
+        "step": 8,
+        "keyboard": {
+          "omitted_records": 0,
+          "records": []
+        },
+        "lookup_guide_present": false
+      },
+      {
+        "step": 9,
+        "keyboard": {
+          "omitted_records": 0,
+          "records": []
+        },
+        "lookup_guide_present": false
+      }
+    ],
+    "key_actions_by_step": {
+      "5": [
+        [
+          "ctrl",
+          "x"
+        ],
+        [
+          "ctrl",
+          "v"
+        ]
+      ],
+      "6": [
+        [
+          "F2"
+        ],
+        [
+          "Enter"
+        ]
+      ]
+    }
+  },
+  "backup": {
+    "general": {
+      "path": "tools/keyboard/backups/general.2026-10-20.pre-expansion.md",
+      "sha256": "56efe9c413001f7644d1a23f0d8cd110d4ff9657c6a4f4f80a1c31f22660dea4"
+    },
+    "catalog": {
+      "path": "tools/keyboard/backups/catalog.2026-10-20.pre-expansion.json",
+      "sha256": "00f7c7307205e282230b7a3ec31f4b4704a64dac512d2d984158cb6a40ba313e"
+    }
+  },
+  "extension": {
+    "source": "kobe_views/key_tools/catalog.json",
+    "generated_document": "tools/keyboard/general.md",
+    "before": {
+      "topics": 11,
+      "recipes": 23
+    },
+    "after": {
+      "topics": 34,
+      "recipes": 86
+    },
+    "added_topics": [
+      "word_navigation",
+      "word_selection",
+      "text_delete",
+      "word_delete",
+      "multiline_navigation",
+      "multiline_selection",
+      "find_text",
+      "document_file",
+      "menu_open",
+      "menu_navigation",
+      "submenu_navigation",
+      "list_navigation",
+      "list_selection",
+      "list_focus",
+      "combobox_open",
+      "combobox_selection",
+      "radio_group",
+      "slider_adjust",
+      "spinbutton_adjust",
+      "tablist_navigation",
+      "tree_navigation",
+      "window_close",
+      "window_menu"
+    ],
+    "catalog_file_sha256": "377709a0bb5cabc3497204fde11b105f07e82eae0d92678ad42de7694eba7a18",
+    "policy": {
+      "version": "mini_keyboard_tools_v3",
+      "platform": "linux",
+      "enabled_toolsets": [
+        "general"
+      ],
+      "topics": [
+        "editing",
+        "clipboard",
+        "undo",
+        "focus_navigation",
+        "control_activation",
+        "popup_dismiss",
+        "context_menu",
+        "page_navigation",
+        "cursor_navigation",
+        "text_selection",
+        "window_switch",
+        "word_navigation",
+        "word_selection",
+        "text_delete",
+        "word_delete",
+        "multiline_navigation",
+        "multiline_selection",
+        "find_text",
+        "document_file",
+        "menu_open",
+        "menu_navigation",
+        "submenu_navigation",
+        "list_navigation",
+        "list_selection",
+        "list_focus",
+        "combobox_open",
+        "combobox_selection",
+        "radio_group",
+        "slider_adjust",
+        "spinbutton_adjust",
+        "tablist_navigation",
+        "tree_navigation",
+        "window_close",
+        "window_menu"
+      ],
+      "max_key_edges": 32,
+      "max_memory_rows": 2,
+      "catalog_sha256": "ebdcf14bf47d89c68c8d924020275f1f7c46711c6b7bf01caf03ebd410dfa310",
+      "selection": "general newest intent; scoped exact lookup only after explicit opt-in; no app detection",
+      "memory": "same episode exact chord evidence; applicability and semantic success remain unknown"
+    },
+    "other_50_toolsets_unchanged": true,
+    "max_reference_bytes_without_memory": 873
+  },
+  "search": {
+    "query": "GNOME keyboard navigation text boxes menus sliders official",
+    "engines": {
+      "Google": "HTTP fetched; no usable target links extracted",
+      "DuckDuckGo": "HTTP fetched; official GNOME keyboard navigation/HIG links extracted",
+      "Brave": "429; homepage attempt and one retry after 2 seconds also 429"
+    },
+    "request_spacing_seconds": 1.5,
+    "cookies_persisted": false,
+    "cookies_cleared": true,
+    "evidence": "official documentation opened and cross-checked; benchmark sources identify operation categories only"
+  },
+  "validation": {
+    "existing_keyboard_and_mini_tests": {
+      "passed": 60,
+      "failed": 0
+    },
+    "added_all_topic_actor_delivery_tests": {
+      "passed": 34,
+      "failed": 0
+    },
+    "total_distinct_tests_passed": 94,
+    "generated_documents_check": "passed",
+    "ruff": "passed",
+    "git_diff_check": "passed",
+    "online_model_requests": 0,
+    "new_osworld_episodes": 0,
+    "guest_shortcuts_individually_tested": false,
+    "delivery_test_scope": "Each topic advertised on first turn and delivered on second turn with one ordinary preceding action; <=3000 bytes and exactly 2 offline actor requests."
+  }
+}

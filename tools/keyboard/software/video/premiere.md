@@ -6,6 +6,8 @@
 
 已核对的适用对象：Adobe Premiere Pro。
 
+任务说明中的匹配别名：`Adobe Premiere Pro`、`Adobe Premiere`、`Premiere Pro`。匹配规则与平台过滤见 [使用说明](../../README.md)。
+
 此目录不会自动继承或覆盖 general；启用一个软件也不会隐式启用同类软件。
 
 ## app.premiere.playback

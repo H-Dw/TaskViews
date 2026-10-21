@@ -30,7 +30,8 @@ def validate_profile(plan):
     profile = plan.get('taskviews_profile', FULL_PROFILE)
     if profile == FULL_PROFILE:
         if (plan.get('mini_profile') is not None or plan.get('mini_controls_view') is not None
-                or plan.get('mini_keyboard_tools') is not None):
+                or plan.get('mini_keyboard_tools') is not None or plan.get('mini_keyboard_selection') is not None
+                or plan.get('mini_keyboard_research') is not None):
             raise ValueError('Full TaskViews cannot carry a Mini profile')
         return profile
     arms = plan.get('arms', [])
@@ -39,8 +40,8 @@ def validate_profile(plan):
             or plan.get('taskviews_feedback', False) is not False
             or plan.get('mini_profile') != frozen_profile(arms[0])
             or plan.get('cua_contract') != mini_cua_contract()
-            or plan.get('source_branch') != 'mini'):
-        raise ValueError('Mini requires one explicit frozen profile on the mini branch, without full feedback')
+            or plan.get('source_branch') not in ('main', 'mini')):
+        raise ValueError('Mini requires one explicit frozen profile from main (legacy mini accepted), without full feedback')
     if plan.get('mini_controls_view') is not None:
         from kobe_views.controls_view import policy
         if arms != ['taskviews'] or plan['mini_controls_view'] != policy():
@@ -54,6 +55,16 @@ def validate_profile(plan):
             raise ValueError('Keyboard tools require their exact declared Mini policy')
         if plan.get('mini_controls_view') is not None and len(selected['enabled_toolsets']) > 1:
             raise ValueError('Scoped keyboard tools cannot use the legacy controls-only packet')
+    if plan.get('mini_keyboard_selection') is not None:
+        from kobe_views.keyboard_selection import validate_task_keyboard
+        if arms != ['taskviews']:
+            raise ValueError('Task keyboard selection requires the Mini TaskViews arm')
+        validate_task_keyboard(plan, plan.get('official', {}))
+    if plan.get('mini_keyboard_research') is not None:
+        from kobe_views.task_keyboard import validate_plan_research
+        if plan.get('mini_controls_view') is not None:
+            raise ValueError('Task keyboard research cannot use the legacy controls-only packet')
+        validate_plan_research(plan, plan.get('official', {}))
     return profile
 
 

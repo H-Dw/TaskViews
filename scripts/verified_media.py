@@ -61,7 +61,7 @@ def prepare(args):
     # Validate both task/evidence/asset sets before publishing the matrix.
     for key in TASKS:
         task = pair.verify_task(args.benchmark_repo, key)
-        spec = pair.specification('sx', 'SX_URL_SB', 'relative', config['experiment'], key)
+        spec = pair.specification('sx', 'SX_URL_SB', 'relative', config['experiment'], key, keyboard_task=task)
         pair.validation_evidence(args.validation_dir/key, 'sx', spec['base_url'], spec['cua_contract'], spec)
         for item in pair.asset_files(task):
             if not (args.assets_root/key/'assets'/item['name']).is_file():

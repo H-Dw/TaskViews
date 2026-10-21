@@ -149,7 +149,8 @@ class MiniTaskViewsContext:
         from .mini_interaction import SILENT_KEY_ALIASES
 
         toolsets = self.owner.keyboard_toolsets
-        topic, selection = select_topic([self.prose(e) for _, e, _ in decisions], toolsets)
+        task_catalog = self.owner.task_keyboard
+        topic, selection = select_topic([self.prose(e) for _, e, _ in decisions], toolsets, task_catalog)
         if topic is None:
             return None
         # A separate keyboard index survives long intervening mouse sequences
@@ -160,7 +161,7 @@ class MiniTaskViewsContext:
         memories, eligible = [], 0
         for seq, event, digest in rows:
             keys = parse_keys(event['tool']['arguments'].get('keys'))
-            if key_topic([SILENT_KEY_ALIASES.get(key, key) for key in keys], topic, toolsets) != topic:
+            if key_topic([SILENT_KEY_ALIASES.get(key, key) for key in keys], topic, toolsets, task_catalog) != topic:
                 continue
             eligible += 1
             if len(memories) >= 2:
@@ -185,7 +186,8 @@ class MiniTaskViewsContext:
                 'receipt': 'recorded; see original event',
                 'image_delta': 'same_bytes' if images[0] == images[1] else 'different_bytes',
                 'effect_status': 'key_not_emitted' if invalid else 'unknown'})
-        return keyboard_record(topic, selection, memories, eligible - len(memories), toolsets=toolsets)
+        return keyboard_record(topic, selection, memories, eligible - len(memories),
+                               toolsets=toolsets, task_catalog=task_catalog)
 
     def validate_review_references(self, note, *, final):
         """Check review process/provenance, never certify a model's visual claim."""
@@ -310,7 +312,7 @@ class MiniTaskViewsContext:
             original_current['recent_repetition'] = repeated
         keyboard = None if self.owner.controls_view_enabled else self.keyboard_view(decisions)
         if not self.owner.controls_view_enabled and keyboard is None:
-            original_current['keyboard_lookup'] = lookup_guide(self.owner.keyboard_toolsets)
+            original_current['keyboard_lookup'] = lookup_guide(self.owner.keyboard_toolsets, self.owner.task_keyboard)
         if keyboard:
             for memory in keyboard['memory']:
                 row = self.read('SELECT seq,id,payload FROM events WHERE id=?', (memory['source_event_id'],))[0]

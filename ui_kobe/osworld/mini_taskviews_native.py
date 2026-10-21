@@ -12,6 +12,7 @@ from .qwen_native_base import QwenNativeProvider
 from .mini_interaction import validate_keys
 from kobe_views.artifact_view import GUIDANCE as ARTIFACT_GUIDANCE
 from kobe_views.keyboard_view import normalize_toolsets, policy as keyboard_policy
+from kobe_views.task_keyboard import ENV as RESEARCH_ENV, instruction_sha, load_bundle
 from .mini_recovery import generate_candidate as generate_mini_candidate
 
 
@@ -28,6 +29,8 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
 
     def __init__(self, **options):
         self.keyboard_toolsets = normalize_toolsets(json.loads(os.environ.get('UI_KOBE_MINI_KEYBOARD_TOOLS', '[]')))
+        research = os.environ.get(RESEARCH_ENV)
+        self.task_keyboard = load_bundle(json.loads(research)) if research else None
         if (os.environ.get('UI_KOBE_TASKVIEWS_PROFILE', PROFILE) != PROFILE
                 or os.environ.get('UI_KOBE_TASKVIEWS_FEEDBACK_V10', '0') != '0'):
             raise ValueError('Mini requires its own declared profile, without full feedback workflow')
@@ -35,7 +38,7 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
         if control_version not in ('disabled', VERSION):
             raise ValueError('Unknown Mini controls view')
         self.controls_view_enabled = control_version == VERSION
-        if self.controls_view_enabled and self.keyboard_toolsets:
+        if self.controls_view_enabled and (self.keyboard_toolsets or self.task_keyboard is not None):
             raise ValueError('Scoped keyboard tools cannot use the legacy controls-only packet')
         self.native_parameter_repair_feedback = self.controls_view_enabled
         self.context_label = CONTROLS_LABEL if self.controls_view_enabled else LABEL
@@ -89,6 +92,8 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
         self.mini_context = MiniTaskViewsContext(self)
 
     def optional_context(self, instruction, obs):
+        if self.task_keyboard is not None and instruction_sha(instruction) != self.task_keyboard['instruction_sha256']:
+            raise ReadAnomaly('Temporary keyboard references belong to a different task')
         return self.mini_context.context(instruction)
 
     def context_delivered(self):
@@ -112,7 +117,7 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
 
     def checkpoint_state(self):
         value = {'contract': profile_contract(), 'delivery': self.mini_context.snapshot(),
-                 'keyboard_tools': keyboard_policy(self.keyboard_toolsets)}
+                 'keyboard_tools': keyboard_policy(self.keyboard_toolsets, self.task_keyboard)}
         if self.controls_view_enabled:
             value['controls_view'] = policy()
         return value
@@ -120,7 +125,7 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
     def restore_checkpoint_state(self, value):
         if (not isinstance(value, dict) or set(value) not in ({'contract', 'delivery', 'keyboard_tools'},
                 {'contract', 'delivery', 'keyboard_tools', 'controls_view'}) or value['contract'] != profile_contract()
-                or value['keyboard_tools'] != keyboard_policy(self.keyboard_toolsets)):
+                or value['keyboard_tools'] != keyboard_policy(self.keyboard_toolsets, self.task_keyboard)):
             raise ReadAnomaly('Mini checkpoint profile differs from implementation')
         if 'controls_view' in value and (not self.controls_view_enabled or value['controls_view'] != policy()):
             raise ReadAnomaly('Mini controls checkpoint extension is incompatible')

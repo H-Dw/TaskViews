@@ -161,6 +161,27 @@ def test_default_actor_prompt_never_advertises_application_topics(monkeypatch, t
     actor.close()
 
 
+@pytest.mark.parametrize('topic', CATALOG)
+def test_each_general_topic_reaches_actor_within_existing_view_budget(monkeypatch, tmp_path, topic):
+    """More catalog entries must remain discoverable and individually deliverable."""
+    monkeypatch.delenv('UI_KOBE_MINI_KEYBOARD_TOOLS', raising=False)
+    actor, obs, transport = make_actor(monkeypatch, tmp_path)
+    try:
+        annotated(transport, lambda: f'<key_lookup>{topic}</key_lookup>')
+        predict(actor, obs)
+        advertised = packet(transport)['views']['current']['records'][0]['keyboard_lookup']['topics']
+        assert topic in advertised
+        assert not any(name.startswith(('app.', 'type.', 'platform.')) for name in advertised)
+        predict(actor, obs)
+        keyboard = packet(transport)['views']['keyboard']
+        assert keyboard['omitted_records'] == 0, topic
+        assert keyboard['records'][0]['topic'] == topic
+        assert actor.mini_context.trace['packet_bytes'] <= 3000
+        assert len(transport.requests) == 2
+    finally:
+        actor.close()
+
+
 def test_runtime_catalog_is_part_of_source_freeze():
     from scripts.osworld_native_experiment import project_snapshot
     assert any(path.replace('\\', '/') == 'kobe_views/key_tools/catalog.json' for path in project_snapshot())

@@ -3,3 +3,5 @@
 *.jpg binary
 # Real SSE fixtures are hashed against sealed originals; preserve their bytes.
 tests/fixtures/k3-empty-content/*.jsonl -text
+# Keyboard backups retain the original bytes recorded in the audit manifest.
+tools/keyboard/backups/*.pre-expansion.* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

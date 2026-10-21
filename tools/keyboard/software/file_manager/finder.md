@@ -6,6 +6,8 @@
 
 已核对的适用对象：Finder。
 
+任务说明中的匹配别名：`Apple Finder`、`macOS Finder`。匹配规则与平台过滤见 [使用说明](../../README.md)。
+
 macOS 专用资料；当前 Linux/X11 Mini 不得启用 command 组合键。Option 记为 alt；移植时须验证原生适配器。
 
 此目录不会自动继承或覆盖 general；启用一个软件也不会隐式启用同类软件。

@@ -1,4 +1,8 @@
-# OSWorld K3 TaskViews
+# TaskViews
+
+2026-10-21：最新 **TaskViews-mini** 已迁入 `main`；旧 `main` 保留为 `backup/main-20261021`。项目仓库为 [H-Dw/TaskViews](https://github.com/H-Dw/TaskViews)。Mini 的准备、启动、恢复和离线校验入口使用 `main`；旧实验保留原分支及源码记录。
+
+2026-10-20：扩充通用按键指引，新增按任务软件名称选择目录，以及默认关闭的任务级联网按键调研。开启 `--keyboard-research` 后，先通过 API 搜索软件指引并保存 Markdown，再生成仅供当前任务读取的临时按键目录；额外研究调用单独记账。详见[自动目录选择](docs/taskviews-keyboard-auto-selection-20261020.md)、[联网调研使用说明](docs/task-keyboard-web-research-20261020.md)和[通用按键与 v7 审计](docs/taskviews-mini-v7-keyboard-audit-20261020.md)。
 
 2026-10-18：Mini 修订为 `mini_report_recovery_v7`。辅助产物报告错误与原生工具错误分流，前者只追加简短反馈，不回填被拒回复及推理；同轮修复按真实输入重新准入，只裁剪完整旧轮，保留任务、当前观察和工具 ID 配对。报告改为扁平四项结构，继续共用原重试池、截止时间和输出预算。实现与真实失败输入的离线验证见 [v7 恢复说明](docs/taskviews-mini-report-recovery-v7.md)。本次不启动线上评测。
 
@@ -22,7 +26,7 @@
 
 OSWorld-Verified（OSWorld-1）的发票与流水核对入口为 `scripts/verified_invoice.py`。2026-10-15按用户指令使用随想接口、环境变量 `SX_QWEN_API_KEY` 和 `SX_URL_SB`、模型 `qwen3.8-flash` / low，每组最多35决策，UI-KOBE-like → Mini串行。含大图的真实接口检查、六例离线集成及运行预检通过；v3真实运行完成14轮及14次完整模型响应后，因Windows可用RAM降至3.736GiB触发4GiB保护，已清理容器，未取得评分、Mini未启动。当前配置与状态见 [随想接入说明](docs/osworld-verified-invoice-sx-flash.md)；历史证据均保留。
 
-`mini` 分支提供 **TaskViews Mini**：一个共同 native actor，默认 `current/keyboard/attempts/lessons` 四个有界视图，零额外分析角色请求、显式 profile 与检查点。最初 M0 的三视图结构保留在历史说明中。后续 Mini 测试先执行 `git switch mini`，使用带分支检查的 `scripts/validate_mini.py`。实现、配置和运行边界见 [Mini 使用说明](docs/taskviews-mini.md)，后续分层接入见 [路线图](docs/taskviews-mini-roadmap-20261012.md)。当前暂停的完整 V12 不迁移为 Mini。
+`main` 分支提供 **TaskViews Mini**：一个共同 native actor，默认 `current/keyboard/attempts/lessons` 四个有界视图，正式操作中零额外分析角色请求、显式 profile 与检查点；可选的操作前联网调研单独记录调用。最初 M0 的三视图结构保留在历史说明中。后续 Mini 测试先执行 `git switch main`，使用带分支检查的 `scripts/validate_mini.py`。实现、配置和运行边界见 [Mini 使用说明](docs/taskviews-mini.md)，后续分层接入见 [路线图](docs/taskviews-mini-roadmap-20261012.md)。当前暂停的完整 V12 不迁移为 Mini。
 
 以下 v7 说明是旧 Kimi 比较路径的历史接口文档，不是 Mini 或 Qwen 完整版的当前配置。v7 分为 **baseline、UI-KOBE-like、TaskViews 三组**，共用同一套 actor、K3 协议适配、截图/坐标契约和官方执行评分。baseline 不创建转换图数据库，也不读取扩展记忆；UI-KOBE-like 单独测试执行边的保存与检索，TaskViews 在此基础上增加任务模块和自适应视图。详见 [三组 actor 与证据边界](docs/cua-v7.md)。
 
@@ -95,4 +99,4 @@ XML 迁移证据不能代替其他 profile、截图契约或修改后源码的�
 
 为接口验证可预先声明 `--purpose cua_smoke --max-steps 3 --agent-interface k3-native`，使用 Task059 原任务和官方 runner 的短程决策上限。三组共用同一冻结计划；`benchmark_comparable=false`，不得与正式 500 决策任务成绩比较。正式 evaluation 的上限保持 500。
 
-`ui_kobe`、`kobe_views` 与部分旧集成/测试工具保留上游来源；旧 GLM/Qwen/Task035 入口不属于本次 v7 比较路径。不要据其旧单动作策略推断当前行为。项目是本地 Git 仓库，尚未建立 GitHub 远程或推送。
+`ui_kobe`、`kobe_views` 与部分旧集成/测试工具保留上游来源；旧 GLM/Qwen/Task035 入口不属于本次 v7 比较路径。不要据其旧单动作策略推断当前行为。当前 GitHub 仓库为 [H-Dw/TaskViews](https://github.com/H-Dw/TaskViews)。

@@ -2,9 +2,11 @@
 
 目录 ID：`app.blender`。类型：`graphics`。平台：`linux / windows`。
 
-状态：显式选择后可检索。资料核对日期：2026-10-17；快捷键未在 guest 中逐项实测。
+状态：任务名匹配或显式选择后可检索。资料核对日期：2026-10-17；快捷键未在 guest 中逐项实测。
 
 已核对的适用对象：Blender。
+
+任务说明中的匹配别名：`Blender`。匹配规则与平台过滤见 [使用说明](../../README.md)。
 
 Blender 默认 keymap；Industry Compatible 与插件键位不在本条范围。资料为 4.1，实际版本需核对。
 

@@ -91,7 +91,8 @@ def test_gimp_integration_evidence_cannot_be_reused_for_vlc(tmp_path,monkeypatch
     for arm in plan['arms']:
         for case in ('limit','terminate','empty'):
             row = {k:plan[k] for k in ('model','base_url','cua_contract','generation_fields','max_steps',
-                                      'experiment','task_key','task_id','domain')}
+                                      'experiment','task_key','task_id','domain',
+                                      'mini_keyboard_tools','mini_keyboard_selection')}
             row.update(passed=True,arm=arm,case=case,provider='sx',source_unchanged=True,
                 project_source=identity,live_api_called=False,vm_started=False)
             pair.write(tmp_path/f'{arm}-{case}'/'validation.json',row)

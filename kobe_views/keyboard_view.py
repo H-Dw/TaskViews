@@ -1,4 +1,4 @@
-"""Scoped, source-backed key references. Only general controls route by default."""
+"""Scoped key references; task preparation can freeze name-matched directories."""
 from copy import deepcopy
 import hashlib
 import json
@@ -43,17 +43,19 @@ def normalize_toolsets(toolsets=()):
     return tuple(sorted(toolsets))
 
 
-def active_catalog(toolsets=()):
+def active_catalog(toolsets=(), task_catalog=None):
     active = dict(CATALOG)
     for key in normalize_toolsets(toolsets):
         for name, entry in TOOLSETS[key]['topics'].items():
             active[key + '.' + name] = entry
+    if task_catalog is not None:
+        active.update(task_catalog['topics'])  # Validated task.* namespace, owned by this actor instance.
     return active
 
 
-def select_topic(proposals, toolsets=()):
-    """Newest intent only. Scoped references require both opt-in and exact lookup."""
-    active = active_catalog(toolsets)
+def select_topic(proposals, toolsets=(), task_catalog=None):
+    """Newest intent only. Scoped references require a frozen directory and exact lookup."""
+    active = active_catalog(toolsets, task_catalog)
     # An empty newest intent must not revive an older request.
     text = proposals[0] if proposals and isinstance(proposals[0], str) else ''
     if '<key_lookup' in text or '</key_lookup' in text:
@@ -73,9 +75,9 @@ def select_topic(proposals, toolsets=()):
     return None, 'no_matching_intent'
 
 
-def key_topic(keys, topic=None, toolsets=()):
+def key_topic(keys, topic=None, toolsets=(), task_catalog=None):
     """Exact chords only; unknown keys never become editing evidence."""
-    active = active_catalog(toolsets)
+    active = active_catalog(toolsets, task_catalog)
     if topic is not None:
         row = active.get(topic)
         return topic if row and any(r['tool']['keys'] == keys for r in row['recipes']) else None
@@ -83,26 +85,32 @@ def key_topic(keys, topic=None, toolsets=()):
     return matches[0] if len(matches) == 1 else None
 
 
-def record(topic, selection, memories=(), omitted=0, *, toolsets=()):
-    catalog = active_catalog(toolsets)[topic]
+def record(topic, selection, memories=(), omitted=0, *, toolsets=(), task_catalog=None):
+    catalog = active_catalog(toolsets, task_catalog)[topic]
     group_id = topic.rsplit('.', 1)[0] if '.' in topic else 'general'
+    temporary = topic.startswith('task.')
+    source = (task_catalog['sources'][catalog['sources'][0]]['url'] if temporary
+              else SOURCES[catalog['sources'][0]])
     return {'version': VERSION, 'grade': 'key_reference_and_episode_evidence',
         'topic': topic, 'selection': selection, 'toolset': group_id, 'scope': catalog['scope'],
-        'source': SOURCES[catalog['sources'][0]],
+        'source': source,
+        **({'candidate_origin': catalog['candidate_origin'], 'verification': 'web_reference_not_guest_tested'}
+           if temporary else {}),
         'recipes': deepcopy(catalog['recipes']), 'check': catalog['check'],
         'memory': deepcopy(list(memories)), 'memory_omitted': omitted}
 
 
-def lookup_guide(toolsets=()):
-    return {'format': '<key_lookup>topic</key_lookup>', 'topics': list(active_catalog(toolsets)),
+def lookup_guide(toolsets=(), task_catalog=None):
+    return {'format': '<key_lookup>topic</key_lookup>', 'topics': list(active_catalog(toolsets, task_catalog)),
             'check': 'Scoped topics need exact lookup; verify current app/focus.'}
 
 
-def policy(toolsets=()):
+def policy(toolsets=(), task_catalog=None):
     enabled = normalize_toolsets(toolsets)
     return {'version': VERSION, 'platform': DATA['runtime_platform'],
-            'enabled_toolsets': ['general', *enabled], 'topics': list(active_catalog(enabled)),
+            'enabled_toolsets': ['general', *enabled], 'topics': list(active_catalog(enabled, task_catalog)),
+            **({'task_catalog': deepcopy(task_catalog['identity'])} if task_catalog is not None else {}),
             'max_key_edges': 32, 'max_memory_rows': 2,
             'catalog_sha256': CATALOG_SHA256,
-            'selection': 'general newest intent; scoped exact lookup only after explicit opt-in; no app detection',
+            'selection': 'general newest intent; scoped exact lookup from frozen/manual toolsets; no foreground detection',
             'memory': 'same episode exact chord evidence; applicability and semantic success remain unknown'}

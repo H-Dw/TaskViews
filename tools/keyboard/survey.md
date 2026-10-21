@@ -15,7 +15,7 @@
 | WebArena | 自托管 GitLab、Reddit 风格论坛、Magento 商城/后台、OpenStreetMap；Wikipedia 辅助站点 | type.browser / type.web_app；GitLab 单独建档。不能从商业网站最新版手册假定自托管站点支持同一快捷键 | [官方仓库及站点变量](https://github.com/web-arena-x/webarena)、[论文](https://arxiv.org/abs/2307.13854) |
 | VisualWebArena | Shopping、Reddit、Classifieds，要求处理图像内容的网页任务 | 浏览器快捷键与站点控件分层；没有核验的站点业务快捷键不编造配方 | [官方仓库](https://github.com/web-arena-x/visualwebarena)、[论文](https://arxiv.org/abs/2401.13649) |
 | WorkArena / WorkArena++ | ServiceNow 的列表、表单、知识库和工作流操作 | type.web_app 控件导航；没有把 ServiceNow 的版本/实例绑定当作通用快捷键 | [官方仓库](https://github.com/ServiceNow/WorkArena)；浏览器与业务系统是两层软件 |
-| Mind2Web | 多领域真实网站上的人工操作序列 | 以 general 与 type.web_app 为基础；网站名称不会触发专用目录 | [项目页](https://osu-nlp-group.github.io/Mind2Web/)、[官方仓库](https://github.com/OSU-NLP-Group/Mind2Web)；原版为离线操作数据，不能当作全部网站的在线快捷键验证 |
+| Mind2Web | 多领域真实网站上的人工操作序列 | 以 general 与显式 type.web_app 为基础；仅 catalog 登记的 GitHub、GitLab 等别名可触发对应目录，其他网站不会自动建立新目录 | [项目页](https://osu-nlp-group.github.io/Mind2Web/)、[官方仓库](https://github.com/OSU-NLP-Group/Mind2Web)；原版为离线操作数据，不能当作全部网站的在线快捷键验证 |
 | MiniWoB++ | 按钮、表单、文本输入、菜单和其他合成网页控件 | 用于确定 focus/activate/dismiss 等通用控件层；不对应某个商业软件 | [官方文档](https://miniwob.farama.org/)、[官方仓库](https://github.com/Farama-Foundation/miniwob-plusplus) |
 | AndroidWorld | 系统 Contacts/Clock 等与离线第三方 Android 应用；任务包含文件、短信、笔记等 | type.android；系统导航是 Android 动作，未伪装成当前 Linux 的按键 token | [官方项目](https://google-research.github.io/android_world/)、[官方仓库](https://github.com/google-research/android_world)；116 项参数化任务、20 个应用 |
 | AndroidLab | Bluecoins、Calendar、Cantook、Clock、Contacts、Maps.me、PiMusic、Settings、Zoom | 全部归 Android 平台资料；桌面上同名 Clock/Zoom 不继承手机绑定 | [官方应用清单](https://github.com/THUDM/Android-Lab)；138 项任务、9 个应用 |

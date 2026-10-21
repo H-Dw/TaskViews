@@ -203,15 +203,15 @@ def committed_source():
 
 def require_mini_branch():
     branch = subprocess.check_output(['git', '-C', str(PROJECT), 'branch', '--show-current'], text=True).strip()
-    if branch != 'mini':
-        raise RuntimeError('Switch Git to mini before preparing, launching or resuming Mini tests')
+    if branch != 'main':
+        raise RuntimeError('Switch Git to main before preparing, launching or resuming Mini tests')
 
 
 def prepare(root, task, validation, purpose="evaluation", admission=None, profile_name="low-16k", cua_config=None,
             agent_interface='official-xml', compatibility=None, max_steps=None, checkpoints=False,
             taskviews_feedback=False, taskviews_profile='full_checkpoint', qwen_arm='taskviews',
             inspection_minutes=None, qwen_generation_profile=None, evaluation_steps=None, completion_pipeline=None,
-            keyboard_toolsets=None):
+            keyboard_toolsets=None, keyboard_mode='task_names', keyboard_research=False, keyboard_research_config=None):
     from examples.osworld2_eval import official_identity
     from ui_kobe.osworld.task_examples import task_example
     from ui_kobe.osworld.runner import source_snapshot
@@ -221,8 +221,13 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         generation_profile as qwen_profile, generation_request_fields, request_policy)
     from ui_kobe.osworld.taskviews_profiles import FULL_PROFILE, MINI_PROFILE, frozen_profile, mini_cua_contract
     mini = taskviews_profile == MINI_PROFILE
-    from kobe_views.keyboard_view import policy as keyboard_policy
-    keyboard = keyboard_policy(() if keyboard_toolsets is None else keyboard_toolsets)
+    if keyboard_research and (not mini or qwen_arm != 'taskviews'):
+        raise ValueError('Keyboard research requires the Mini TaskViews arm')
+    if keyboard_research_config and not keyboard_research:
+        raise ValueError('--keyboard-research-config requires --keyboard-research')
+    from kobe_views.keyboard_selection import task_keyboard_policy
+    # Validate explicit settings before reading resources; resolve task names below.
+    task_keyboard_policy({}, mode=keyboard_mode, requested=keyboard_toolsets or ())
     if keyboard_toolsets and (not mini or qwen_arm != 'taskviews'):
         raise ValueError('Explicit keyboard toolsets require the Mini TaskViews arm')
     qwen = agent_interface == 'qwen-native'
@@ -286,6 +291,7 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     # remains in launch() and the VM guard, under the authorized resource policy.
     status = host_status()
     identity = official_identity(REPO, task, "osworld-v2.1")
+    keyboard = task_keyboard_policy(identity, mode=keyboard_mode, requested=keyboard_toolsets or ())
     assets = {str(ROOT / "assets/osworld-v2.1" / f"task_{task}" / name):
               digest(ROOT / "assets/osworld-v2.1" / f"task_{task}" / name)
               for name in task_example(task).assets}
@@ -377,8 +383,8 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     if mini:
         plan['mini_profile'] = frozen_profile(qwen_arm)
         if qwen_arm == 'taskviews':
-            plan['mini_keyboard_tools'] = keyboard
-        plan['source_branch'] = 'mini'
+            plan.update(keyboard)
+        plan['source_branch'] = 'main'
         plan['source_commit'] = committed_source()
         plan['iteration_commit_required'] = True
         plan['runtime_revision'] = 10
@@ -388,7 +394,8 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
         plan['budget_scopes']['advisory'] = 'no extra role requests in M0'
         plan['checkpoint_policy']['inspection_minutes'] = 30
         plan['checkpoint_policy']['read_error_policy'] = 'core frame/journal/native/VM integrity pauses; optional projection omitted whole'
-        plan['user_authorization'] = ('2026-10-12: user authorized Mini implementation on mini branch. '
+        plan['user_authorization'] = ('2026-10-12: user authorized Mini implementation; '
+            '2026-10-21: user promoted the latest Mini code to main. '
             'Preparing a plan does not authorize a new evaluation episode or migration of paused full TaskViews.')
     taskviews_workflow(plan)
     if inspection_minutes is not None:
@@ -416,6 +423,8 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     elif purpose not in ("evaluation", 'cua_smoke', 'checkpoint_evaluation'):
         raise RuntimeError("Setup validation is only supported for Task046")
     root.mkdir(parents=True, exist_ok=False)
+    from kobe_views.keyboard_research import prepare_research
+    prepare_research(plan, identity, root, enabled=keyboard_research, config_path=keyboard_research_config)
     write(root / "plan.json", plan)
     write(root / "project-source-planned.json", project_snapshot())
     write(root / "osworld-source-planned.json", source_snapshot(REPO))
@@ -526,6 +535,10 @@ def launch(root, arm):
         manifest['mini_profile'] = plan['mini_profile']
         if 'mini_keyboard_tools' in plan:
             manifest['mini_keyboard_tools'] = plan['mini_keyboard_tools']
+        if 'mini_keyboard_selection' in plan:
+            manifest['mini_keyboard_selection'] = plan['mini_keyboard_selection']
+        if 'mini_keyboard_research' in plan:
+            manifest['mini_keyboard_research'] = plan['mini_keyboard_research']
         manifest['source_branch'] = plan['source_branch']
     if plan.get('checkpoint_policy', {}).get('enabled'):
         if arm != 'taskviews' and not (mini and arm == 'ui_kobe_like'):
@@ -919,7 +932,13 @@ def main():
     parser.add_argument('--taskviews-profile', choices=('full_checkpoint', 'mini_fixed_v1'), default='full_checkpoint')
     parser.add_argument('--qwen-arm', choices=('taskviews', 'ui_kobe_like'), default='taskviews')
     parser.add_argument('--keyboard-toolset', action='append', dest='keyboard_toolsets',
-                        help='Explicit Linux keyboard toolset ID; repeat to add. Default: general only')
+                        help='Add an explicit Linux keyboard directory to the task-name selection; repeat to add')
+    parser.add_argument('--keyboard-mode', choices=('task_names', 'manual'), default='task_names',
+                        help='Match software names in public task fields, or use general plus explicit directories only')
+    parser.add_argument('--keyboard-research', action='store_true',
+                        help='Opt in to bounded API web research before freezing a new Mini TaskViews plan')
+    parser.add_argument('--keyboard-research-config', type=Path,
+                        help='Optional research endpoint/model/budget JSON; requires --keyboard-research')
     parser.add_argument('--inspection-minutes', type=int, help='Freeze the requested checkpoint inspection interval')
     parser.add_argument('--qwen-generation-profile', help='Explicit Qwen generation profile; legacy default remains disabled')
     parser.add_argument('--evaluation-steps', type=int, nargs='+', help='Official evaluation after these completed decisions; last equals max-steps')
@@ -931,7 +950,8 @@ def main():
         prepare(root, args.task, args.validation, args.purpose, args.admission, args.profile, args.cua_config,
                 args.agent_interface, args.k3_compatibility, args.max_steps, args.checkpoints, args.taskviews_feedback,
                 args.taskviews_profile, args.qwen_arm, args.inspection_minutes,
-                args.qwen_generation_profile, args.evaluation_steps, args.completion_pipeline, args.keyboard_toolsets)
+                args.qwen_generation_profile, args.evaluation_steps, args.completion_pipeline, args.keyboard_toolsets,
+                args.keyboard_mode, args.keyboard_research, args.keyboard_research_config)
     elif args.action == "launch":
         lock = Path.home() / ".cache/ui-kobe-osworld-experiment.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)

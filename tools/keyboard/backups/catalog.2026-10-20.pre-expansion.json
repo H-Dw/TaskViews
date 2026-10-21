@@ -1,0 +1,3691 @@
+{
+  "schema_version": 1,
+  "version": "mini_keyboard_tools_v3",
+  "researched_on": "2026-10-17",
+  "runtime_platform": "linux",
+  "default_toolsets": [
+    "general"
+  ],
+  "format": {
+    "tool": {
+      "action": "key",
+      "keys": [
+        "ctrl",
+        "c"
+      ]
+    },
+    "chord_semantics": "simultaneous; sequential chords require separate native calls"
+  },
+  "sources": {
+    "gnome_nav": {
+      "title": "GNOME keyboard navigation",
+      "url": "https://help.gnome.org/gnome-help/keyboard-nav.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "windows": {
+      "title": "Windows keyboard shortcuts",
+      "url": "https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "mac": {
+      "title": "Mac keyboard shortcuts",
+      "url": "https://support.apple.com/en-us/102650",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "gnome_windows": {
+      "title": "GNOME window states",
+      "url": "https://help.gnome.org/gnome-help/shell-windows-states.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "gnome_maximize": {
+      "title": "GNOME maximize and restore",
+      "url": "https://help.gnome.org/gnome-help/shell-windows-maximize.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "gnome_switch": {
+      "title": "GNOME useful shortcuts",
+      "url": "https://help.gnome.org/gnome-help/shell-keyboard-shortcuts.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "gnome_keymap": {
+      "title": "GNOME default window keymap source",
+      "url": "https://raw.githubusercontent.com/GNOME/gsettings-desktop-schemas/master/schemas/org.gnome.desktop.wm.keybindings.gschema.xml.in",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "gtk_text_cursor": {
+      "title": "GTK TextView cursor and viewport keys",
+      "url": "https://docs.gtk.org/gtk3/signal.TextView.move-cursor.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "gtk_entry_cursor": {
+      "title": "GTK Entry cursor and selection keys",
+      "url": "https://docs.gtk.org/gtk3/signal.Entry.move-cursor.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "files_copy": {
+      "title": "GNOME Files transfer",
+      "url": "https://help.gnome.org/gnome-help/files-copy.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "files_rename": {
+      "title": "GNOME Files rename",
+      "url": "https://help.gnome.org/gnome-help/files-rename.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "files_open": {
+      "title": "GNOME Files navigation",
+      "url": "https://help.gnome.org/gnome-help/files-browse.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "chrome": {
+      "title": "Chrome keyboard shortcuts",
+      "url": "https://support.google.com/chrome/answer/157179?hl=en-PG",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "firefox": {
+      "title": "Firefox keyboard shortcuts",
+      "url": "https://support.mozilla.org/en-US/kb/keyboard-shortcuts-perform-firefox-tasks-quickly",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "edge": {
+      "title": "Edge keyboard shortcuts",
+      "url": "https://support.microsoft.com/en-us/edge/keyboard-shortcuts-in-microsoft-edge",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "libreoffice": {
+      "title": "LibreOffice general shortcuts",
+      "url": "https://help.libreoffice.org/latest/en-US/text/shared/04/01010000.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "writer": {
+      "title": "LibreOffice Writer shortcuts",
+      "url": "https://help.libreoffice.org/latest/en-US/text/swriter/04/01020000.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "calc": {
+      "title": "LibreOffice Calc shortcuts",
+      "url": "https://help.libreoffice.org/latest/en-US/text/scalc/04/01020000.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "impress": {
+      "title": "LibreOffice Impress shortcuts",
+      "url": "https://help.libreoffice.org/latest/en-US/text/simpress/04/01020000.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "gimp": {
+      "title": "GIMP keys and mouse reference",
+      "url": "https://docs.gimp.org/3.0/en/key-reference.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "gimp_edit": {
+      "title": "GIMP editing shortcuts",
+      "url": "https://docs.gimp.org/3.0/en/key-reference-edit.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "gimp_view": {
+      "title": "GIMP view shortcuts",
+      "url": "https://docs.gimp.org/3.0/en/key-reference-view.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "vlc": {
+      "title": "VLC desktop hotkeys",
+      "url": "https://docs.videolan.me/vlc-user/desktop/3.0/en/basic/hotkeys.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "thunderbird": {
+      "title": "Thunderbird keyboard shortcuts",
+      "url": "https://support.mozilla.org/en-US/kb/keyboard-shortcuts-thunderbird",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "vscode": {
+      "title": "VS Code Linux key reference",
+      "url": "https://code.visualstudio.com/shortcuts/keyboard-shortcuts-linux.pdf",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "evince": {
+      "title": "Evince document navigation",
+      "url": "https://help.gnome.org/evince/movingaround.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "evince_zoom": {
+      "title": "Evince zoom",
+      "url": "https://help.gnome.org/evince/movingaround.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "files_hidden": {
+      "title": "GNOME Files hidden files",
+      "url": "https://help.gnome.org/gnome-help/files-hidden.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "word": {
+      "title": "Word keyboard shortcuts",
+      "url": "https://support.microsoft.com/en-us/accessibility/word/keyboard-shortcuts-in-word",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "excel": {
+      "title": "Excel keyboard shortcuts",
+      "url": "https://support.microsoft.com/en-us/accessibility/excel/keyboard-shortcuts-in-excel",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "powerpoint": {
+      "title": "PowerPoint editing shortcuts",
+      "url": "https://support.microsoft.com/en-us/accessibility/powerpoint/use-keyboard-shortcuts-to-create-powerpoint-presentations",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "outlook": {
+      "title": "Outlook keyboard shortcuts",
+      "url": "https://support.microsoft.com/en-us/accessibility/outlook/keyboard-shortcuts-for-outlook",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "audacity": {
+      "title": "Audacity command and keyboard reference",
+      "url": "https://manual.audacityteam.org/man/keyboard_shortcut_reference.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "inkscape": {
+      "title": "Inkscape default keymap source",
+      "url": "https://gitlab.com/inkscape/inkscape/-/raw/master/share/keys/inkscape.xml",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "photoshop": {
+      "title": "Photoshop keyboard shortcuts",
+      "url": "https://helpx.adobe.com/photoshop/desktop/get-started/settings-and-preferences/view-keyboard-shortcuts.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "after_effects": {
+      "title": "After Effects keyboard shortcuts",
+      "url": "https://helpx.adobe.com/after-effects/desktop/get-started/keyboard-shortcuts/keyboard-shortcuts-reference.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "premiere": {
+      "title": "Premiere default shortcuts",
+      "url": "https://helpx.adobe.com/premiere/desktop/get-started/keyboard-shortcuts/default-keyboard-shortcuts.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "gitlab": {
+      "title": "GitLab keyboard shortcuts",
+      "url": "https://docs.gitlab.com/user/shortcuts/",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "github": {
+      "title": "GitHub keyboard shortcuts",
+      "url": "https://docs.github.com/en/get-started/accessibility/keyboard-shortcuts",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "safari": {
+      "title": "Safari keyboard shortcuts",
+      "url": "https://support.apple.com/guide/safari/cpsh003/mac",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "notes": {
+      "title": "Notes keyboard shortcuts",
+      "url": "https://support.apple.com/guide/notes/apd46c25187e/mac",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "mail": {
+      "title": "Mail keyboard shortcuts",
+      "url": "https://support.apple.com/guide/mail/mlhlb94f262b/mac",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "preview": {
+      "title": "Preview keyboard shortcuts",
+      "url": "https://support.apple.com/guide/preview/cpprvw0003/mac",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "terminal": {
+      "title": "GNOME Terminal shortcuts",
+      "url": "https://help.gnome.org/users/gnome-terminal/stable/adv-keyboard-shortcuts.html.en",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "android": {
+      "title": "Android KeyEvent",
+      "url": "https://developer.android.com/reference/android/view/KeyEvent",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "pycharm": {
+      "title": "PyCharm Windows/Linux keymap card",
+      "url": "https://resources.jetbrains.com/storage/products/pycharm/docs/PyCharm_ReferenceCard.pdf",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "matlab": {
+      "title": "MATLAB Editor keyboard shortcuts",
+      "url": "https://www.mathworks.com/help/matlab/matlab_prog/editor-keyboard-shortcuts.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "autocad": {
+      "title": "AutoCAD default shortcuts (2023)",
+      "url": "https://help.autodesk.com/cloudhelp/2023/ENU/AutoCAD-Customization/files/GUID-B6A9C126-230D-47F5-8973-464BC80E3736.htm",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested"
+    },
+    "blender": {
+      "title": "Blender 4.1 default keymap",
+      "url": "https://docs.blender.org/manual/en/4.1/interface/keymap/blender_default.html",
+      "accessed": "2026-10-17",
+      "kind": "official_documentation",
+      "verification": "documented_not_guest_tested",
+      "access_method": "official_search_index; direct fetch unavailable"
+    }
+  },
+  "toolsets": {
+    "general": {
+      "title": "通用软件控制（默认）",
+      "category": "general",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [],
+      "reference_only": false,
+      "note": "跨软件的传统 GUI 控件和文本操作；需要当前控件支持。终端、画布和游戏不得直接套用文本语义。",
+      "topics": {
+        "editing": {
+          "scope": "focused conventional editable text field",
+          "sources": [
+            "gnome_switch",
+            "gnome_nav",
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "select field text",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "a"
+                ]
+              }
+            },
+            {
+              "intent": "confirm current field or dialog",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "return"
+                ]
+              }
+            },
+            {
+              "intent": "dismiss current popup",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "escape"
+                ]
+              }
+            }
+          ]
+        },
+        "clipboard": {
+          "scope": "selected text/items in a conventional GUI; paste replaces a selection",
+          "sources": [
+            "gnome_switch",
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "copy selection",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "c"
+                ]
+              }
+            },
+            {
+              "intent": "cut selection",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "x"
+                ]
+              }
+            },
+            {
+              "intent": "paste clipboard",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "v"
+                ]
+              }
+            }
+          ]
+        },
+        "undo": {
+          "scope": "focused editable GUI supporting undo",
+          "sources": [
+            "gnome_switch",
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "undo last edit",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "z"
+                ]
+              }
+            }
+          ]
+        },
+        "focus_navigation": {
+          "scope": "visible focusable controls",
+          "sources": [
+            "gnome_nav",
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "next control",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "tab"
+                ]
+              }
+            },
+            {
+              "intent": "previous control",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "shift",
+                  "tab"
+                ]
+              }
+            }
+          ]
+        },
+        "control_activation": {
+          "scope": "focused button or checkbox; Return can submit a default dialog action",
+          "sources": [
+            "gnome_nav",
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "activate focused button",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "return"
+                ]
+              }
+            },
+            {
+              "intent": "toggle focused checkbox or button",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "space"
+                ]
+              }
+            }
+          ]
+        },
+        "popup_dismiss": {
+          "scope": "focused popup, menu or cancellable dialog",
+          "sources": [
+            "gnome_nav",
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "dismiss popup",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "escape"
+                ]
+              }
+            }
+          ]
+        },
+        "context_menu": {
+          "scope": "focused conventional GUI item",
+          "sources": [
+            "gnome_nav",
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "open focused item context menu",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "shift",
+                  "f10"
+                ]
+              }
+            }
+          ]
+        },
+        "page_navigation": {
+          "scope": "scrollable text/document pane; not timeline/grid/terminal",
+          "sources": [
+            "gtk_text_cursor",
+            "windows",
+            "firefox"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "scroll one viewport down",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "pagedown"
+                ]
+              }
+            },
+            {
+              "intent": "scroll one viewport up",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "pageup"
+                ]
+              }
+            }
+          ]
+        },
+        "cursor_navigation": {
+          "scope": "focused conventional single-line text field; check selection and cursor",
+          "sources": [
+            "gtk_entry_cursor",
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "previous character",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "left"
+                ]
+              }
+            },
+            {
+              "intent": "next character",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "right"
+                ]
+              }
+            },
+            {
+              "intent": "field or line start",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "home"
+                ]
+              }
+            },
+            {
+              "intent": "field or line end",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "end"
+                ]
+              }
+            }
+          ]
+        },
+        "text_selection": {
+          "scope": "focused conventional single-line text field",
+          "sources": [
+            "gtk_entry_cursor",
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "extend selection right",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "shift",
+                  "right"
+                ]
+              }
+            },
+            {
+              "intent": "select to field or line end",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "shift",
+                  "end"
+                ]
+              }
+            },
+            {
+              "intent": "select to field or line start",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "shift",
+                  "home"
+                ]
+              }
+            }
+          ]
+        },
+        "window_switch": {
+          "scope": "Linux/Windows desktop; GNOME groups windows by app; recheck selection",
+          "sources": [
+            "gnome_keymap",
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "switch window or application",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "alt",
+                  "tab"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.browser": {
+      "title": "浏览器共性",
+      "category": "browser",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "Chrome",
+        "Firefox",
+        "Edge"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "navigation": {
+          "scope": "Chrome/Firefox/Edge browser chrome; page scripts can intercept keys",
+          "sources": [
+            "chrome",
+            "firefox",
+            "edge"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "focus address bar",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "l"
+                ]
+              }
+            },
+            {
+              "intent": "back in history",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "alt",
+                  "left"
+                ]
+              }
+            },
+            {
+              "intent": "forward in history",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "alt",
+                  "right"
+                ]
+              }
+            },
+            {
+              "intent": "reload page",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "r"
+                ]
+              }
+            }
+          ]
+        },
+        "tabs": {
+          "scope": "Chrome/Firefox/Edge tab controls",
+          "sources": [
+            "chrome",
+            "firefox",
+            "edge"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "new tab",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "t"
+                ]
+              }
+            },
+            {
+              "intent": "close current tab",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "w"
+                ]
+              }
+            },
+            {
+              "intent": "restore closed tab",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "t"
+                ]
+              }
+            }
+          ]
+        },
+        "zoom": {
+          "scope": "Chrome/Firefox/Edge page zoom, not embedded application zoom",
+          "sources": [
+            "chrome",
+            "firefox",
+            "edge"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "zoom page out",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "-"
+                ]
+              }
+            },
+            {
+              "intent": "zoom page in",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "+"
+                ]
+              }
+            },
+            {
+              "intent": "reset page zoom",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "0"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.document": {
+      "title": "文档编辑器共性",
+      "category": "document",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "LibreOffice Writer",
+        "Microsoft Word"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "document": {
+          "scope": "Writer/Word editable document",
+          "sources": [
+            "libreoffice",
+            "word"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "open document dialog",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "o"
+                ]
+              }
+            },
+            {
+              "intent": "save current document",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "s"
+                ]
+              }
+            },
+            {
+              "intent": "print dialog",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "p"
+                ]
+              }
+            }
+          ]
+        },
+        "formatting": {
+          "scope": "selected text in Writer/Word",
+          "sources": [
+            "libreoffice",
+            "word"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "toggle bold",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "b"
+                ]
+              }
+            },
+            {
+              "intent": "toggle italic",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "i"
+                ]
+              }
+            },
+            {
+              "intent": "toggle underline",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "u"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.spreadsheet": {
+      "title": "电子表格共性",
+      "category": "spreadsheet",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "LibreOffice Calc",
+        "Microsoft Excel"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "cells": {
+          "scope": "Calc/Excel grid; leave cell edit mode before sheet navigation",
+          "sources": [
+            "calc",
+            "excel"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "edit active cell",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "f2"
+                ]
+              }
+            },
+            {
+              "intent": "confirm cell entry",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "return"
+                ]
+              }
+            },
+            {
+              "intent": "next worksheet",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "pagedown"
+                ]
+              }
+            },
+            {
+              "intent": "previous worksheet",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "pageup"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.presentation": {
+      "title": "演示文稿共性",
+      "category": "presentation",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "LibreOffice Impress",
+        "Microsoft PowerPoint"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "slides": {
+          "scope": "Impress/PowerPoint presentation editor",
+          "sources": [
+            "impress",
+            "powerpoint"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "start presentation from beginning",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "f5"
+                ]
+              }
+            },
+            {
+              "intent": "exit presentation",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "escape"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.file_manager": {
+      "title": "文件管理器共性",
+      "category": "file_manager",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "GNOME Files",
+        "Windows File Explorer"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "rename": {
+          "scope": "GNOME Files/Explorer selected file; observe editable basename or complete name",
+          "sources": [
+            "files_rename",
+            "windows"
+          ],
+          "check": "Observe selection: basename or full name. Preserve the extension exactly once; verify the confirmed filename.",
+          "recipes": [
+            {
+              "intent": "rename selected file",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "f2"
+                ]
+              }
+            }
+          ]
+        },
+        "file_transfer": {
+          "scope": "GNOME Files/Explorer selected source; navigate to destination before paste",
+          "sources": [
+            "files_copy",
+            "windows"
+          ],
+          "check": "Verify selected source, destination and resulting files; clipboard return does not prove transfer.",
+          "recipes": [
+            {
+              "intent": "cut selected files",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "x"
+                ]
+              }
+            },
+            {
+              "intent": "copy selected files",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "c"
+                ]
+              }
+            },
+            {
+              "intent": "paste into current folder",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "v"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.text_editor": {
+      "title": "文本编辑器共性",
+      "category": "text_editor",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "VS Code",
+        "LibreOffice Writer"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "files": {
+          "scope": "VS Code/Writer text editing, not terminal prompt",
+          "sources": [
+            "vscode",
+            "libreoffice"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "open file dialog",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "o"
+                ]
+              }
+            },
+            {
+              "intent": "save file",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "s"
+                ]
+              }
+            },
+            {
+              "intent": "find text",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "f"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.media": {
+      "title": "媒体时间轴共性",
+      "category": "media",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "VLC",
+        "Audacity"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "playback": {
+          "scope": "VLC/Audacity playback area; text input must not have focus",
+          "sources": [
+            "vlc",
+            "audacity"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "toggle play or pause",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "space"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.terminal": {
+      "title": "终端控件",
+      "category": "terminal",
+      "platforms": [
+        "linux"
+      ],
+      "members": [
+        "GNOME Terminal"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "clipboard": {
+          "scope": "GNOME Terminal; Ctrl+C interrupts a foreground process",
+          "sources": [
+            "terminal"
+          ],
+          "check": "Pasting can execute multiline shell input; inspect the text and current prompt first.",
+          "recipes": [
+            {
+              "intent": "copy selected terminal text",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "c"
+                ]
+              }
+            },
+            {
+              "intent": "paste into terminal",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "v"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.web_app": {
+      "title": "网页应用控件",
+      "category": "web_app",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [],
+      "reference_only": false,
+      "note": "站点业务动作无统一快捷键；先观察标签、输入框和站点帮助。浏览器历史/标签页只属于 type.browser。",
+      "topics": {
+        "focus": {
+          "scope": "standard HTML controls in web applications; custom widgets may differ",
+          "sources": [
+            "chrome",
+            "firefox"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "next focusable control",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "tab"
+                ]
+              }
+            },
+            {
+              "intent": "previous focusable control",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "shift",
+                  "tab"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.graphics": {
+      "title": "图形/音视频创作工具",
+      "category": "graphics",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [],
+      "reference_only": false,
+      "note": "画布、选区、时间轴的同一按键含义不同。专用绑定按软件建档；不从软件类型猜测工具或导出操作。",
+      "topics": {}
+    },
+    "platform.gnome": {
+      "title": "GNOME 窗口管理",
+      "category": "desktop",
+      "platforms": [
+        "linux"
+      ],
+      "members": [
+        "GNOME Shell"
+      ],
+      "reference_only": false,
+      "note": "仅 GNOME 默认键位；Super 对应当前 PyAutoGUI X11 的 win。",
+      "topics": {
+        "window_maximize": {
+          "scope": "GNOME active window; maximize/restore toggle",
+          "sources": [
+            "gnome_maximize"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "toggle maximize",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "alt",
+                  "f10"
+                ]
+              }
+            }
+          ]
+        },
+        "window_minimize": {
+          "scope": "GNOME active window",
+          "sources": [
+            "gnome_nav"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "minimize active window",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "win",
+                  "h"
+                ]
+              }
+            }
+          ]
+        },
+        "window_geometry": {
+          "scope": "GNOME active window; arrows then Return/Escape",
+          "sources": [
+            "gnome_windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "begin moving window",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "alt",
+                  "f7"
+                ]
+              }
+            },
+            {
+              "intent": "begin resizing window",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "alt",
+                  "f8"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "platform.windows": {
+      "title": "Windows 窗口管理",
+      "category": "desktop",
+      "platforms": [
+        "windows"
+      ],
+      "members": [
+        "Windows"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "window_maximize": {
+          "scope": "Windows active window",
+          "sources": [
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "maximize active window",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "win",
+                  "up"
+                ]
+              }
+            },
+            {
+              "intent": "restore or minimize",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "win",
+                  "down"
+                ]
+              }
+            }
+          ]
+        },
+        "window_menu": {
+          "scope": "Windows active window",
+          "sources": [
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "open window menu",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "alt",
+                  "space"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "platform.macos": {
+      "title": "macOS 通用控制（资料）",
+      "category": "desktop",
+      "platforms": [
+        "macos"
+      ],
+      "members": [
+        "macOS"
+      ],
+      "reference_only": true,
+      "note": "当前 Mini 固定 Linux/X11，macOS 文档只作移植参考；不可在本后端启用。",
+      "topics": {
+        "editing": {
+          "scope": "macOS conventional text controls",
+          "sources": [
+            "mac"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "copy selection",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "c"
+                ]
+              }
+            },
+            {
+              "intent": "paste clipboard",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "v"
+                ]
+              }
+            },
+            {
+              "intent": "undo edit",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "z"
+                ]
+              }
+            },
+            {
+              "intent": "select all",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "a"
+                ]
+              }
+            }
+          ]
+        },
+        "windows": {
+          "scope": "macOS application windows",
+          "sources": [
+            "mac"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "switch application",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "tab"
+                ]
+              }
+            },
+            {
+              "intent": "minimize window",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "m"
+                ]
+              }
+            },
+            {
+              "intent": "close current window",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "w"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.chrome": {
+      "title": "Google Chrome",
+      "category": "browser",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "Google Chrome"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "find": {
+          "scope": "Google Chrome page content",
+          "sources": [
+            "chrome"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "find page text",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "f"
+                ]
+              }
+            },
+            {
+              "intent": "next find match",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "g"
+                ]
+              }
+            }
+          ]
+        },
+        "bookmarks": {
+          "scope": "Chrome browser UI",
+          "sources": [
+            "chrome"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "bookmark page",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "d"
+                ]
+              }
+            },
+            {
+              "intent": "bookmark manager",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "o"
+                ]
+              }
+            }
+          ]
+        },
+        "panels": {
+          "scope": "Chrome browser UI",
+          "sources": [
+            "chrome"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "downloads",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "j"
+                ]
+              }
+            },
+            {
+              "intent": "history",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "h"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.firefox": {
+      "title": "Mozilla Firefox",
+      "category": "browser",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "Mozilla Firefox"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "find": {
+          "scope": "Mozilla Firefox page content",
+          "sources": [
+            "firefox"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "find page text",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "f"
+                ]
+              }
+            },
+            {
+              "intent": "next find match",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "g"
+                ]
+              }
+            }
+          ]
+        },
+        "private_window": {
+          "scope": "Firefox browser UI",
+          "sources": [
+            "firefox"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "new private window",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "p"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.edge": {
+      "title": "Microsoft Edge",
+      "category": "browser",
+      "platforms": [
+        "windows"
+      ],
+      "members": [
+        "Microsoft Edge"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "find": {
+          "scope": "Microsoft Edge page content",
+          "sources": [
+            "edge"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "find page text",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "f"
+                ]
+              }
+            },
+            {
+              "intent": "next find match",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "g"
+                ]
+              }
+            }
+          ]
+        },
+        "private_window": {
+          "scope": "Edge browser UI",
+          "sources": [
+            "edge"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "new InPrivate window",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "n"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.libreoffice_writer": {
+      "title": "LibreOffice Writer",
+      "category": "document",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "LibreOffice Writer"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "formatting": {
+          "scope": "Writer document paragraphs",
+          "sources": [
+            "writer"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "Heading 1",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "1"
+                ]
+              }
+            },
+            {
+              "intent": "Heading 2",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "2"
+                ]
+              }
+            },
+            {
+              "intent": "insert page break",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "return"
+                ]
+              }
+            }
+          ]
+        },
+        "search": {
+          "scope": "Writer document",
+          "sources": [
+            "libreoffice"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "find",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "f"
+                ]
+              }
+            },
+            {
+              "intent": "find and replace",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "h"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.libreoffice_calc": {
+      "title": "LibreOffice Calc",
+      "category": "spreadsheet",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "LibreOffice Calc"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "data": {
+          "scope": "Calc grid, not formula editing",
+          "sources": [
+            "calc"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "format cells",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "1"
+                ]
+              }
+            },
+            {
+              "intent": "fill down",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "d"
+                ]
+              }
+            },
+            {
+              "intent": "edit active cell",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "f2"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.libreoffice_impress": {
+      "title": "LibreOffice Impress",
+      "category": "presentation",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "LibreOffice Impress"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "slideshow": {
+          "scope": "Impress editor",
+          "sources": [
+            "impress"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "slideshow from first slide",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "f5"
+                ]
+              }
+            },
+            {
+              "intent": "slideshow from current slide",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "shift",
+                  "f5"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.gimp": {
+      "title": "GIMP",
+      "category": "graphics",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "GIMP"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "history": {
+          "scope": "GIMP image editing",
+          "sources": [
+            "gimp_edit"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "undo image edit",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "z"
+                ]
+              }
+            },
+            {
+              "intent": "redo image edit",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "y"
+                ]
+              }
+            }
+          ]
+        },
+        "zoom": {
+          "scope": "GIMP canvas; not text tool",
+          "sources": [
+            "gimp_view"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "zoom out",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "-"
+                ]
+              }
+            },
+            {
+              "intent": "actual pixels",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "1"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.vlc": {
+      "title": "VLC",
+      "category": "media",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "VLC"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "playback": {
+          "scope": "VLC player; not preferences text fields",
+          "sources": [
+            "vlc"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "toggle playback",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "space"
+                ]
+              }
+            },
+            {
+              "intent": "stop playback",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "s"
+                ]
+              }
+            },
+            {
+              "intent": "toggle full screen",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "f"
+                ]
+              }
+            }
+          ]
+        },
+        "seeking": {
+          "scope": "VLC focused player",
+          "sources": [
+            "vlc"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "short seek backward",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "shift",
+                  "left"
+                ]
+              }
+            },
+            {
+              "intent": "short seek forward",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "shift",
+                  "right"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.thunderbird": {
+      "title": "Thunderbird",
+      "category": "email",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "Thunderbird"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "messages": {
+          "scope": "Thunderbird message list, not compose body",
+          "sources": [
+            "thunderbird"
+          ],
+          "check": "Draft/reply actions do not send mail. Check recipient and body before any separately authorized send action.",
+          "recipes": [
+            {
+              "intent": "new draft",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "n"
+                ]
+              }
+            },
+            {
+              "intent": "reply to sender",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "r"
+                ]
+              }
+            },
+            {
+              "intent": "reply to all",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "r"
+                ]
+              }
+            },
+            {
+              "intent": "archive selected message",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "a"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.vscode": {
+      "title": "Visual Studio Code (Linux)",
+      "category": "text_editor",
+      "platforms": [
+        "linux"
+      ],
+      "members": [
+        "Visual Studio Code"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "navigation": {
+          "scope": "VS Code Linux default keymap; no Vim/Emacs extension",
+          "sources": [
+            "vscode"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "command palette",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "p"
+                ]
+              }
+            },
+            {
+              "intent": "quick open file",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "p"
+                ]
+              }
+            },
+            {
+              "intent": "go to line",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "g"
+                ]
+              }
+            }
+          ]
+        },
+        "search": {
+          "scope": "VS Code editor/workspace",
+          "sources": [
+            "vscode"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "find in editor",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "f"
+                ]
+              }
+            },
+            {
+              "intent": "search workspace",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "f"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.evince": {
+      "title": "Evince",
+      "category": "pdf",
+      "platforms": [
+        "linux"
+      ],
+      "members": [
+        "Evince"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "page_navigation": {
+          "scope": "Evince PDF document pane",
+          "sources": [
+            "evince"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "next PDF page",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "pagedown"
+                ]
+              }
+            },
+            {
+              "intent": "previous PDF page",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "pageup"
+                ]
+              }
+            }
+          ]
+        },
+        "zoom": {
+          "scope": "Evince PDF document",
+          "sources": [
+            "evince_zoom"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "zoom out",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "-"
+                ]
+              }
+            },
+            {
+              "intent": "zoom in",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "+"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.gnome_files": {
+      "title": "GNOME Files",
+      "category": "file_manager",
+      "platforms": [
+        "linux"
+      ],
+      "members": [
+        "GNOME Files"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "hidden_files": {
+          "scope": "GNOME Files folder view",
+          "sources": [
+            "files_hidden"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "toggle hidden files",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "h"
+                ]
+              }
+            }
+          ]
+        },
+        "rename": {
+          "scope": "GNOME Files selected file; basename or complete name",
+          "sources": [
+            "files_rename"
+          ],
+          "check": "Observe selection: basename or full name. Preserve the extension exactly once; verify after confirm.",
+          "recipes": [
+            {
+              "intent": "rename file",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "f2"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.file_explorer": {
+      "title": "Windows File Explorer",
+      "category": "file_manager",
+      "platforms": [
+        "windows"
+      ],
+      "members": [
+        "File Explorer"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "navigation": {
+          "scope": "File Explorer folder view",
+          "sources": [
+            "windows"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "edit address",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "alt",
+                  "d"
+                ]
+              }
+            },
+            {
+              "intent": "parent folder",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "alt",
+                  "up"
+                ]
+              }
+            },
+            {
+              "intent": "create folder",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "n"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.word": {
+      "title": "Microsoft Word (Windows)",
+      "category": "document",
+      "platforms": [
+        "windows"
+      ],
+      "members": [
+        "Microsoft Word"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "paragraphs": {
+          "scope": "Word editable document",
+          "sources": [
+            "word"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "align left",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "l"
+                ]
+              }
+            },
+            {
+              "intent": "center paragraph",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "e"
+                ]
+              }
+            },
+            {
+              "intent": "align right",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "r"
+                ]
+              }
+            },
+            {
+              "intent": "page break",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "return"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.excel": {
+      "title": "Microsoft Excel (Windows)",
+      "category": "spreadsheet",
+      "platforms": [
+        "windows"
+      ],
+      "members": [
+        "Microsoft Excel"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "cells": {
+          "scope": "Excel worksheet grid",
+          "sources": [
+            "excel"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "format cells",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "1"
+                ]
+              }
+            },
+            {
+              "intent": "fill down",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "d"
+                ]
+              }
+            },
+            {
+              "intent": "insert current date",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  ";"
+                ]
+              }
+            },
+            {
+              "intent": "go to cell",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "g"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.powerpoint": {
+      "title": "Microsoft PowerPoint (Windows)",
+      "category": "presentation",
+      "platforms": [
+        "windows"
+      ],
+      "members": [
+        "Microsoft PowerPoint"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "editing": {
+          "scope": "PowerPoint slide editor, not outline text",
+          "sources": [
+            "powerpoint"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "new slide",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "m"
+                ]
+              }
+            },
+            {
+              "intent": "duplicate selected object",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "d"
+                ]
+              }
+            },
+            {
+              "intent": "group selected objects",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "g"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.outlook": {
+      "title": "Microsoft Outlook classic (Windows)",
+      "category": "email",
+      "platforms": [
+        "windows"
+      ],
+      "members": [
+        "Microsoft Outlook classic"
+      ],
+      "reference_only": false,
+      "note": "新 Outlook/web 与 classic 的默认绑定不同，此处仅 classic。",
+      "topics": {
+        "drafts": {
+          "scope": "Outlook classic mail view",
+          "sources": [
+            "outlook"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "new mail draft",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "m"
+                ]
+              }
+            },
+            {
+              "intent": "reply",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "r"
+                ]
+              }
+            },
+            {
+              "intent": "reply to all",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "r"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.audacity": {
+      "title": "Audacity",
+      "category": "media",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "Audacity"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "playback": {
+          "scope": "Audacity project timeline",
+          "sources": [
+            "audacity"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "play or pause",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "space"
+                ]
+              }
+            },
+            {
+              "intent": "record",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "r"
+                ]
+              }
+            }
+          ]
+        },
+        "editing": {
+          "scope": "Audacity selected audio",
+          "sources": [
+            "audacity"
+          ],
+          "check": "An export dialog or saved project does not establish an exported audio file; inspect format, path and output.",
+          "recipes": [
+            {
+              "intent": "split clip",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "i"
+                ]
+              }
+            },
+            {
+              "intent": "duplicate audio",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "d"
+                ]
+              }
+            },
+            {
+              "intent": "export audio dialog",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "e"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.inkscape": {
+      "title": "Inkscape",
+      "category": "graphics",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "Inkscape"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "objects": {
+          "scope": "Inkscape canvas selection",
+          "sources": [
+            "inkscape"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "duplicate object",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "d"
+                ]
+              }
+            },
+            {
+              "intent": "group objects",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "g"
+                ]
+              }
+            },
+            {
+              "intent": "ungroup objects",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "g"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.photoshop": {
+      "title": "Adobe Photoshop (Windows)",
+      "category": "graphics",
+      "platforms": [
+        "windows"
+      ],
+      "members": [
+        "Adobe Photoshop"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "layers": {
+          "scope": "Photoshop default keymap, selected layer",
+          "sources": [
+            "photoshop"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "duplicate selected layer",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "j"
+                ]
+              }
+            },
+            {
+              "intent": "new layer dialog",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "n"
+                ]
+              }
+            },
+            {
+              "intent": "free transform",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "t"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.after_effects": {
+      "title": "Adobe After Effects (Windows)",
+      "category": "video",
+      "platforms": [
+        "windows"
+      ],
+      "members": [
+        "Adobe After Effects"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "timeline": {
+          "scope": "After Effects timeline; selected layer, no text editing",
+          "sources": [
+            "after_effects"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "position property",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "p"
+                ]
+              }
+            },
+            {
+              "intent": "scale property",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "s"
+                ]
+              }
+            },
+            {
+              "intent": "rotation property",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "r"
+                ]
+              }
+            },
+            {
+              "intent": "opacity property",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "t"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.premiere": {
+      "title": "Adobe Premiere (Windows)",
+      "category": "video",
+      "platforms": [
+        "windows"
+      ],
+      "members": [
+        "Adobe Premiere Pro"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "playback": {
+          "scope": "Premiere timeline; no text field focus",
+          "sources": [
+            "premiere"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "play backwards",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "j"
+                ]
+              }
+            },
+            {
+              "intent": "stop",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "k"
+                ]
+              }
+            },
+            {
+              "intent": "play forwards",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "l"
+                ]
+              }
+            },
+            {
+              "intent": "play or stop",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "space"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.gitlab": {
+      "title": "GitLab",
+      "category": "web_app",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "GitLab"
+      ],
+      "reference_only": false,
+      "note": "GitLab 版本、用户快捷键设置和当前输入焦点会改变绑定。连续键必须分次调用。",
+      "topics": {
+        "help": {
+          "scope": "GitLab page outside editable fields; shortcuts enabled",
+          "sources": [
+            "gitlab"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "show keyboard help",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "shift",
+                  "/"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.github": {
+      "title": "GitHub",
+      "category": "web_app",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "GitHub"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "repository": {
+          "scope": "GitHub repository outside editable fields; shortcuts enabled",
+          "sources": [
+            "github"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "show keyboard help",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "shift",
+                  "/"
+                ]
+              }
+            },
+            {
+              "intent": "file finder",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "t"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.finder": {
+      "title": "Finder (macOS 资料)",
+      "category": "file_manager",
+      "platforms": [
+        "macos"
+      ],
+      "members": [
+        "Finder"
+      ],
+      "reference_only": true,
+      "note": "macOS 专用资料；当前 Linux/X11 Mini 不得启用 command 组合键。Option 记为 alt；移植时须验证原生适配器。",
+      "topics": {
+        "files": {
+          "scope": "Finder file selection",
+          "sources": [
+            "mac"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "rename selected item",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "return"
+                ]
+              }
+            },
+            {
+              "intent": "new folder",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "shift",
+                  "n"
+                ]
+              }
+            },
+            {
+              "intent": "Go to Folder dialog",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "shift",
+                  "g"
+                ]
+              }
+            },
+            {
+              "intent": "Quick Look selection",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "space"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.safari": {
+      "title": "Safari (macOS 资料)",
+      "category": "browser",
+      "platforms": [
+        "macos"
+      ],
+      "members": [
+        "Safari"
+      ],
+      "reference_only": true,
+      "note": "macOS 专用资料；当前 Linux/X11 Mini 不得启用 command 组合键。Option 记为 alt；移植时须验证原生适配器。",
+      "topics": {
+        "navigation": {
+          "scope": "Safari browser UI",
+          "sources": [
+            "safari"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "address bar",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "l"
+                ]
+              }
+            },
+            {
+              "intent": "new tab",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "t"
+                ]
+              }
+            },
+            {
+              "intent": "reload page",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "r"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.notes": {
+      "title": "Notes (macOS 资料)",
+      "category": "notes",
+      "platforms": [
+        "macos"
+      ],
+      "members": [
+        "Notes"
+      ],
+      "reference_only": true,
+      "note": "macOS 专用资料；当前 Linux/X11 Mini 不得启用 command 组合键。Option 记为 alt；移植时须验证原生适配器。",
+      "topics": {
+        "notes": {
+          "scope": "Notes editor",
+          "sources": [
+            "notes"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "new note",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "n"
+                ]
+              }
+            },
+            {
+              "intent": "new folder",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "shift",
+                  "n"
+                ]
+              }
+            },
+            {
+              "intent": "main Notes window",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "0"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.mail": {
+      "title": "Mail (macOS 资料)",
+      "category": "email",
+      "platforms": [
+        "macos"
+      ],
+      "members": [
+        "Mail"
+      ],
+      "reference_only": true,
+      "note": "macOS 专用资料；当前 Linux/X11 Mini 不得启用 command 组合键。Option 记为 alt；移植时须验证原生适配器。",
+      "topics": {
+        "drafts": {
+          "scope": "Mail compose UI",
+          "sources": [
+            "mail"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "new draft",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "n"
+                ]
+              }
+            },
+            {
+              "intent": "attach file dialog",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "shift",
+                  "a"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.preview": {
+      "title": "Preview (macOS 资料)",
+      "category": "pdf",
+      "platforms": [
+        "macos"
+      ],
+      "members": [
+        "Preview"
+      ],
+      "reference_only": true,
+      "note": "macOS 专用资料；当前 Linux/X11 Mini 不得启用 command 组合键。Option 记为 alt；移植时须验证原生适配器。",
+      "topics": {
+        "navigation": {
+          "scope": "Preview PDF/image viewer",
+          "sources": [
+            "preview"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "next page",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "alt",
+                  "down"
+                ]
+              }
+            },
+            {
+              "intent": "previous page",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "alt",
+                  "up"
+                ]
+              }
+            },
+            {
+              "intent": "full screen toggle",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "command",
+                  "f"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.textedit": {
+      "title": "TextEdit (macOS 资料)",
+      "category": "text_editor",
+      "platforms": [
+        "macos"
+      ],
+      "members": [
+        "TextEdit"
+      ],
+      "reference_only": true,
+      "note": "macOS 专用资料；当前 Linux/X11 Mini 不得启用 command 组合键。Option 记为 alt；移植时须验证原生适配器。",
+      "topics": {
+        "document": {
+          "scope": "TextEdit editable document",
+          "sources": [
+            "mac"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "new document",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "n"
+                ]
+              }
+            },
+            {
+              "intent": "open document",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "o"
+                ]
+              }
+            },
+            {
+              "intent": "save document",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "command",
+                  "s"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.android": {
+      "title": "Android 系统按键与触控（资料）",
+      "category": "mobile",
+      "platforms": [
+        "android"
+      ],
+      "members": [
+        "Android"
+      ],
+      "reference_only": true,
+      "note": "AndroidWorld/AndroidLab 采用触控及系统导航。Back/Home/Recents 是 Android 系统动作，不是 PyAutoGUI key token；本库不生成伪造的 action:key 指令。原生适配器应使用 KeyEvent KEYCODE_BACK=4、KEYCODE_HOME=3、KEYCODE_APP_SWITCH=187，并单独验证系统导航策略。",
+      "topics": {}
+    },
+    "app.pycharm": {
+      "title": "PyCharm (Windows/Linux keymap)",
+      "category": "text_editor",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "PyCharm"
+      ],
+      "reference_only": false,
+      "note": "只适用于明确选用的 Windows/Linux 默认 keymap；双击 Shift 是连续事件，未编码成组合键。",
+      "topics": {
+        "navigation": {
+          "scope": "PyCharm Windows/Linux keymap",
+          "sources": [
+            "pycharm"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "find action",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "a"
+                ]
+              }
+            },
+            {
+              "intent": "recent files",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "e"
+                ]
+              }
+            },
+            {
+              "intent": "go to file",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "n"
+                ]
+              }
+            },
+            {
+              "intent": "go to line",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "g"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.matlab": {
+      "title": "MATLAB Editor",
+      "category": "scientific",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "MATLAB"
+      ],
+      "reference_only": false,
+      "note": "",
+      "topics": {
+        "editor": {
+          "scope": "MATLAB Editor, not Command Window or Simulink",
+          "sources": [
+            "matlab"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "focus editor",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "0"
+                ]
+              }
+            },
+            {
+              "intent": "new script",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "n"
+                ]
+              }
+            },
+            {
+              "intent": "save script",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "s"
+                ]
+              }
+            },
+            {
+              "intent": "maximize editor",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "shift",
+                  "m"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.autocad": {
+      "title": "AutoCAD (Windows)",
+      "category": "cad",
+      "platforms": [
+        "windows"
+      ],
+      "members": [
+        "AutoCAD"
+      ],
+      "reference_only": false,
+      "note": "2023 官方默认 CUIx；基准任务可能使用更早版本，须核对实际 keymap。命令别名需要 type 后确认，不能当作 chord。",
+      "topics": {
+        "panels": {
+          "scope": "AutoCAD active drawing",
+          "sources": [
+            "autocad"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "toggle properties palette",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "1"
+                ]
+              }
+            },
+            {
+              "intent": "toggle command line",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "9"
+                ]
+              }
+            },
+            {
+              "intent": "toggle clean screen",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "ctrl",
+                  "0"
+                ]
+              }
+            },
+            {
+              "intent": "toggle ortho mode",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "f8"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "app.blender": {
+      "title": "Blender",
+      "category": "graphics",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [
+        "Blender"
+      ],
+      "reference_only": false,
+      "note": "Blender 默认 keymap；Industry Compatible 与插件键位不在本条范围。资料为 4.1，实际版本需核对。",
+      "topics": {
+        "viewport": {
+          "scope": "Blender 3D viewport; pointer over viewport, not text input",
+          "sources": [
+            "blender"
+          ],
+          "check": "Recheck app/focus, enabled state and visible effect.",
+          "recipes": [
+            {
+              "intent": "menu search",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "f3"
+                ]
+              }
+            },
+            {
+              "intent": "toggle edit mode",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "tab"
+                ]
+              }
+            },
+            {
+              "intent": "toggle sidebar",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "n"
+                ]
+              }
+            },
+            {
+              "intent": "toggle toolbar",
+              "tool": {
+                "action": "key",
+                "keys": [
+                  "t"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "type.cad": {
+      "title": "CAD/工程软件",
+      "category": "cad",
+      "platforms": [
+        "windows"
+      ],
+      "members": [],
+      "reference_only": false,
+      "note": "AutoCAD、SolidWorks、Inventor、Vivado 的快捷键和命令别名不互换；使用具体软件目录和画面内菜单。",
+      "topics": {}
+    },
+    "type.scientific": {
+      "title": "科学计算/数据分析软件",
+      "category": "scientific",
+      "platforms": [
+        "linux",
+        "windows"
+      ],
+      "members": [],
+      "reference_only": false,
+      "note": "MATLAB、Origin、Stata、EViews 的编辑器、命令窗和绘图区没有共同业务快捷键；按软件目录检索。",
+      "topics": {}
+    }
+  }
+}

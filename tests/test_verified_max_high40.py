@@ -151,7 +151,8 @@ def test_high40_requires_all_nine_cases_with_current_generation(tmp_path,monkeyp
     monkeypatch.setattr(module,'project_identity',lambda:identity)
     for arm in plan['arms']:
         for case in ('limit','terminate','empty'):
-            row={k:deepcopy(plan[k]) for k in ('model','base_url','cua_contract','generation_fields','max_steps','experiment')}
+            row={k:deepcopy(plan[k]) for k in ('model','base_url','cua_contract','generation_fields','max_steps','experiment',
+                                            'mini_keyboard_tools','mini_keyboard_selection')}
             row.update(passed=True,arm=arm,case=case,provider='sx',source_unchanged=True,
                        project_source=identity,live_api_called=False,vm_started=False)
             module.write(tmp_path/f'{arm}-{case}'/'validation.json',row)

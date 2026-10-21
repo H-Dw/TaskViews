@@ -2,9 +2,11 @@
 
 目录 ID：`app.pycharm`。类型：`text_editor`。平台：`linux / windows`。
 
-状态：显式选择后可检索。资料核对日期：2026-10-17；快捷键未在 guest 中逐项实测。
+状态：任务名匹配或显式选择后可检索。资料核对日期：2026-10-17；快捷键未在 guest 中逐项实测。
 
 已核对的适用对象：PyCharm。
+
+任务说明中的匹配别名：`JetBrains PyCharm`、`PyCharm`。匹配规则与平台过滤见 [使用说明](../../README.md)。
 
 只适用于明确选用的 Windows/Linux 默认 keymap；双击 Shift 是连续事件，未编码成组合键。
 

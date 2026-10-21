@@ -1,6 +1,7 @@
 """Prepare/check an OSWorld-1 invoice comparison; execution is explicit opt-in.
 
-No VM, model request, GUI action, or official score is produced by prepare/check.
+Prepare/check never produce VM/GUI actions or an official score. Prepare can
+make separately logged research requests only with --keyboard-research.
 Each approved arm runs in a new interpreter and a fresh official Docker guest.
 """
 from __future__ import annotations
@@ -101,7 +102,7 @@ def project_identity():
 
 
 def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolute', experiment='legacy-low35',
-                  task_key='invoice'):
+                  task_key='invoice', *, keyboard_task=None, keyboard_mode='task_names', keyboard_toolsets=()):
     task_spec = TASKS[task_key]
     single_vlc_mini = task_key == 'vlc' and experiment == 'sx-mini-max-high40'
     if task_key != 'invoice' and experiment != 'sx-pair-max-high40' and not single_vlc_mini:
@@ -132,7 +133,9 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
     arms = MAX40_EXPERIMENTS[experiment][1] if max40 else ARMS
     max_steps = 40 if max40 else 35
     from ui_kobe.osworld.taskviews_profiles import frozen_profile, mini_cua_contract
-    from kobe_views.keyboard_view import policy as keyboard_policy
+    from kobe_views.keyboard_selection import task_keyboard_policy
+    keyboard = task_keyboard_policy(keyboard_task if keyboard_task is not None else {},
+                                    mode=keyboard_mode, requested=keyboard_toolsets)
     contract = mini_cua_contract()
     contract['coordinate_type'] = coordinate_type
     if provider == 'sx':
@@ -162,7 +165,7 @@ def specification(provider='qwen', sx_url_env='SX_URL', coordinate_type='absolut
         'cua_contract': contract, 'taskviews_profile': 'mini_fixed_v1',
         'arm_profiles': {arm: frozen_profile(arm) for arm in arms},
         'controls_view': 'disabled', 'full_taskviews_feedback': False,
-        'mini_keyboard_tools': keyboard_policy(),
+        **keyboard,
         'official_runner': 'lib_run_single.run_single_example', 'sleep_after_execution': 3,
         'evaluation': f'original DesktopEnv.evaluate after explicit terminal action or {max_steps} decisions',
         'score_threshold': None, 'checkpoint_resume': False,
@@ -195,7 +198,9 @@ def prepare(args):
         raise FileExistsError('Use a new plan directory; existing plans are immutable')
     task_key = getattr(args, 'task', 'invoice')
     task = verify_task(args.benchmark_repo, task_key)
-    spec = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment, task_key)
+    spec = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment, task_key,
+                         keyboard_task=task, keyboard_mode=getattr(args, 'keyboard_mode', 'task_names'),
+                         keyboard_toolsets=getattr(args, 'keyboard_toolset', ()))
     evidence = validation_evidence(args.validation_dir, args.provider, spec['base_url'], spec['cua_contract'], spec)
     plan = spec | {'sources': sources(args.benchmark_repo, args.compiler_repo, task_key),
         'project_source': project_identity(), 'image': str(args.image.resolve()),
@@ -210,10 +215,15 @@ def prepare(args):
         plan['image_identity'] = proof
     plan['asset_identity'] = {item['name']: sha(args.assets / item['name']) for item in asset_files(task)}
     root.mkdir(parents=True)
+    from kobe_views.keyboard_research import prepare_research
+    prepare_research(plan, task, root, enabled=getattr(args, 'keyboard_research', False),
+                     config_path=getattr(args, 'keyboard_research_config', None))
     write(root / 'plan.json', plan)
     write(root / 'plan.sha256.json', {'sha256': sha(root / 'plan.json')})
     write(root / 'state.json', {'status': 'prepared_not_started', 'completed_arms': [],
-                              'model_calls': 0, 'vm_starts': 0, 'evaluations': 0})
+                              'model_calls': 0, 'vm_starts': 0, 'evaluations': 0,
+                              **({'research_model_calls': plan['mini_keyboard_research']['request_count']}
+                                 if plan.get('mini_keyboard_research') else {})})
     print(json.dumps({'status': 'prepared_not_started', 'root': str(root), 'max_steps': spec['max_steps']}))
 
 
@@ -224,6 +234,8 @@ def validate_plan(root):
     for key, value in specification(plan.get('provider', 'qwen'), plan.get('base_url_env') or 'SX_URL',
                                     plan.get('coordinate_type', 'absolute'), plan.get('experiment','legacy-low35'),
                                     plan.get('task_key','invoice')).items():
+        if key in ('mini_keyboard_tools', 'mini_keyboard_selection'):
+            continue  # Recomputed below against the verified public task fields.
         if plan.get(key) != value:
             raise ValueError('Frozen comparison differs from implementation: ' + key)
     if project_identity() != plan['project_source']:
@@ -243,6 +255,10 @@ def validate_plan(root):
     task = verify_task(plan['sources']['benchmark']['repo'], task_key)
     if sha(Path(plan['sources']['benchmark']['repo']) / task_path(task_key)) != plan['task_sha256']:
         raise ValueError('Task identity differs from frozen plan')
+    from kobe_views.keyboard_selection import validate_task_keyboard
+    validate_task_keyboard(plan, task)
+    from kobe_views.task_keyboard import validate_plan_research
+    validate_plan_research(plan, task)
     if set(plan['asset_identity']) != {item['name'] for item in asset_files(task)}:
         raise ValueError('Task assets differ from frozen plan')
     for item in asset_files(task):
@@ -267,7 +283,8 @@ def validation_evidence(directory, provider='qwen', base_url=None, cua_contract=
                     or (base_url is not None and value.get('base_url') != base_url)
                     or (cua_contract is not None and value.get('cua_contract') != cua_contract)
                     or (plan is not None and any(value.get(k) != plan[k] for k in
-                        ('model','generation_fields','max_steps','experiment')))
+                        ('model','generation_fields','max_steps','experiment',
+                         'mini_keyboard_tools','mini_keyboard_selection')))
                     or (plan is not None and plan.get('task_key','invoice') != 'invoice'
                         and any(value.get(k) != plan[k] for k in ('task_key','task_id','domain')))
                     or value.get('project_source') != identity or value.get('source_unchanged') is not True
@@ -404,8 +421,11 @@ def execute_arm(args):
     stage.mkdir(exist_ok=False)
     task = verify_task(plan['sources']['benchmark']['repo'], plan.get('task_key','invoice'))
     stage_cache(plan, stage, task)
+    from kobe_views.task_keyboard import environment
+    os.environ.update(environment(plan, arm=args.arm))
     os.environ.update(UI_KOBE_TASKVIEWS_PROFILE='mini_fixed_v1', UI_KOBE_MINI_CONTROLS_VIEW='disabled',
-        UI_KOBE_MINI_KEYBOARD_TOOLS='[]',
+        UI_KOBE_MINI_KEYBOARD_TOOLS=json.dumps(
+            plan['mini_keyboard_tools']['enabled_toolsets'][1:] if args.arm == 'taskviews' else []),
         UI_KOBE_TASKVIEWS_FEEDBACK_V10='0', UI_KOBE_GENERATION_PROFILE=plan['generation_profile']['name'],
         UI_KOBE_CUA_CONTRACT_JSON=json.dumps(plan['cua_contract']), UI_KOBE_TASK_ID=plan['task_id'],
         UI_KOBE_TELEMETRY_DIR=str(stage / 'telemetry'), OSWORLD_FULL_RUN_ID=plan['run_ids'][args.arm])
@@ -538,6 +558,14 @@ def main():
                         help='Prepare only: freeze one coordinate mode for both arms; never auto-switch')
     parser.add_argument('--experiment', choices=EXPERIMENTS, default='legacy-low35')
     parser.add_argument('--task', choices=tuple(TASKS), default='invoice', help='Prepare only; later commands use plan')
+    parser.add_argument('--keyboard-mode', choices=('task_names', 'manual'), default='task_names',
+                        help='Prepare only: match public task names, or use only explicitly selected directories')
+    parser.add_argument('--keyboard-toolset', action='append', default=[],
+                        help='Prepare only: add an exact directory ID to general and any task matches')
+    parser.add_argument('--keyboard-research', action='store_true',
+                        help='Prepare only: research and archive task-scoped keyboard references before any CUA action')
+    parser.add_argument('--keyboard-research-config', type=Path,
+                        help='Optional research endpoint/model/budget JSON; requires --keyboard-research')
     parser.add_argument('--arm', choices=ALL_ARMS)
     parser.add_argument('--execute-approved-plan', action='store_true')
     args = parser.parse_args()

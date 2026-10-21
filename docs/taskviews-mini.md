@@ -1,5 +1,9 @@
 # TaskViews Mini M0
 
+2026-10-21：最新 Mini 迁入 `main`，旧主分支备份为 `backup/main-20261021`。当前准备、启动、恢复和离线验证入口要求 `main`；新计划记录 `source_branch=main`，历史计划的 `source_branch=mini` 保留原值用于审计，仍受原源码与检查点一致性校验约束。
+
+2026-10-20 可选增加[任务级按键联网调研](task-keyboard-web-research-20261020.md)：默认关闭，开启后在新计划准备阶段识别软件、通过 API web search 保存 Markdown，再生成隔离的临时按键目录。准备调用单独计费和记录，正式 actor 保持原 View 预算。下文的历史版本与旧实验条件不包含该扩展。
+
 2026-10-18 当前实现为 `mini_report_recovery_v7`：Mini 单独处理辅助报告错误，同轮请求按完整旧轮重新准入；保留共同的 predict、传输、官方执行／评分和原预算，只有 Mini 使用独立的有界候选循环。报告采用扁平结构，旧 v2 合规报告仍可读取，unknown 不升级。详见 [v7 恢复与离线验证](taskviews-mini-report-recovery-v7.md)。以下版本记录保留为历史。
 
 2026-10-18 `mini_artifact_protocol_v6` 修复成功报告的指引／校验不一致和错误反馈不具体的问题，但未解决长回复触发同轮修复后的输入超限。其实现与当时的离线验证见 [v6 历史记录](taskviews-mini-artifact-protocol-v6.md)。
@@ -12,7 +16,7 @@
 
 2026-10-15 更新：当前实现修订为 `mini_cua_feedback_v2`，修复空错误误分类，默认提供重复操作证据，并在正式 Mini 输入中明确坐标与结果检查要求。详见[本次修复及验证记录](taskviews-mini-cua-feedback-20261015.md)。下文保留最初 M0 搭建时的配置与验证记录；最新随想发票任务的 35 轮、0/0 分结果见[正式结果](osworld-verified-invoice-sx-flash-results-20261015.md)，不应与旧 Task059/Pinggy 配置混用。
 
-Mini 在 `mini` 分支实现。它复用共同 `KimiNativeAgent.predict` 和机械提取的 Qwen provider，不继承完整 TaskViews agent；v7 的 `generate_candidate` 只在 Mini 内分流错误并重做输入准入。执行仍由原 native tool schema、官方完整批次 compiler 和 controller 完成。没有模型驱动的分类、perception/controller/planner、DAG、语义图或 pointer guard。
+Mini 最初在 `mini` 分支实现，当前代码位于 `main`。它复用共同 `KimiNativeAgent.predict` 和机械提取的 Qwen provider，不继承完整 TaskViews agent；v7 的 `generate_candidate` 只在 Mini 内分流错误并重做输入准入。执行仍由原 native tool schema、官方完整批次 compiler 和 controller 完成。没有模型驱动的分类、perception/controller/planner、DAG、语义图或 pointer guard。
 
 本次交付是代码搭建与离线验证。没有启动新的正式 episode、VM、模型 API 或官方评分；当前 V12 继续暂停。V12 原230已执行而安全检查点229，不能把 Mini 装入旧 episode 或用恢复229重放230。
 
@@ -48,7 +52,7 @@ Mini 恢复还读取原 journal 与同 episode 的续跑 journal：检查点之�
 
 ```bash
 cd /mnt/d/cua_lty/OSWorld-K3-TaskViews
-git switch mini
+git switch main
 PYTHONDONTWRITEBYTECODE=1 systemd-run --user --scope \
   --property=MemoryMax=128M --property=MemorySwapMax=0 \
   /home/dawei/osworld2/OSWorld-V2/.venv/bin/python scripts/validate_mini.py \
@@ -63,7 +67,7 @@ PYTHONDONTWRITEBYTECODE=1 systemd-run --user --scope \
 
 ## 未来正式准备入口
 
-入口已支持：`scripts/osworld_native_experiment.py prepare` 添加 `--taskviews-profile mini_fixed_v1 --qwen-arm taskviews`（对照用 `ui_kobe_like`），其余选择 `--task 059 --agent-interface qwen-native --checkpoints --cua-config configs/cua-mini-fixed-v1.json`，提供当前通过的 `--validation`、原 provider compatibility 证据和新的 `--root`。源码必须验证后 commit、Gitclean；准备/launch/resume 都检查当前分支为 `mini`。
+入口已支持：`scripts/osworld_native_experiment.py prepare` 添加 `--taskviews-profile mini_fixed_v1 --qwen-arm taskviews`（对照用 `ui_kobe_like`），其余选择 `--task 059 --agent-interface qwen-native --checkpoints --cua-config configs/cua-mini-fixed-v1.json`，提供当前通过的 `--validation`、原 provider compatibility 证据和新的 `--root`。源码必须验证后 commit、Gitclean；准备/launch/resume 都检查当前分支为 `main`。
 
 准备不创建 VM，也不代表获得新 episode 授权。本次没有调用 prepare/launch/resume。未来获得新实验授权后才准备并启动独立 Mini episode；正常 native terminate/原500上限后才能官方评测。完整流程与原 score≥0.2、原 cleanup/audit 完成才算达标。
 
