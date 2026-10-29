@@ -7,15 +7,17 @@
   "unscored_attempts": 5,
   "not_started_plans": 32,
   "csv_json_equal": true,
-  "source_inputs_verified_unchanged": 236,
+  "source_inputs_verified_unchanged": 238,
   "frozen_snapshots_verified": 15,
   "valid_outcomes_verified_including_baseline": 83,
   "tested_source_blobs_matched_in_code_commit": 12,
   "new_model_calls": 0,
   "new_gui_dispatches": 0,
   "artifacts_sha256": {
-    "validation/taskviews-post-v7-experiments-20261029.json": "87e336529249fedc34e77e008acb559ba32588a745266ce0a6bef542eada7f3b",
-    "docs/taskviews-post-v7-experiments-20261029.md": "1e923bb04f410ae7e5a93c04dee51254680c95e2fe929f9d56f59013b75142d3",
+    "validation/taskviews-post-v7-experiments-20261029.json": "d03108ff2555fca4de9c15d7dd5892aeb2588f7fc01fc088fe72246835109129",
+    "docs/taskviews-post-v7-experiments-20261029.md": "916e3ae16bcb686dc51a844fbf1248ba2b6aa2bbcf93e7c3df84fcaab6ce202a",
     "validation/taskviews-post-v7-experiments-20261029.csv": "e9086314ec0ea9163c8f86246871cc7480c5f5482f1605533439101f439c48d8"
-  }
+  },
+  "v3_derivative_versions_verified": 2,
+  "supplementary_invoice_table_rows": 13
 }

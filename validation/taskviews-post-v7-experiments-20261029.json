@@ -5584,7 +5584,9 @@
     "runs/verified-gimp-llm-baseline-low40-20261027-v1/source-reference.json": "f877cfc772fdbea1374aa5da45ae816cdaff4be4806fc6dec2dfe12a746bbec7",
     "outputs/mini-guidance-v5-20261027/validation.json": "c9813b02019b197053f3f7bb57e615f62776465c526ff845912b52d776e4dabd",
     "outputs/mini-reading-v6-20261027/validation.json": "cad567f4bb214fcce8013d0fc86a569537e2561ab8bd91efde37cc245b928738",
-    "validation/keyboard-eligibility-v7-20261028.json": "01530104a25729f1d5f36c3e77633aee8fa33dff7096ee32357c4a2119ccfec0"
+    "validation/keyboard-eligibility-v7-20261028.json": "01530104a25729f1d5f36c3e77633aee8fa33dff7096ee32357c4a2119ccfec0",
+    "runs/verified-mini-guidance-low40-20261026-v1/v3-backport-provenance.json": "09288f1d8dc7ae0f97151a354c4786cfebb7f8afe2cd2c44fd69189fad53e135",
+    "runs/verified-mini-clipboard-flow-invoice-low40-20261027-v1/manipulation.json": "e231a0125bf2229495b435756e7a7166609294da485924b8b6fe4049943d7886"
   },
   "checks": {
     "source_manifests": [],
@@ -5692,5 +5694,40 @@
   },
   "new_model_calls": 0,
   "new_gui_dispatches": 0,
-  "gold_read": false
+  "gold_read": false,
+  "v3_based_versions": {
+    "new_keyboard_adapter": {
+      "commit": "5a66b7ec8487193b1c93b8ff84902743e5abbb16",
+      "base_commit": "4dd4f2b3564dc8a14d7cc18ab14e44435cb16802",
+      "kind": "v3_core_plus_keyboard_guidance_adapter",
+      "campaign": "K01",
+      "case_ids": [
+        "07-v3-keyboard-invoice-low",
+        "08-v3-keyboard-gimp-low",
+        "09-v3-keyboard-vlc-low"
+      ],
+      "provenance": "runs/verified-mini-guidance-low40-20261026-v1/v3-backport-provenance.json",
+      "new_artifact_review_imported": false
+    },
+    "clipboard_scope_ablation": {
+      "commit": "2a9dbd0d59eed5ebbcbde1f2c7fba82d2f155622",
+      "base_commit": "4dd4f2b3564dc8a14d7cc18ab14e44435cb16802",
+      "kind": "single_scope_sentence_ablation",
+      "campaign": "A01",
+      "case_ids": [
+        "02-clipboard-invoice-low"
+      ],
+      "provenance": "runs/verified-mini-clipboard-flow-invoice-low40-20261027-v1/manipulation.json"
+    },
+    "exact_rerun": {
+      "commit": "0a5b6f2a8824008dc3bba01803b1b43369016627",
+      "campaign": "R01",
+      "kind": "unchanged_historical_code_rerun"
+    },
+    "minimal_stage_guidance_v5": {
+      "kind": "current_mainline_candidate_not_v3_backport",
+      "live_performance": null,
+      "source": "docs/taskviews-mini-guidance-v5.md"
+    }
+  }
 }
