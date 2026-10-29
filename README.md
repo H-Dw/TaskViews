@@ -2,11 +2,23 @@
 
 ![TaskViews-Mini：单一 CUA actor、四类 View 与执行证据回路](docs/assets/taskviews-mini-framework.png)
 
-*首图展示首个 release 所用的 Mini v3 核心（`0a5b6f2`）：四类 View 从预置操作知识和本次任务的执行记录中组织补充上下文。当前开发版在此基础上增加了指导选择、阶段状态和跨 View 引用。*
+*首图展示历史 Mini v3 核心（`0a5b6f2`）：四类 View 从预置操作知识和本次任务的执行记录中组织补充上下文。当前开发版在此基础上增加了指导选择、阶段状态和跨 View 引用。*
 
 TaskViews 为 computer-use agent 按信息职责组织上下文：让基础操作知识、当前界面、已执行尝试和历史错误各有位置，帮助同一个 CUA actor 复用证据、选择下一步动作。Mini 路径采用确定性的检索与打包，正常操作中不增加规划或分析模型调用。
 
-**首个 release：[TaskViews-Mini v0.1.0](https://github.com/H-Dw/TaskViews/releases/tag/v0.1.0)**，固定到 [`0a5b6f2`](https://github.com/H-Dw/TaskViews/commit/0a5b6f2a8824008dc3bba01803b1b43369016627)。该版本在已测任务中实现了 CUA 决策效率提升，但在部分复杂任务上存在结果提交缺陷。`main` 是后续开发版本，不能用其运行结果替代首版成绩。
+## 开发状态与已知问题
+
+**当前优化版 keyboard 尚未完全优化完毕，在 agent 决策过程中仍可能出现错误匹配的 bug**，例如将界面状态误判为动作意图，或选入与当前软件、对象、流程阶段不适用的操作卡。主要代码与指导内容如下：
+
+|代码路径|职责|
+|---|---|
+|[`kobe_views/keyboard_guidance.py`](kobe_views/keyboard_guidance.py#L207)|`route()`：根据任务、公开意图、执行记录和流程阶段选择操作卡|
+|[`kobe_views/guidance_semantics.py`](kobe_views/guidance_semantics.py#L78)|区分动作意图、界面状态及能力需求|
+|[`kobe_views/guidance_eligibility.py`](kobe_views/guidance_eligibility.py)|检查操作、对象和软件等适用条件|
+|[`kobe_views/key_tools/guidance.json`](kobe_views/key_tools/guidance.json) · [`catalog.json`](kobe_views/key_tools/catalog.json)|完整操作卡与分类按键配方|
+|[`kobe_views/keyboard_view.py`](kobe_views/keyboard_view.py#L56)|旧目录路径的主题选择与 lookup；历史实验按各自冻结版本运行|
+
+**Graph 模式也尚未开发完毕，keyboard 的优化仍是当前未完成的前置工作。** 表中 Graph 测试数值包含当时 keyboard 匹配及有效指导送达缺陷的干扰，不能据此单独归因 Graph／links 的收益。当前只实现了部分身份、共享事实与引用组织；linked 尚未包含完整图检索或路径规划。历史实验使用各自冻结的 keyboard，不等于当前优化候选已经完成验证。
 
 ## 工作方式
 
@@ -37,7 +49,7 @@ TaskViews 为 computer-use agent 按信息职责组织上下文：让基础操�
 
 ## 已观察到的效率与限制
 
-以下按**任务类型 × reasoning**分为六张表。**所有列出的 TaskViews 实验官方得分均为 1，且决策次数、总 tokens 均低于同任务、同 reasoning 的 LLM baseline。** 表中的 baseline 也均为官方 1 分，作为对照单独列示；VLC／low 尚缺同档 baseline，没有可列入的配对结果。
+以下按**任务类型 × reasoning**分表。**所有列出的 TaskViews 实验官方得分均为 1，且决策次数、总 tokens 均低于同任务、同 reasoning 的 LLM baseline。** 表中的 baseline 也均为官方 1 分，作为对照单独列示。
 
 模型均为 `qwen3.8-max`，thinking 开启，温度 0，最多 40 次决策；逐组核对相同任务、reasoning 与预算。**总 tokens＝输入＋输出**；输出已包含推理 tokens，不再重复相加。这里只展示满足上述条件的结果，完整实验及未改善组保留在[实验总账](docs/taskviews-post-v7-experiments-20261029.md)。
 
@@ -53,7 +65,7 @@ TaskViews 为 computer-use agent 按信息职责组织上下文：让基础操�
 |实验组|冻结代码身份|决策次数|总 tokens|
 |---|---|---:|---:|
 |**LLM baseline**|`0a5b6f2`|**28**|**226,864**|
-|Mini v3／首个 release|`0a5b6f2`|22|196,880|
+|Mini v3|`0a5b6f2`|22|196,880|
 
 ### GIMP · high
 
@@ -69,7 +81,7 @@ TaskViews 为 computer-use agent 按信息职责组织上下文：让基础操�
 
 |实验组|冻结代码身份|决策次数|总 tokens|
 |---|---|---:|---:|
-|**LLM baseline（后续补测）**|`f277ea7`，TaskViews 关闭|**40**|**281,352**|
+|**LLM baseline**|`f277ea7`，TaskViews 关闭|**40**|**281,352**|
 |Graph r007 flat|`6d9e0d7`＋r007 冻结 manifest †|20|152,553|
 |能力指导 v3 legacy／full|`216a14e`|24|209,408|
 
@@ -81,26 +93,16 @@ TaskViews 为 computer-use agent 按信息职责组织上下文：让基础操�
 |Mini v7|`ae27018`|9|78,087|
 |Graph r007 legacy|`6d9e0d7`＋r007 冻结 manifest †|10|88,842|
 
-### VLC · low
-
-|比较条件|LLM baseline 决策次数|LLM baseline 总 tokens|可列入的配对结果|
-|---|---:|---:|---|
-|VLC／low|未测|未测|暂无同 reasoning baseline，暂不作效率比较|
-
 † Graph r007 当时冻结了基础提交及额外修改的源码 manifest，没有独立的完整实验 commit；不能仅检出 `6d9e0d7` 就声称复现 r007。逐格来源与哈希见[结构化总账](validation/taskviews-post-v7-experiments-20261029.json)。表中的“能力指导 v3”是后续模块版本，不是历史 Mini v3。
-
-原 Mini v3 发票／low 这次记录的决策减少 **21.4%**，总 tokens 减少 **13.2%**。各格通常只运行一次，GIMP／low baseline 为后续补测；这些结果不足以证明所有任务均有收益，或将差异归因于某一个模块。
-
-**已知限制：效率提升不能保证交付正确。** 首版尚未包含后续的严格产物来源复核。复杂任务可能完成了界面操作，却提交了来源不符或内容不正确的产物。例如，同属 v3 核心的后续提交 `4dd4f2b` 在 VLC 截帧任务中把观察截图作为交付图片，官方连续分数为 `0.08199028328542753`。这是另一提交的证据，不能冒称 `0a5b6f2` 的直接 VLC 成绩；它揭示了首版架构需要补强的提交检查。
 
 完整版本、指标定义、失败用量下界和后续实验见[实验与版本总账](docs/taskviews-post-v7-experiments-20261029.md)。不同提交、reasoning、目录和运行日期分别报告，不把离线结构验证当作在线成功率提升。
 
-## 首版与当前开发版
+## 历史实现与当前开发版
 
 |版本|范围|
 |---|---|
-|`v0.1.0` / `0a5b6f2`|历史 `mini_keyboard_memory_v3`；单 actor、四个 View、预置按键与 episode 记忆。保留原样，作为冻结参照。|
-|历史 Mini v7 / `ae27018`|增加产物报告协议、来源校验、短纠错及同轮输入重新准入。不是首个 release，也不是当前指导模块的“v7”。|
+|历史 Mini v3 / `0a5b6f2`|`mini_keyboard_memory_v3`；单 actor、四个 View、预置按键与 episode 记忆。保留原样，作为冻结参照。|
+|历史 Mini v7 / `ae27018`|增加产物报告协议、来源校验、短纠错及同轮输入重新准入。不同于当前指导模块的“v7”。|
 |当前 `main`|代码核心提交 `3800520`，后续提交补充报告与文档；包含阶段化复核、阅读进度、适用性优先的操作指导及三种 View 表示。最新指导候选有离线验证，尚无对应线上任务成绩。|
 
 当前开发版支持以下表示方式，选择模式并不等于切换到某个历史提交：
@@ -132,33 +134,17 @@ python -m kobe_views.keyboard_selection \
   --instruction "Read and compare PDF documents"
 ```
 
-检出首版源码：
+检出历史 Mini v3 源码：
 
 ```bash
-git switch --detach v0.1.0
+git switch --detach 0a5b6f2
 ```
 
-首版没有后续新增的命令参数，应按该提交自己的代码与冻结配置使用。返回开发版用 `git switch main`。
+历史版本没有后续新增的命令参数，应按该提交自己的代码与冻结配置使用。返回开发版用 `git switch main`。
 
 实际 OSWorld 评估需要另外准备 Linux／WSL、Docker／KVM、guest 镜像、任务资源和外部执行底座。项目固定使用 `xlang-ai/OSWorld-V2@3d778a3c9a34a079316f70df023b166700445792` 的执行／评分代码，并校验来源；仓库不附带 VM 镜像、任务答案、凭据或完整原始运行数据。
 
 当前 Verified 入口为 `scripts/verified_invoice.py`，支持发票、GIMP、VLC。默认 API 为 AutoDL 的 `https://www.autodl.art/api/v1`，模型 `Qwen3.5-397B-A17B`，密钥由 `AUTODL_API_KEY` 环境变量提供。**上面的历史成绩使用 SX 接口的 `qwen3.8-max`，不是 AutoDL 成绩。** 模型、reasoning、坐标、预算、按键目录、源码身份和模式都应在新计划中显式冻结；准备、检查、启动和恢复按对应说明执行。
-
-## 文档与复现
-
-|内容|入口|
-|---|---|
-|首个 release、已知缺陷和证据范围|[v0.1.0 发布说明](docs/releases/v0.1.0.md)|
-|架构图与上传报告的来源|[README 来源说明](docs/readme-provenance.md)|
-|v7 之后的冻结版本与逐格 performance|[实验总账](docs/taskviews-post-v7-experiments-20261029.md) · [CSV](validation/taskviews-post-v7-experiments-20261029.csv) · [JSON](validation/taskviews-post-v7-experiments-20261029.json)|
-|Mini 实现与早期沿革|[Mini 说明](docs/taskviews-mini.md)|
-|Graph 三模式与消融边界|[Graph v1](docs/taskviews-mini-graph-v1.md) · [送达 v2](docs/taskviews-mini-delivery-v2.md)|
-|阶段上下文与当前按键适用性|[指导 v5](docs/taskviews-mini-guidance-v5.md) · [适用性审计](docs/taskviews-keyboard-eligibility-v7-audit.md)|
-|按键目录与可选联网研究|[目录入口](tools/keyboard/README.md) · [目录选择](docs/taskviews-keyboard-auto-selection-20261020.md) · [任务级调研](docs/task-keyboard-web-research-20261020.md)|
-|AutoDL 配置与离线／真实接口验证边界|[API 接入](docs/autodl-taskviews-mini-20261021.md)|
-|冻结矩阵、串行执行与审计|[三任务运行说明](docs/osworld-mini-graph-high-low40.md)|
-
-历史文档保留当时的默认值和验证结果；复现应以目标提交、该次冻结计划和原始指标来源为准。离线测试、接口探针和正式任务成绩分别核算。
 
 ## 表中实验版本的差异
 
@@ -177,3 +163,18 @@ Mini v3／v7 是历史整体实现；legacy／flat 是 View 表示模式；能�
 ## 来源与许可
 
 本项目衍生自 [UI-KOBE](https://github.com/YuxiangChai/UI-KOBE)，保留原作者署名、[上游 README](README.upstream.md) 和 Apache-2.0 [LICENSE](LICENSE)。衍生源码与外部 OSWorld 底座的边界见 [UPSTREAM.md](UPSTREAM.md)。
+
+## 文档与复现
+
+|内容|入口|
+|---|---|
+|架构图与上传报告的来源|[README 来源说明](docs/readme-provenance.md)|
+|v7 之后的冻结版本与逐格 performance|[实验总账](docs/taskviews-post-v7-experiments-20261029.md) · [CSV](validation/taskviews-post-v7-experiments-20261029.csv) · [JSON](validation/taskviews-post-v7-experiments-20261029.json)|
+|Mini 实现与早期沿革|[Mini 说明](docs/taskviews-mini.md)|
+|Graph 三模式与消融边界|[Graph v1](docs/taskviews-mini-graph-v1.md) · [送达 v2](docs/taskviews-mini-delivery-v2.md)|
+|阶段上下文与当前按键适用性|[指导 v5](docs/taskviews-mini-guidance-v5.md) · [适用性审计](docs/taskviews-keyboard-eligibility-v7-audit.md)|
+|按键目录与可选联网研究|[目录入口](tools/keyboard/README.md) · [目录选择](docs/taskviews-keyboard-auto-selection-20261020.md) · [任务级调研](docs/task-keyboard-web-research-20261020.md)|
+|AutoDL 配置与离线／真实接口验证边界|[API 接入](docs/autodl-taskviews-mini-20261021.md)|
+|冻结矩阵、串行执行与审计|[三任务运行说明](docs/osworld-mini-graph-high-low40.md)|
+
+历史文档保留当时的默认值和验证结果；复现应以目标提交、该次冻结计划和原始指标来源为准。离线测试、接口探针和正式任务成绩分别核算。

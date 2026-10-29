@@ -19,7 +19,7 @@
 
 ## 指标与版本
 
-README 按发票／GIMP／VLC × high／low 分成六张结果表。8 个入选 TaskViews 实验均为官方 1 分，且决策次数和输入加输出总 tokens 均可证实低于同任务、同 reasoning 的 LLM baseline；VLC／low 缺少同档 baseline，仅列未测占位，不编造配对结果。
+README 按任务类型与 reasoning 分成五张有配对结果的表。8 个入选 TaskViews 实验均为官方 1 分，且决策次数和输入加输出总 tokens 均可证实低于同任务、同 reasoning 的 LLM baseline。按后续排版要求移除 VLC／low 未测占位，未新增或改写任何成绩。
 
 首版发票／low 对应 `0a5b6f2a8824008dc3bba01803b1b43369016627`，使用上传报告的统计，并与[历史参照表](taskviews-post-v7-experiments-20261029.md)及其[结构化总账](../validation/taskviews-post-v7-experiments-20261029.json)交叉核验。其他入选组为 Mini v3 发票／high、Mini v7 VLC／high、Graph r007 的 GIMP／high legacy 与 flat、GIMP／low flat、VLC／high legacy，以及能力指导 v3 legacy/full 的 GIMP／low。总 tokens 依据原始 request_outcome 的已知 usage 重算。按用户要求，README 不展示精确复现、linked、能力指导 v1／v4 的结果；完整记录仍保留在实验总账，不删除历史证据。
 
@@ -28,3 +28,9 @@ GIMP／low baseline 来自后续单次补测，与其他 reasoning 分开。GIMP
 VLC 交付缺陷属于后续 `4dd4f2b` 的 v3 核心实验，不冒充首版相同提交的直接成绩。历史 Mini v7 为 `ae27018`；当前指导模块版本名不等于该历史代码版本。开发版代码核心为 `3800520`，本次不新增其线上性能结论。
 
 输出 tokens 包含推理 tokens；总 tokens 为输入加输出。不同版本、reasoning、任务和失败／未知用量不合并成单一收益。底部差异表区分历史整体版本 Mini v3／v7、View 表示模式 legacy／flat，以及后续能力指导模块 v3；不把后续 legacy 标为历史 Mini v3。
+
+## 开发状态说明与排版
+
+README 明示当前 keyboard 优化尚未完成，仍可能出现错误匹配，并链接实际选卡、语义、适用性及指导库代码。Graph 模式尚未完成，历史 Graph 数值包含其冻结 keyboard 匹配及指导送达缺陷的干扰；不将这些数值作为 Graph／links 的独立收益证据，也不宣称当前候选已有线上验证。
+
+按用户要求，README 移除 release 宣传、指定的效率总结及 VLC 失败案例段落，隐藏 baseline 的补测括注，并将“文档与复现”置于最后。历史发布说明、完整结果、补测来源与失败证据继续保留在各自文档及总账中。
