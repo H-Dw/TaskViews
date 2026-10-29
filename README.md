@@ -1,116 +1,126 @@
 # TaskViews
 
-2026-10-29：当前代码提交为 `3800520`，包含来源绑定的阅读进度、阶段化复核及先检查适用性再排序的按键指导；674 项相关离线测试通过，最新候选尚无线上成绩。v7 之后各轮实验的冻结 commit、代码措施、逐格分数、决策、GUI/API 和 tokens 见[实验与版本总账](docs/taskviews-post-v7-experiments-20261029.md)，并提供 CSV/JSON。历史 Mini v7、各代指导模块及未评分异常分别标注。
+![TaskViews-Mini：单一 CUA actor、四类 View 与执行证据回路](docs/assets/taskviews-mini-framework.png)
 
-2026-10-27：能力指导 v5 采用最小阶段上下文：当前事实/错误、一张完整操作卡、一条有来源的阅读报告和必要终态格式。相对缩放不再默认走数值框；输入后只确认，确认后只检查实际效果。新能力路径仅保留 `--mini-review-timing stage`，默认 `--mini-review-budget refill`；严格终态来源校验和 3000 bytes 上限不变。481 项回归及保存日志打包检查通过，详见[指导 v5 与两格实验说明](docs/taskviews-mini-guidance-v5.md)。两格发票/low 文件转移说明实验使用独立冻结的原 Mini v3 核心，不混入本次优化。
+*首图展示首个 release 所用的 Mini v3 核心（`0a5b6f2`）：四类 View 从预置操作知识和本次任务的执行记录中组织补充上下文。当前开发版在此基础上增加了指导选择、阶段状态和跨 View 引用。*
 
-2026-10-26：能力指导 v3 统一完整指导组，加入有来源的动作前置条件、短周期反馈、公开阅读进度和通用收尾。完整／压缩复核提示可独立冻结，严格终态验证不变；原 v3 整轮历史裁剪保持。实现与评估边界见[指导 v3 说明](docs/taskviews-mini-guidance-v3.md)；历史说明保留于[指导 v2](docs/taskviews-mini-guidance-v2.md)。
+TaskViews 为 computer-use agent 按信息职责组织上下文：让基础操作知识、当前界面、已执行尝试和历史错误各有位置，帮助同一个 CUA actor 复用证据、选择下一步动作。Mini 路径采用确定性的检索与打包，正常操作中不增加规划或分析模型调用。
 
-2026-10-24：新增可选 `--mini-graph-packing evidence_first_delivery_v2`，在 3000 UTF-8 bytes 内恢复完整按键配方、查询入口与关键历史的送达。保留 legacy 和 Graph v1；同输入 flat/linked 仍共享事实选择。510 个日志快照的离线对比、版本溯源与后续图检索设计见 [送达 v2 说明](docs/taskviews-mini-delivery-v2.md)。本次离线验证不代表新的在线成绩。
+**首个 release：[TaskViews-Mini v0.1.0](https://github.com/H-Dw/TaskViews/releases/tag/v0.1.0)**，固定到 [`0a5b6f2`](https://github.com/H-Dw/TaskViews/commit/0a5b6f2a8824008dc3bba01803b1b43369016627)。该版本在已测任务中实现了 CUA 决策效率提升，但在部分复杂任务上存在结果提交缺陷。`main` 是后续开发版本，不能用其运行结果替代首版成绩。
 
-2026-10-23：新增 OSWorld-1 三任务 Mini `legacy/flat/linked × high/low` 串行矩阵、40分钟单次巡检和全实验最多10次修复账本。配置、入口与重测规则见[实验运行说明](docs/osworld-mini-graph-high-low40.md)。
+## 工作方式
 
-2026-10-22：Mini 新建运行默认采用跨 View Graph `linked` 模式，并提供 `--mini-graph-mode legacy|flat|linked` 消融选项。统一事件、观察、动作、总目标和配方身份；flat/linked 共用事实选择，按相同 3000 UTF-8 bytes 上限打包。历史缺省配置继续解释为 legacy。使用、恢复与离线比较见 [Graph v1 说明](docs/taskviews-mini-graph-v1.md)。
-
-2026-10-21 接口更新：当前 Mini 的 `scripts/verified_invoice.py` 入口默认使用 **AutoDL / Qwen3.5-397B-A17B**，API 地址为 `https://www.autodl.art/api/v1`，密钥从 `AUTODL_API_KEY` 读取，采用流式 Chat Completions。默认准备 `autodl-mini40`（Mini 单组、最多 40 轮）；`autodl-pair40` 提供 baseline/Mini 对照。支持现有 invoice、GIMP、VLC 任务。接入、离线验证与实际接口检查步骤见 [AutoDL 使用说明](docs/autodl-taskviews-mini-20261021.md)。旧 provider 与冻结实验配置保留。
-
-2026-10-21：最新 **TaskViews-mini** 已迁入 `main`；旧 `main` 保留为 `backup/main-20261021`。项目仓库为 [H-Dw/TaskViews](https://github.com/H-Dw/TaskViews)。Mini 的准备、启动、恢复和离线校验入口使用 `main`；旧实验保留原分支及源码记录。
-
-2026-10-20：扩充通用按键指引，新增按任务软件名称选择目录，以及默认关闭的任务级联网按键调研。开启 `--keyboard-research` 后，先通过 API 搜索软件指引并保存 Markdown，再生成仅供当前任务读取的临时按键目录；额外研究调用单独记账。详见[自动目录选择](docs/taskviews-keyboard-auto-selection-20261020.md)、[联网调研使用说明](docs/task-keyboard-web-research-20261020.md)和[通用按键与 v7 审计](docs/taskviews-mini-v7-keyboard-audit-20261020.md)。
-
-2026-10-18：Mini 修订为 `mini_report_recovery_v7`。辅助产物报告错误与原生工具错误分流，前者只追加简短反馈，不回填被拒回复及推理；同轮修复按真实输入重新准入，只裁剪完整旧轮，保留任务、当前观察和工具 ID 配对。报告改为扁平四项结构，继续共用原重试池、截止时间和输出预算。实现与真实失败输入的离线验证见 [v7 恢复说明](docs/taskviews-mini-report-recovery-v7.md)。本次不启动线上评测。
-
-2026-10-18：Mini 修订为 `mini_artifact_protocol_v6`，继承 v5 按键目录。产物报告使用完整 JSON 模板和统一长度规则，返回具体格式／引用错误，澄清 unknown 与模型复核的区别，并在原 3000 bytes 内去掉重复元数据、优先保留操作证据。详见 [v6 修复与离线验收](docs/taskviews-mini-artifact-protocol-v6.md)。本次不启动线上评测。
-
-2026-10-17：Mini 按键 View 更新为 `mini_keyboard_tools_v5`。检索 14 类 CUA 评测来源，按通用、软件类型、平台和具体软件整理 51 份 tools 文档、34 个软件条目、190 条配方；默认仅启用 `general`，专用目录须显式选择并按名称检索。见 [按键 tools 入口](tools/keyboard/README.md)、[分类索引](tools/keyboard/index.md)和[评测软件检索](tools/keyboard/survey.md)。这是文档与离线实现更新，旧冻结计划和检查点不自动迁移。
-
-2026-10-16 待审配置：新增 OSWorld-Verified 的 GIMP 背景透明化与 VLC 截帧，每项比较 LLM baseline 和 TaskViews-mini，统一 `qwen3.8-max / high`、每组最多40决策轮。Mini 先以 `49fefeb` 提交快照，当前只准备与离线验证，不启动正式评测。工具操作、四组设置与入口见 [GIMP/VLC 评测准备](docs/osworld-verified-media-max-high40.md)。
-
-2026-10-16 开发更新：Max/high 三组官方结果为 UI-KOBE-like 0、baseline 1、Mini 0。已依据保存轨迹将 Mini 更新为 `mini_keyboard_memory_v3`：独立 keyboard view、意图到确切键名的生成引导、同 episode 键盘记忆检索，默认四视图仍共用3000-byte上限。231项回归、保存轨迹回放、原运行器模拟集成通过；6次真实键名生成测试中，新上下文在两个现场均首轮正确。新代码尚无正式分数，巡检保持暂停。见[输入差异、异常与修复验证](docs/taskviews-mini-keyboard-postmortem-20261016.md)及[auto-research 策略](docs/taskviews-mini-auto-research.md)。
-
-2026-10-16：Mini 优化已提交为 `2c6662c`。新增随想 `qwen3.8-max`、思考 `high`、每组 40 轮的 UI-KOBE-like → LLM baseline → TaskViews-mini 三组入口，使用显式归一化坐标和共同资源预算。配置与验证见 [Max/high 三组说明](docs/osworld-verified-invoice-sx-max-high40.md)，实际运行进度见 [运行状态](D:/cua_lty/osworld_verified_setup/运行状态.md)。
-
-2026-10-15最终结果：随想qwen3.8-flash / low的v5发票核对比较已完成，UI-KOBE-like与TaskViews-mini各35轮，官方得分均0.0。内存检查通过，容器清理、源码校验完成，巡检已暂停。见 [最终报告](docs/osworld-verified-invoice-sx-flash-results-20261015.md)。下文保留实现和历史记录。
-
-2026-10-15 21:58：按用户确认采用“真实空闲RAM>2GiB＋单独核算本项目占用”的新内存规则。56项相关回归、六例离线集成、大图在线检查和实测计数预检通过，独立v5计划已在真实环境取得完整模型响应及动作回执，20分钟巡检已恢复。模型qwen3.8-flash / low，UI-KOBE-like → Mini各最多35轮。机制见 [2GiB内存规则](docs/osworld-verified-memory-policy-20261015.md)，实时状态见 [运行状态](D:/cua_lty/osworld_verified_setup/运行状态.md)。下文保留历史记录。
-
-2026-10-15 21:41巡检：v4在UI-KOBE-like完成9轮后因Windows可用RAM降至3.821GiB触发4GiB保护；9次模型调用完整返回，容器已清理、未评分、Mini未启动。巡检已通过应用工具暂停。证据和后续所需处理见 [运行状态](D:/cua_lty/osworld_verified_setup/运行状态.md)。下文保留启动与历史说明。
-
-2026-10-15 21:16，按用户明确指令以新v4目录重新运行随想qwen3.8-flash / low的UI-KOBE-like → Mini比较，各最多35轮。启动前可用RAM约11.6GiB、零swap，代码与配置沿用已验证版本；v3历史记录保留。UI-KOBE-like已在真实环境取得完整模型响应与动作回执，应用已确认20分钟巡检恢复ACTIVE。实时进度见 [运行状态](D:/cua_lty/osworld_verified_setup/运行状态.md)。
-
-OSWorld-Verified（OSWorld-1）的发票与流水核对入口为 `scripts/verified_invoice.py`。2026-10-15按用户指令使用随想接口、环境变量 `SX_QWEN_API_KEY` 和 `SX_URL_SB`、模型 `qwen3.8-flash` / low，每组最多35决策，UI-KOBE-like → Mini串行。含大图的真实接口检查、六例离线集成及运行预检通过；v3真实运行完成14轮及14次完整模型响应后，因Windows可用RAM降至3.736GiB触发4GiB保护，已清理容器，未取得评分、Mini未启动。当前配置与状态见 [随想接入说明](docs/osworld-verified-invoice-sx-flash.md)；历史证据均保留。
-
-`main` 分支提供 **TaskViews Mini**：一个共同 native actor，默认 `current/keyboard/attempts/lessons` 四个有界视图，正式操作中零额外分析角色请求、显式 profile 与检查点；可选的操作前联网调研单独记录调用。最初 M0 的三视图结构保留在历史说明中。后续 Mini 测试先执行 `git switch main`，使用带分支检查的 `scripts/validate_mini.py`。实现、配置和运行边界见 [Mini 使用说明](docs/taskviews-mini.md)，后续分层接入见 [路线图](docs/taskviews-mini-roadmap-20261012.md)。当前暂停的完整 V12 不迁移为 Mini。
-
-以下 v7 说明是旧 Kimi 比较路径的历史接口文档，不是 Mini 或 Qwen 完整版的当前配置。v7 分为 **baseline、UI-KOBE-like、TaskViews 三组**，共用同一套 actor、K3 协议适配、截图/坐标契约和官方执行评分。baseline 不创建转换图数据库，也不读取扩展记忆；UI-KOBE-like 单独测试执行边的保存与检索，TaskViews 在此基础上增加任务模块和自适应视图。详见 [三组 actor 与证据边界](docs/cua-v7.md)。
-
-baseline 的提示保留固定官方文本，native 路径仅替换 XML 的传输格式说明；移除项目追加的提示增强。模型只接收最小工具结果、真实错误或用户答复。原始 SSE、完整命令、控制器回执、后截图和评分保存在独立审计中，不自动拼入模型反馈。实验组只能通过有界可选上下文消费其记录。
-
-native 三组继承同一个 `KimiNativeAgent.predict`，这是 native 协议桥接，不能称为未经修改的官方 QwenAgent。另行预选的 official-xml 三组继承固定 QwenAgent 的 `predict`、提示、历史、XML 解析和修复。两条协议路径独立冻结，不自动切换。
-
-2026-10-07 的接口修复见 [空字段与被动记录修复](docs/native-cua-fixes.md)：复用固定官方客户端的空文本兼容规则，修复 SQLite 事件引用输出的字段冲突，并用三份真实失败 SSE 回归。新的 native 动作链路验证预选相同 absolute 1920×1080 契约，串行运行两臂；短程链路检查与正式任务成绩分开。
-
-此前两臂真实 native 短程验证见 [原测试报告](docs/native-cua-validation-20261007.md)。它使用修订前的提示、扩展反馈与共同 SQLite，属于历史验证，不能代替 v7 三组的新在线验证。旧评分、分析失败、未知费用和证据保持原样。
-
-选择 official-xml 前必须取得当前源码、配置与 K3 的真实 XML/历史兼容证明。此前实现、UI-KOBE 关系与证据限制见 [v6 历史说明](docs/cua-v6.md)。
-
-官方底座固定为 `xlang-ai/OSWorld-V2@3d778a3c9a34a079316f70df023b166700445792`，从外部 checkout 加载；仓库不复制或修改官方执行器、评分器或任务答案。运行前逐字节检查关键官方文件，并保存运行前后源码索引。
-
-## v7 历史 CUA 契约
-
-- 默认配置：[cua-v5-absolute.json](configs/cua-v5-absolute.json)。预先选择官方 **absolute**，模型图固定 **1920×1080**，所有动作均以这张模型图的像素为单位。原图可以有其他尺寸，官方投影负责映射回 guest。
-- 可选配置：[cua-v5-relative.json](configs/cua-v5-relative.json)。预先选择官方 **relative**，使用官方图片 resize，动作每轴 **0..1000**。实际模型图尺寸仍随 frame 保存；感知 bbox 始终是模型图像素。
-- 两种配置都不猜单位、不夹取非法点、不执行非法批次的合法前缀。禁止根据某次模型输出临时切换模式。
-- 同一 frame 对象生成 schema、提示、模型图片、元数据和官方编译参数。TaskViews 所有角色与 actor 使用完全相同的图片。
-- 历史默认使用官方 runner 的 500 轮、20 图、10 轮折叠步幅。XML 路径使用官方 `build_messages`、上下文处理与原修复提示；原始 K3 reasoning/content 在供应商请求中恢复。官方 XML 历史的 success 文本是合成反馈，不冒充真实回执。native 使用同一份官方历史工具、原始 assistant/tool ID 和最小结果反馈，原任务放在首个保留观察中；其整轮裁剪不是官方 XML 摘要流程。
-- 三组 actor 都保留最多两次动作修复、相同输出预算和完整执行期限。TaskViews 分析使用独立的账本、分析期限和两次分析修复池，不减少 actor 的可用额度。所有失败、修复、重试和未知费用分别保留；实验组的额外成本必须报告，不能声称总预算相等。
-- TaskViews 的业务 JSON、角色范围在同一个有界校验修复流程中检查；控制器收到各消费者实际允许的 anchors。权限与范围检查继续生效。最终分析不可用时，原目标与同一截图继续交给 actor。
-- 关闭 terminal judge、endless retry、一般 summary folding 和 zoom；XML 的原官方 context rescue 仍可调用摘要 LLM，native 历史封装另列。模型显式 terminate 或官方决策上限后，由原 runner 执行原任务评估。模型 success 与官方得分分开记录。
-
-此前 v5 实现见 [接口优化说明](docs/cua-v5.md)。v6 official-xml 四组评测已封存，其失败分析见 [接口异常分析](docs/analysis/v6-k3-interface-failure-20261007/report.md)。协议兼容探针不等于任务成绩，单位合法也不等于视觉目标识别正确。
-
-新授权的 max/16K 配置及单独验证见 [max16 配置说明](docs/max16-profile.md)：max/16000、整步32000、actor保留16000、分析4000。正式任务评测记录与此前兼容探针分开管理。
-
-## 离线验证
-
-使用 Ubuntu-24.04、官方 `.venv/bin/python`，同一注册的 128 MiB / 零 swap scope。测试仅使用本地官方代码、模拟模型响应和模拟资源；不操作 GUI 或访问模型 API。
-
-```bash
-cd /mnt/d/cua_lty/OSWorld-K3-TaskViews
-PYTHONDONTWRITEBYTECODE=1 systemd-run --user --scope \
-  --property=MemoryMax=128M --property=MemorySwapMax=0 \
-  /home/dawei/osworld2/OSWorld-V2/.venv/bin/python scripts/validate_cua.py \
-  --dev-site-packages /mnt/d/cua_lty/UI-KOBE-TaskViews/.venv/lib/python3.12/site-packages \
-  --ruff /mnt/d/cua_lty/UI-KOBE-TaskViews/.venv/bin/ruff \
-  --output validation/three-arm-actor-v7-20261007-complete.json
+```text
+任务 + 当前截图 + 原生历史 + 本轮 View 补充包
+                         ↓
+                   单一 CUA actor
+                         ↓
+               原生工具 → 官方执行器 → 桌面
+                         ↓
+               观察 / 参数 / 回执 / 错误
+                         ↓
+                 episode SQLite journal
+                         ↓
+                 下一轮检索与上下文打包
 ```
 
-`--dev-site-packages` 仅指定已有测试依赖位置，不读取旧实验；在新环境安装开发依赖后可以省略。测试文件按顺序运行，每个文件完成后以 `exec` 替换当前解释器；始终是同一个 PID、同一个 scope，不保留额外 Python 报告进程。
+|View|提供的信息|证据边界|
+|---|---|---|
+|`current`|当前观察、任务和坐标约定；开发版还投影已有检查状态|引用当前帧，不额外生成界面事实|
+|`keyboard`|适用的准确按键、完整操作指导及同 episode 按键记录|目录启用不代表软件、窗口或焦点已确认|
+|`attempts`|实际动作参数、回执，以及动作前后和后续观察|工具返回、按键匹配或截图变化不等于业务成功|
+|`lessons`|真实执行错误，以及带来源的模型公开意图／复核报告|模型判断保留 proposal 身份，`unknown` 不自动升级|
 
-v7 的 [离线验证](validation/three-arm-actor-v7-20261007-complete.json) 为 **614 passed、0 failed、Ruff 通过**，核验三组 actor 一致、baseline 无转换库、审计与模型反馈分离、原工具 ID、分析预算隔离和官方底座未改。此前 [v6 验证](docs/v6-validation.md) 与 v5 原件保留，不能当作当前源码的验证记录。
+四个 View 共用 **3000 UTF-8 bytes** 补充上下文上限，并受实际请求余量约束。完整记录按预算准入，完整事件、来源和省略信息留在本地审计中。补充包每轮独立可读；任务记录按 episode 隔离。
 
-## v7 历史实验入口
+项目沿用 UI-KOBE 的执行转移记录和检索思路，将其组织为固定职责的 View。GUI 动作仍经共同的 native 协议桥接与外部 OSWorld 执行／评分底座处理。模型声称完成和官方评分分别记录。
 
-只支持 v7 的新三组冻结计划。上一批 v4/v5/v6 的计划和证据保持原样，不能让新代码继续旧目录，也不自动重跑旧实验。
+## 已观察到的效率与限制
 
-仅选择 official-xml 时，先在同一个 128 MiB / 零 swap 辅助 scope 内运行 `scripts/probe_k3_official_compatibility.py --profile max-16k --output outputs/new-k3-xml-proof.json`，验证真实 K3 XML 响应及原始 assistant 历史。每次使用新的证据路径。探针不执行动作、不创建 VM，也不评分。需可用的 `KIMI_API_KEY`；无凭证、传输错误或 length 不等于 K3 不支持 XML。
+下表来自历史发票任务的同档 baseline／Mini 记录，模型为 `qwen3.8-max`，thinking 开启、reasoning 为 `low`，温度 0，最多 40 次决策。两组源码均冻结于首个 release 的 `0a5b6f2`，使用各自独立 guest 和空任务记忆。
 
-完成离线验证后，准备计划时通过 `--cua-config` 冻结共同契约；三组只能使用这一个计划中的配置。例如以下命令只准备 native 计划，不创建 VM：
+|指标|LLM baseline|TaskViews-Mini v0.1.0|
+|---|---:|---:|
+|官方分数|1.0|1.0|
+|决策次数|28|22|
+|GUI 命令|27|22|
+|API 尝试／完整返回|28／28|22／22|
+|输入 tokens|219,061|190,785|
+|输出 tokens|7,803|6,095|
+|其中推理 tokens|4,723|3,865|
+|总 tokens|226,864|196,880|
+
+这次记录中，Mini 的决策减少 **21.4%**，总 tokens 减少 **13.2%**。输出 tokens 已包含推理，不能重复相加。同提交后来一次原样复现也为 1 分、22 次决策，输出为 6,973 tokens；单次运行不代表固定开销，也不足以证明所有任务均有收益。
+
+**已知限制：效率提升不能保证交付正确。** 首版尚未包含后续的严格产物来源复核。复杂任务可能完成了界面操作，却提交了来源不符或内容不正确的产物。例如，同属 v3 核心的后续提交 `4dd4f2b` 在 VLC 截帧任务中把观察截图作为交付图片，官方连续分数为 `0.08199028328542753`。这是另一提交的证据，不能冒称 `0a5b6f2` 的直接 VLC 成绩；它揭示了首版架构需要补强的提交检查。
+
+完整版本、指标定义、失败用量下界和后续实验见[实验与版本总账](docs/taskviews-post-v7-experiments-20261029.md)。不同提交、reasoning、目录和运行日期分别报告，不把离线结构验证当作在线成功率提升。
+
+## 首版与当前开发版
+
+|版本|范围|
+|---|---|
+|`v0.1.0` / `0a5b6f2`|历史 `mini_keyboard_memory_v3`；单 actor、四个 View、预置按键与 episode 记忆。保留原样，作为冻结参照。|
+|历史 Mini v7 / `ae27018`|增加产物报告协议、来源校验、短纠错及同轮输入重新准入。不是首个 release，也不是当前指导模块的“v7”。|
+|当前 `main`|代码核心提交 `3800520`，后续提交补充报告与文档；包含阶段化复核、阅读进度、适用性优先的操作指导及三种 View 表示。最新指导候选有离线验证，尚无对应线上任务成绩。|
+
+当前开发版支持以下表示方式，选择模式并不等于切换到某个历史提交：
+
+|`--mini-graph-mode`|行为|
+|---|---|
+|`legacy`|原四 View 的表示／打包路径；仍使用所冻结提交的公共 actor 和指导模块|
+|`flat`|统一实体 ID、共享事实与 View 引用，不输出新增显式关系|
+|`linked`|与 flat 使用相同事实选择，额外输出有执行字段依据的关系|
+
+flat／linked 在相同日志输入和预算下按 linked 成本选择相同事实；flat 删除关系后不回填记录。**linked 当前没有完整图检索或路径规划**，不应把关系输出本身当作已验证的效率优化。新入口默认显式选择 linked；旧计划缺少模式字段时解释为 legacy，恢复时不允许切换。
+
+当前指导路径先检查能力、动作、对象、应用与流程阶段是否适用，再排序和打包完整指导组。软件名匹配、通用能力冻结与任务级联网调研是不同选项；联网调研默认关闭，其 API 成本另计。目录扩充和指导改写不保证比原 v3 更高效。
+
+## 开始使用
+
+Python **3.10+**。以下命令安装代码并预览确定性的目录选择，不启动 CUA、虚拟机或模型请求：
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 systemd-run --user --scope \
-  --property=MemoryMax=128M --property=MemorySwapMax=0 \
-  /home/dawei/osworld2/OSWorld-V2/.venv/bin/python scripts/osworld_native_experiment.py prepare \
-  --root /mnt/d/cua_lty/OSWorld-K3-TaskViews/runs/new-task059-plan \
-  --task 059 --profile max-16k --validation validation/three-arm-actor-v7-20261007-complete.json \
-  --cua-config configs/cua-v5-absolute.json \
-  --agent-interface k3-native
+git clone https://github.com/H-Dw/TaskViews.git
+cd TaskViews
+python -m venv .venv
+# Linux / WSL
+source .venv/bin/activate
+# Windows PowerShell 可改用 .venv\Scripts\Activate.ps1
+python -m pip install -e ".[native,dev]"
+python -m kobe_views.keyboard_selection \
+  --keyboard-mode task_capabilities \
+  --instruction "Read and compare PDF documents"
 ```
 
-实际启动由 `osworld_native_experiment.py launch --root <新计划> --arm baseline|ui_kobe_like|taskviews` 完成，必须继续放在 128 MiB 辅助 scope 中，并取得新实验授权。保留串行运行、VM 3 GiB、service 2 GiB、网站合计 0.75 GiB、单个辅助 128 MiB、禁止 swap、启动 adjusted 5 / 运行 4 GiB 和磁盘保护。Task046 另需当前源码对应的官方 setup/网站部署准入证明；此仓库没有把旧证明冒充为新版本已验证。不要手工调用内部 runner 绕过准入。
+检出首版源码：
 
-XML 迁移证据不能代替其他 profile、截图契约或修改后源码的兼容检查。配置文件的 v5 名称保持，共同截图/坐标配置供 v7 使用；当前可选上下文预留为0，超出 actor 既有上下文上限时省略完整可选包，不挤出原历史。
+```bash
+git switch --detach v0.1.0
+```
 
-为接口验证可预先声明 `--purpose cua_smoke --max-steps 3 --agent-interface k3-native`，使用 Task059 原任务和官方 runner 的短程决策上限。三组共用同一冻结计划；`benchmark_comparable=false`，不得与正式 500 决策任务成绩比较。正式 evaluation 的上限保持 500。
+首版没有后续新增的命令参数，应按该提交自己的代码与冻结配置使用。返回开发版用 `git switch main`。
 
-`ui_kobe`、`kobe_views` 与部分旧集成/测试工具保留上游来源；旧 GLM/Qwen/Task035 入口不属于本次 v7 比较路径。不要据其旧单动作策略推断当前行为。当前 GitHub 仓库为 [H-Dw/TaskViews](https://github.com/H-Dw/TaskViews)。
+实际 OSWorld 评估需要另外准备 Linux／WSL、Docker／KVM、guest 镜像、任务资源和外部执行底座。项目固定使用 `xlang-ai/OSWorld-V2@3d778a3c9a34a079316f70df023b166700445792` 的执行／评分代码，并校验来源；仓库不附带 VM 镜像、任务答案、凭据或完整原始运行数据。
+
+当前 Verified 入口为 `scripts/verified_invoice.py`，支持发票、GIMP、VLC。默认 API 为 AutoDL 的 `https://www.autodl.art/api/v1`，模型 `Qwen3.5-397B-A17B`，密钥由 `AUTODL_API_KEY` 环境变量提供。**上面的历史成绩使用 SX 接口的 `qwen3.8-max`，不是 AutoDL 成绩。** 模型、reasoning、坐标、预算、按键目录、源码身份和模式都应在新计划中显式冻结；准备、检查、启动和恢复按对应说明执行。
+
+## 文档与复现
+
+|内容|入口|
+|---|---|
+|首个 release、已知缺陷和证据范围|[v0.1.0 发布说明](docs/releases/v0.1.0.md)|
+|架构图与上传报告的来源|[README 来源说明](docs/readme-provenance.md)|
+|v7 之后的冻结版本与逐格 performance|[实验总账](docs/taskviews-post-v7-experiments-20261029.md) · [CSV](validation/taskviews-post-v7-experiments-20261029.csv) · [JSON](validation/taskviews-post-v7-experiments-20261029.json)|
+|Mini 实现与早期沿革|[Mini 说明](docs/taskviews-mini.md)|
+|Graph 三模式与消融边界|[Graph v1](docs/taskviews-mini-graph-v1.md) · [送达 v2](docs/taskviews-mini-delivery-v2.md)|
+|阶段上下文与当前按键适用性|[指导 v5](docs/taskviews-mini-guidance-v5.md) · [适用性审计](docs/taskviews-keyboard-eligibility-v7-audit.md)|
+|按键目录与可选联网研究|[目录入口](tools/keyboard/README.md) · [目录选择](docs/taskviews-keyboard-auto-selection-20261020.md) · [任务级调研](docs/task-keyboard-web-research-20261020.md)|
+|AutoDL 配置与离线／真实接口验证边界|[API 接入](docs/autodl-taskviews-mini-20261021.md)|
+|冻结矩阵、串行执行与审计|[三任务运行说明](docs/osworld-mini-graph-high-low40.md)|
+
+历史文档保留当时的默认值和验证结果；复现应以目标提交、该次冻结计划和原始指标来源为准。离线测试、接口探针和正式任务成绩分别核算。
+
+## 来源与许可
+
+本项目衍生自 [UI-KOBE](https://github.com/YuxiangChai/UI-KOBE)，保留原作者署名、[上游 README](README.upstream.md) 和 Apache-2.0 [LICENSE](LICENSE)。衍生源码与外部 OSWorld 底座的边界见 [UPSTREAM.md](UPSTREAM.md)。

@@ -6,4 +6,4 @@
 - Original LICENSE and README.upstream.md retained. Package author credit remains with Yuxiang Chai; current work refactors the native K3 CUA contract, role validation and lifecycle described in docs/cua-v5.md.
 - OSWorld external execution/evaluation checkout: `xlang-ai/OSWorld-V2@3d778a3c9a34a079316f70df023b166700445792`. The official parser/compiler/images/history/prompts/runner/Env/controller remain unmodified; validation records their hashes and checks before/after source snapshots.
 - Existing v4 experiment directories, plans, raw API transcripts, screenshots, answer material, assets and credentials were not copied into this new repository. The original workspace and sealed evidence remain in place.
-- This new local Git repository has no configured GitHub remote and has not been published.
+- Current derivative repository: https://github.com/H-Dw/TaskViews. The `main` branch contains subsequent development; the first TaskViews-Mini release, `v0.1.0`, preserves commit `0a5b6f2a8824008dc3bba01803b1b43369016627`.
