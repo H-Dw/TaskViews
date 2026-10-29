@@ -117,7 +117,7 @@ def test_offline_preparation_and_launch_freeze_one_profile_without_starting_serv
     from ui_kobe.api.qwen_png_transport import policy as image_policy
     assert plan['qwen_image_transport_policy'] == image_policy()
     assert plan['arms'] == [arm] and plan['implementation_version'] == 10
-    assert plan['mini_profile'] == frozen_profile(arm) and plan['taskviews_feedback'] is False
+    assert plan['mini_profile'] == frozen_profile(arm, plan['mini_graph_mode']) and plan['taskviews_feedback'] is False
     assert plan['source_branch'] == 'main' and plan['iteration_commit_required']
     assert plan['cua_contract'] == mini_cua_contract() and plan['max_steps'] == (50 if low50 else 500)
     assert plan['checkpoint_policy']['inspection_minutes'] == (30 if inspection is None else inspection)

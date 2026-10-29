@@ -119,6 +119,9 @@ def test_three_actors_share_projection_but_baseline_reads_no_extra_context(tmp_p
     ('sx-max-high40',None),('sx-max-high40','ui_kobe_like'),('sx-max-high40','baseline'),
     ('sx-mini-max-high40',None),('sx-mini-max-high40','taskviews')])
 def test_three_arm_dispatch_never_marks_complete_or_skips_cleanup_early(tmp_path,monkeypatch,experiment,stop_arm):
+    from ui_kobe.osworld import verified_serial
+    monkeypatch.setattr(verified_serial, 'LOCK', tmp_path / 'unit-evaluation.lock')
+    monkeypatch.delenv(verified_serial.FD_ENV, raising=False)
     spec(monkeypatch)
     plan=module.specification('sx','SX_URL_SB','relative',experiment)
     from scripts import osworld_native_experiment
@@ -153,6 +156,8 @@ def test_high40_requires_all_nine_cases_with_current_generation(tmp_path,monkeyp
         for case in ('limit','terminate','empty'):
             row={k:deepcopy(plan[k]) for k in ('model','base_url','cua_contract','generation_fields','max_steps','experiment',
                                             'mini_keyboard_tools','mini_keyboard_selection')}
+            from kobe_views.mini_graph import arm_policy
+            row.update(mini_graph_mode=arm_policy(plan, arm)['mode'], mini_graph=arm_policy(plan, arm))
             row.update(passed=True,arm=arm,case=case,provider='sx',source_unchanged=True,
                        project_source=identity,live_api_called=False,vm_started=False)
             module.write(tmp_path/f'{arm}-{case}'/'validation.json',row)

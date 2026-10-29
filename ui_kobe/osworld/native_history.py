@@ -3,6 +3,21 @@ from __future__ import annotations
 
 import json
 
+POLICY = 'native_v3_whole_turns_v1'
+
+
+def policy(contract):
+    """Name the original v3 behavior without silently changing caller limits.
+
+    The same compactor is used for baseline and Mini. Keeping complete turns
+    preserves tool IDs and provider reasoning; optional views never evict them.
+    """
+    return {'version': POLICY, 'unit': 'whole_native_turn', 'reasoning': 'count_and_preserve',
+            **{key: getattr(contract, key) for key in (
+                'history_n', 'image_max', 'fold_size', 'context_max_payload_chars',
+                'context_max_text_chars', 'context_rough_text_token_budget',
+                'context_reserve_chars', 'enable_context_rescue')}}
+
 
 def context_size(messages):
     # Official context helpers understand XML text arrays. Native messages also

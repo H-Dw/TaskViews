@@ -67,10 +67,19 @@ def configure_profile(plan, manifest):
                 or manifest.get('mini_controls_view') != plan.get('mini_controls_view')
                 or manifest.get('mini_keyboard_tools') != plan.get('mini_keyboard_tools')
                 or manifest.get('mini_keyboard_selection') != plan.get('mini_keyboard_selection')
+                or manifest.get('mini_guidance') != plan.get('mini_guidance')
                 or manifest.get('mini_keyboard_research') != plan.get('mini_keyboard_research')):
             raise RuntimeError('Manifest fixed-view contract differs from frozen Mini plan')
+        from kobe_views.mini_graph import plan_policy
+        if plan_policy(manifest) != plan_policy(plan):
+            raise RuntimeError('Manifest graph mode differs from frozen plan')
         require_mini_branch()
     os.environ['UI_KOBE_TASKVIEWS_PROFILE'] = profile
+    os.environ['UI_KOBE_MINI_GRAPH_MODE'] = (plan.get('mini_graph_mode', 'legacy')
+        if profile == MINI_PROFILE and manifest.get('arm', plan.get('arms', [''])[0]) == 'taskviews' else 'legacy')
+    from kobe_views.mini_graph import environment as graph_environment
+    os.environ.update(graph_environment(plan if profile == MINI_PROFILE else {},
+        manifest.get('arm', plan.get('arms', [''])[0])))
     os.environ['UI_KOBE_MINI_CONTROLS_VIEW'] = (plan['mini_controls_view']['version']
         if plan.get('mini_controls_view') is not None else 'disabled')
     os.environ['UI_KOBE_MINI_KEYBOARD_TOOLS'] = json.dumps(
@@ -80,7 +89,7 @@ def configure_profile(plan, manifest):
     return profile
 
 
-def main():
+def _main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()
@@ -216,6 +225,13 @@ def main():
         after = source_snapshot(repo)
         changed = sorted(p for p in set(before) | set(after) if before.get(p) != after.get(p))
         write(output / "source-audit.json", {"unchanged": not changed, "changed_paths": changed})
+
+
+def main():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from ui_kobe.osworld.verified_serial import serial_lock
+    with serial_lock():
+        return _main()
 
 
 if __name__ == "__main__":

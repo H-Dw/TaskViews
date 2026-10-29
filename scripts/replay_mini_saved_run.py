@@ -138,7 +138,8 @@ def replay(root, output):
         'UI_KOBE_SX_URL_ENV': 'SX_URL_SB', 'UI_KOBE_GENERATION_PROFILE': plan['generation_profile']['name'],
         'UI_KOBE_CUA_CONTRACT_JSON': json.dumps(contract.snapshot()),
         'UI_KOBE_TELEMETRY_DIR': str(output / 'telemetry'),
-        'UI_KOBE_TASKVIEWS_PROFILE': 'mini_fixed_v1', 'UI_KOBE_TASKVIEWS_FEEDBACK_V10': '0',
+        'UI_KOBE_TASKVIEWS_PROFILE': 'mini_fixed_v1', 'UI_KOBE_MINI_GRAPH_MODE': 'legacy',
+        'UI_KOBE_MINI_GRAPH_PACKING': 'mini_report_recovery_v7', 'UI_KOBE_TASKVIEWS_FEEDBACK_V10': '0',
         'UI_KOBE_MINI_CONTROLS_VIEW': 'disabled'}
     with patch.dict(os.environ, environment), patch.object(SXNativeProvider, 'provider_transport', lambda *a: transport):
         actor = SXMiniTaskViewsNativeAgent(model=plan['model'], base_url=plan['base_url'], temperature=0,

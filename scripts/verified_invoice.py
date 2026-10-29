@@ -33,6 +33,7 @@ ALL_ARMS = ('ui_kobe_like', 'baseline', 'taskviews')
 MAX40_EXPERIMENTS = {
     'sx-max-high40': ('high', ALL_ARMS),
     'sx-mini-max-high40': ('high', ('taskviews',)),
+    'sx-mini-max-low40': ('low', ('taskviews',)),
     'sx-max-medium40': ('medium', ('baseline', 'taskviews')),
     'sx-max-low40': ('low', ('baseline', 'taskviews')),
     'sx-pair-max-high40': ('high', ('baseline', 'taskviews')),
@@ -104,13 +105,20 @@ def project_identity():
 
 
 def specification(provider=DEFAULT_PROVIDER, sx_url_env='SX_URL', coordinate_type='absolute', experiment=None,
-                  task_key='invoice', *, keyboard_task=None, keyboard_mode='task_names', keyboard_toolsets=()):
+                  task_key='invoice', *, keyboard_task=None, keyboard_mode='task_names', keyboard_toolsets=(),
+                  mini_graph_mode='linked', mini_graph_packing=None, mini_review_prompt='full',
+                  mini_review_timing='stage', mini_review_budget='refill'):
+    from kobe_views.mini_graph import policy as graph_policy
+    if keyboard_mode == 'task_capabilities' and mini_graph_mode != 'legacy' and mini_graph_packing is None:
+        mini_graph_packing = 'evidence_first_delivery_v2'
+    graph = graph_policy(mini_graph_mode, mini_graph_packing)
     if experiment is None:
         experiment = 'autodl-mini40' if provider == 'autodl' else 'legacy-low35'
     task_spec = TASKS[task_key]
     autodl = experiment in AUTODL_EXPERIMENTS
     single_vlc_mini = task_key == 'vlc' and experiment == 'sx-mini-max-high40'
-    if task_key != 'invoice' and experiment != 'sx-pair-max-high40' and not single_vlc_mini and not autodl:
+    single_mini = experiment in ('sx-mini-max-high40', 'sx-mini-max-low40')
+    if task_key != 'invoice' and experiment != 'sx-pair-max-high40' and not single_mini and not autodl:
         raise ValueError('GIMP/VLC require the explicit baseline/Mini Max/high40 experiment')
     max40 = experiment in MAX40_EXPERIMENTS
     if (experiment not in EXPERIMENTS or (max40 and provider != 'sx')
@@ -144,7 +152,9 @@ def specification(provider=DEFAULT_PROVIDER, sx_url_env='SX_URL', coordinate_typ
     from ui_kobe.osworld.taskviews_profiles import frozen_profile, mini_cua_contract
     from kobe_views.keyboard_selection import task_keyboard_policy
     keyboard = task_keyboard_policy(keyboard_task if keyboard_task is not None else {},
-                                    mode=keyboard_mode, requested=keyboard_toolsets)
+                                    mode=keyboard_mode, requested=keyboard_toolsets,
+                                    review_prompt=mini_review_prompt, decision_limit=max_steps,
+                                    review_timing=mini_review_timing, review_budget=mini_review_budget)
     contract = mini_cua_contract()
     contract['coordinate_type'] = coordinate_type
     if provider in ('sx', 'autodl'):
@@ -169,11 +179,12 @@ def specification(provider=DEFAULT_PROVIDER, sx_url_env='SX_URL', coordinate_typ
         'live_provider_check_required': provider in ('tinker', 'openrouter', 'sx', 'autodl'),
         'mini_grounding_check_required': provider in ('sx', 'autodl'), 'coordinate_type': coordinate_type,
         'mini_grounding_check_policy': ('collect_all_record_accuracy' if experiment in
-                                       ('sx-mini-max-high40', 'sx-max-medium40', 'sx-max-low40', 'sx-pair-max-high40',
+                                       ('sx-mini-max-high40', 'sx-mini-max-low40', 'sx-max-medium40', 'sx-max-low40', 'sx-pair-max-high40',
                                         *AUTODL_EXPERIMENTS)
                                         else 'all_targets_within30px'),
         'cua_contract': contract, 'taskviews_profile': 'mini_fixed_v1',
-        'arm_profiles': {arm: frozen_profile(arm) for arm in arms},
+        'arm_profiles': {arm: frozen_profile(arm, mini_graph_mode, mini_graph_packing) for arm in arms},
+        'mini_graph_mode': mini_graph_mode, 'mini_graph': graph,
         'controls_view': 'disabled', 'full_taskviews_feedback': False,
         **keyboard,
         'official_runner': 'lib_run_single.run_single_example', 'sleep_after_execution': 3,
@@ -210,7 +221,12 @@ def prepare(args):
     task = verify_task(args.benchmark_repo, task_key)
     spec = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment, task_key,
                          keyboard_task=task, keyboard_mode=getattr(args, 'keyboard_mode', 'task_names'),
-                         keyboard_toolsets=getattr(args, 'keyboard_toolset', ()))
+                         keyboard_toolsets=getattr(args, 'keyboard_toolset', ()),
+                         mini_graph_mode=getattr(args, 'mini_graph_mode', 'linked'),
+                         mini_graph_packing=getattr(args, 'mini_graph_packing', None),
+                         mini_review_prompt=getattr(args, 'mini_review_prompt', 'full'),
+                         mini_review_timing=getattr(args, 'mini_review_timing', 'stage'),
+                         mini_review_budget=getattr(args, 'mini_review_budget', 'refill'))
     evidence = validation_evidence(args.validation_dir, args.provider, spec['base_url'], spec['cua_contract'], spec)
     plan = spec | {'sources': sources(args.benchmark_repo, args.compiler_repo, task_key),
         'project_source': project_identity(), 'image': str(args.image.resolve()),
@@ -243,8 +259,11 @@ def validate_plan(root):
         raise ValueError('Plan changed after preparation')
     for key, value in specification(plan.get('provider', 'qwen'), plan.get('base_url_env') or 'SX_URL',
                                     plan.get('coordinate_type', 'absolute'), plan.get('experiment','legacy-low35'),
-                                    plan.get('task_key','invoice')).items():
-        if key in ('mini_keyboard_tools', 'mini_keyboard_selection'):
+                                    plan.get('task_key','invoice'), mini_graph_mode=plan.get('mini_graph_mode', 'legacy'),
+                                    mini_graph_packing=plan.get('mini_graph', {}).get('packing')).items():
+        if key in ('mini_graph_mode', 'mini_graph') and key not in plan:
+            continue  # Historical declarations are legacy; source/hash checks still apply.
+        if key in ('mini_keyboard_tools', 'mini_keyboard_selection', 'mini_guidance'):
             continue  # Recomputed below against the verified public task fields.
         if plan.get(key) != value:
             raise ValueError('Frozen comparison differs from implementation: ' + key)
@@ -265,6 +284,8 @@ def validate_plan(root):
     task = verify_task(plan['sources']['benchmark']['repo'], task_key)
     if sha(Path(plan['sources']['benchmark']['repo']) / task_path(task_key)) != plan['task_sha256']:
         raise ValueError('Task identity differs from frozen plan')
+    from kobe_views.mini_graph import plan_policy
+    plan_policy(plan)
     from kobe_views.keyboard_selection import validate_task_keyboard
     validate_task_keyboard(plan, task)
     from kobe_views.task_keyboard import validate_plan_research
@@ -282,16 +303,19 @@ def validation_evidence(directory, provider='qwen', base_url=None, cua_contract=
     if directory is None:
         raise ValueError('--validation-dir with all declared arms and passing offline cases is required')
     directory = Path(directory).resolve()
+    from kobe_views.mini_graph import plan_policy, arm_policy
     evidence = {}
     identity = project_identity()
     for arm in plan['arms'] if plan is not None else ARMS:
         for case in ('limit', 'terminate', 'empty'):
             path = directory / f'{arm}-{case}' / 'validation.json'
             value = read(path)
-            if (value.get('passed') is not True or value.get('arm') != arm or value.get('case') != case
+            if ((plan is not None and plan_policy(value) != arm_policy(plan, arm))
+                    or value.get('passed') is not True or value.get('arm') != arm or value.get('case') != case
                     or value.get('provider') != provider
                     or (base_url is not None and value.get('base_url') != base_url)
                     or (cua_contract is not None and value.get('cua_contract') != cua_contract)
+                    or (plan is not None and value.get('mini_guidance') != plan.get('mini_guidance'))
                     or (plan is not None and any(value.get(k) != plan[k] for k in
                         ('model','generation_fields','max_steps','experiment',
                          'mini_keyboard_tools','mini_keyboard_selection')))
@@ -365,6 +389,7 @@ def require_live_provider_check(root, plan):
             or proof.get('checks') != ['text', 'vision_native_tool', 'tool_reply']):
         raise ValueError('Live provider compatibility check is missing or incomplete; no VM may start')
     if plan.get('mini_grounding_check_required'):
+        from kobe_views.mini_graph import plan_policy
         grounding = read(root / 'mini-grounding-check.json')
         diagnostic = plan.get('mini_grounding_check_policy') == 'collect_all_record_accuracy'
         cases = grounding.get('cases', [])
@@ -381,10 +406,12 @@ def require_live_provider_check(root, plan):
                     and c['native_actions'][0].get('action') == 'mouse_move' for c in cases))
         else:
             compatible = all(case.get('passed') is True for case in cases)
-        if (grounding.get('kind') != 'synthetic_mini_grounding' or grounding.get('complete') is not True
+        if (plan_policy(grounding) != plan_policy(plan)
+                or grounding.get('kind') != 'synthetic_mini_grounding' or grounding.get('complete') is not True
                 or grounding.get('live_api_called') is not True
                 or grounding.get('source_unchanged') is not True
                 or grounding.get('project_source') != plan['project_source']
+                or grounding.get('mini_guidance') != plan.get('mini_guidance')
                 or any(grounding.get(k) != plan[k] for k in ('model', 'base_url', 'generation_fields', 'cua_contract'))
                 or len(cases) != 4 or not compatible
                 or grounding.get('vm_started') is not False or grounding.get('gui_actions') != 0
@@ -429,11 +456,17 @@ def execute_arm(args):
     from ui_kobe.osworld import telemetry
     stage = args.root / args.arm
     stage.mkdir(exist_ok=False)
+    from ui_kobe.osworld.verified_serial import process_identity
+    write(stage / 'process-receipt.json', {'process': process_identity(os.getpid()),
+        'run_id': plan['run_ids'][args.arm], 'plan_sha256': sha(args.root / 'plan.json')})
     task = verify_task(plan['sources']['benchmark']['repo'], plan.get('task_key','invoice'))
     stage_cache(plan, stage, task)
     from kobe_views.task_keyboard import environment
     os.environ.update(environment(plan, arm=args.arm))
+    from kobe_views.mini_graph import environment as graph_environment
+    os.environ.update(graph_environment(plan, args.arm))
     os.environ.update(UI_KOBE_TASKVIEWS_PROFILE='mini_fixed_v1', UI_KOBE_MINI_CONTROLS_VIEW='disabled',
+        UI_KOBE_MINI_GRAPH_MODE=plan.get('mini_graph_mode', 'legacy') if args.arm == 'taskviews' else 'legacy',
         UI_KOBE_MINI_KEYBOARD_TOOLS=json.dumps(
             plan['mini_keyboard_tools']['enabled_toolsets'][1:] if args.arm == 'taskviews' else []),
         UI_KOBE_TASKVIEWS_FEEDBACK_V10='0', UI_KOBE_GENERATION_PROFILE=plan['generation_profile']['name'],
@@ -500,7 +533,8 @@ def launch(args):
     if not args.execute_approved_plan:
         raise PermissionError('User review is pending; no evaluation was started')
     import fcntl
-    with (args.root / 'launch.lock').open('a') as lock:
+    from ui_kobe.osworld.verified_serial import serial_lock
+    with serial_lock(), (args.root / 'launch.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         plan = validate_plan(args.root)
         require_live_provider_check(args.root, plan)
@@ -569,10 +603,18 @@ def main():
     parser.add_argument('--experiment', choices=EXPERIMENTS,
                         help='Defaults to autodl-mini40 for AutoDL; legacy-low35 for older providers')
     parser.add_argument('--task', choices=tuple(TASKS), default='invoice', help='Prepare only; later commands use plan')
-    parser.add_argument('--keyboard-mode', choices=('task_names', 'manual'), default='task_names',
-                        help='Prepare only: match public task names, or use only explicitly selected directories')
+    parser.add_argument('--mini-graph-mode', choices=('legacy', 'flat', 'linked'), default='linked',
+                        help='Prepare only: cross-view graph mode, frozen into the plan')
+    parser.add_argument('--mini-graph-packing', choices=('linked_cost_shared_selection_v1', 'evidence_first_delivery_v2'),
+                        help='Prepare only: graph codec; capability guidance defaults to delivery v2')
+    parser.add_argument('--keyboard-mode', choices=('task_names', 'manual', 'task_capabilities'), default='task_capabilities',
+                        help='Prepare only: task capabilities and automatic guidance; task_names/manual retain old selection')
     parser.add_argument('--keyboard-toolset', action='append', default=[],
                         help='Prepare only: add an exact directory ID to general and any task matches')
+    parser.add_argument('--mini-review-timing', choices=('stage',), default='stage')
+    parser.add_argument('--mini-review-budget', choices=('fixed_reference', 'refill'), default='refill')
+    parser.add_argument('--mini-review-prompt', choices=('full', 'compact'), default='full',
+                        help='Prepare only: independent prompt ablation; strict final validation is unchanged')
     parser.add_argument('--keyboard-research', action='store_true',
                         help='Prepare only: research and archive task-scoped keyboard references before any CUA action')
     parser.add_argument('--keyboard-research-config', type=Path,

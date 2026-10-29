@@ -7,7 +7,7 @@ from .keyboard_view import DATA, TOOLSETS, normalize_toolsets, policy
 from .model import dumps
 
 VERSION = 'mini_keyboard_task_names_v1'
-MODES = ('task_names', 'manual')
+MODES = ('task_names', 'manual', 'task_capabilities')
 
 
 def normalized_name(text):
@@ -35,7 +35,7 @@ def resolve_task_toolsets(task, *, mode='task_names', requested=()):
     text = normalized_name(fields['instruction'])
     apps = {normalized_name(app) for app in fields['related_apps']}
     enabled, matches, skipped = set(manual), [], []
-    if mode == 'task_names':
+    if mode in ('task_names', 'task_capabilities'):
         for key, aliases in sorted(DATA['task_aliases'].items()):
             entry = TOOLSETS[key]
             candidates = [*aliases, key]
@@ -56,16 +56,40 @@ def resolve_task_toolsets(task, *, mode='task_names', requested=()):
                 continue
             enabled.add(key)
             matches.append(evidence)
+    if mode == 'task_capabilities':
+        from .keyboard_guidance import capabilities
+        needs = capabilities(fields['instruction'])
+        if set(needs) & {'file_operations', 'capture', 'export', 'reading'}:
+            enabled.add('type.file_manager')
+            matches.append({'toolset': 'type.file_manager', 'source': 'public_task_capabilities',
+                            'capabilities': sorted(set(needs) & {'file_operations', 'capture', 'export', 'reading'})})
+        # PDF reading makes Evince a conditional reference candidate on Linux,
+        # not evidence of the foreground application or installed software.
+        if 'reading' in needs and re.search(r'\bpdf\b', text):
+            enabled.add('app.evince')
+            matches.append({'toolset': 'app.evince', 'source': 'conditional_pdf_reading_capability',
+                            'focus_confirmed': False})
     return {'version': VERSION, 'mode': mode,
             'task_input_sha256': hashlib.sha256(dumps(fields).encode()).hexdigest(),
             'requested_toolsets': list(manual), 'matches': matches, 'skipped': skipped,
             'enabled_toolsets': ['general', *normalize_toolsets(sorted(enabled))]}
 
 
-def task_keyboard_policy(task, *, mode='task_names', requested=()):
+def task_keyboard_policy(task, *, mode='task_names', requested=(), review_prompt='full', decision_limit=None,
+                         review_timing='stage', review_budget='refill'):
+    from .review_presentation import validate
+    validate(review_timing, review_budget)
+    if mode != 'task_capabilities' and (review_prompt != 'full' or review_budget != 'refill'):
+        raise ValueError('Compact review requires the versioned capability guidance path')
     selection = resolve_task_toolsets(task, mode=mode, requested=requested)
-    return {'mini_keyboard_tools': policy(selection['enabled_toolsets'][1:]),
-            'mini_keyboard_selection': selection}
+    result = {'mini_keyboard_tools': policy(selection['enabled_toolsets'][1:]),
+              'mini_keyboard_selection': selection}
+    if mode == 'task_capabilities':
+        from .keyboard_guidance import policy as guidance_policy
+        result['mini_guidance'] = guidance_policy(task_fields(task), selection['enabled_toolsets'],
+                                                  review_prompt=review_prompt, decision_limit=decision_limit,
+                                                  review_timing=review_timing, review_budget=review_budget)
+    return result
 
 
 def validate_task_keyboard(plan, task):
@@ -74,8 +98,16 @@ def validate_task_keyboard(plan, task):
     if not isinstance(selection, dict):
         raise ValueError('Missing frozen task keyboard selection')
     expected = task_keyboard_policy(task, mode=selection.get('mode'),
-                                    requested=selection.get('requested_toolsets'))
-    if any(plan.get(key) != value for key, value in expected.items()):
+                                    requested=selection.get('requested_toolsets'),
+                                    review_prompt=(plan.get('mini_guidance') or {}).get('review_prompt', 'full'),
+                                    review_timing=(plan.get('mini_guidance') or {}).get('review_timing', 'stage'),
+                                    review_budget=(plan.get('mini_guidance') or {}).get('review_budget', 'refill'),
+                                    decision_limit=(plan.get('mini_guidance') or {}).get('decision_limit'))
+    if (plan.get('mini_guidance') is not None and 'max_steps' in plan
+            and plan['mini_guidance'].get('decision_limit') != plan['max_steps']):
+        raise ValueError('Guidance decision limit differs from frozen execution limit')
+    if (any(plan.get(key) != value for key, value in expected.items())
+            or plan.get('mini_guidance') != expected.get('mini_guidance')):
         raise ValueError('Frozen task keyboard selection differs from task or catalog')
 
 

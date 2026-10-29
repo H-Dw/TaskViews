@@ -133,4 +133,7 @@ def validate_plan_research(plan, task):
 def environment(plan, *, arm):
     """Always clear inherited temporary catalogs when this plan/arm has none."""
     reference = plan.get('mini_keyboard_research') if arm == 'taskviews' else None
-    return {ENV: json.dumps(reference) if reference else ''}
+    from .keyboard_guidance import ENV as GUIDANCE_ENV
+    guidance = plan.get('mini_guidance') if arm == 'taskviews' else None
+    return {ENV: json.dumps(reference) if reference else '',
+            GUIDANCE_ENV: json.dumps(guidance) if guidance else ''}

@@ -1,5 +1,6 @@
 """Explicit profile selection, without merging full and Mini instruction sets."""
 from kobe_views.fixed_views import PROFILE as MINI_PROFILE, profile_contract
+from kobe_views.mini_graph import mode, policy as graph_policy, plan_policy
 
 FULL_PROFILE = 'full_checkpoint'
 UI_KOBE_PROFILE = 'ui_kobe_like_native_v1'
@@ -13,9 +14,14 @@ def mini_cua_contract():
         taskviews_context_bytes=8000).snapshot()
 
 
-def frozen_profile(arm):
+def frozen_profile(arm, graph_mode='legacy', graph_packing=None):
+    mode(graph_mode)
+    selected = graph_policy(graph_mode, graph_packing)
     if arm == 'taskviews':
-        return profile_contract()
+        value = profile_contract()
+        if graph_mode != 'legacy':
+            value['graph'] = selected
+        return value
     if arm == 'ui_kobe_like':
         return {'profile': UI_KOBE_PROFILE, 'selector': 'recent_execution_edges',
                 'recent_edges': 8, 'extra_role_requests': 0}
@@ -31,17 +37,21 @@ def validate_profile(plan):
     if profile == FULL_PROFILE:
         if (plan.get('mini_profile') is not None or plan.get('mini_controls_view') is not None
                 or plan.get('mini_keyboard_tools') is not None or plan.get('mini_keyboard_selection') is not None
-                or plan.get('mini_keyboard_research') is not None):
+                or plan.get('mini_keyboard_research') is not None or plan.get('mini_graph_mode') is not None
+                or plan.get('mini_graph') is not None or plan.get('mini_guidance') is not None):
             raise ValueError('Full TaskViews cannot carry a Mini profile')
         return profile
     arms = plan.get('arms', [])
+    graph = plan_policy(plan)
     if (profile != MINI_PROFILE or plan.get('agent_interface') != 'qwen-native'
             or len(arms) != 1 or arms[0] not in ('taskviews', 'ui_kobe_like')
             or plan.get('taskviews_feedback', False) is not False
-            or plan.get('mini_profile') != frozen_profile(arms[0])
+            or plan.get('mini_profile') != frozen_profile(arms[0], graph['mode'], graph['packing'])
             or plan.get('cua_contract') != mini_cua_contract()
             or plan.get('source_branch') not in ('main', 'mini')):
         raise ValueError('Mini requires one explicit frozen profile from main (legacy mini accepted), without full feedback')
+    if graph['mode'] != 'legacy' and (arms != ['taskviews'] or plan.get('mini_controls_view') is not None):
+        raise ValueError('Mini graph modes require the four-view TaskViews arm without legacy controls')
     if plan.get('mini_controls_view') is not None:
         from kobe_views.controls_view import policy
         if arms != ['taskviews'] or plan['mini_controls_view'] != policy():
@@ -60,6 +70,12 @@ def validate_profile(plan):
         if arms != ['taskviews']:
             raise ValueError('Task keyboard selection requires the Mini TaskViews arm')
         validate_task_keyboard(plan, plan.get('official', {}))
+    if plan.get('mini_guidance') is not None:
+        from kobe_views.keyboard_guidance import validate
+        if (arms != ['taskviews'] or plan.get('mini_keyboard_selection') is None
+                or plan.get('mini_controls_view') is not None):
+            raise ValueError('Capability guidance requires frozen task selection and four Mini views')
+        validate(plan['mini_guidance'], plan['mini_keyboard_tools']['enabled_toolsets'][1:])
     if plan.get('mini_keyboard_research') is not None:
         from kobe_views.task_keyboard import validate_plan_research
         if plan.get('mini_controls_view') is not None:
@@ -71,7 +87,7 @@ def validate_profile(plan):
 def checkpoint_profile(manifest):
     profile = manifest.get('taskviews_profile', FULL_PROFILE)
     if profile == MINI_PROFILE:
-        return frozen_profile(manifest['arm'])['profile']
+        return frozen_profile(manifest['arm'], plan_policy(manifest)['mode'])['profile']
     if profile != FULL_PROFILE:
         raise ValueError('Unknown checkpoint actor profile')
     return FULL_PROFILE

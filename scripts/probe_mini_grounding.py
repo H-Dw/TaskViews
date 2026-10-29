@@ -70,6 +70,8 @@ def main():
     parser.add_argument('--coordinate-type', choices=('absolute','relative'), default='absolute')
     parser.add_argument('--provider', choices=('autodl', 'sx'), default='autodl')
     from scripts.verified_invoice import EXPERIMENTS
+    parser.add_argument('--mini-graph-mode', choices=('legacy', 'flat', 'linked'), default='linked')
+    parser.add_argument('--mini-graph-packing', choices=('linked_cost_shared_selection_v1', 'evidence_first_delivery_v2'))
     parser.add_argument('--experiment', choices=EXPERIMENTS)
     parser.add_argument('--sx-url-env', choices=('SX_URL','SX_URL_SB'), default='SX_URL_SB')
     parser.add_argument('--output', type=Path, required=True)
@@ -81,11 +83,13 @@ def main():
     from scripts.osworld_native_experiment import require_scope
     require_scope(128*1024**2)
     from scripts.verified_invoice import project_identity, specification, validate_plan, write
+    from kobe_views.mini_graph import plan_policy
     from ui_kobe.osworld.official_base import verify_official_base
     from ui_kobe.osworld.transitions import TransitionJournal
     from scripts.run_official_native_tasks import agent_class
     from ui_kobe.osworld.cua_contract import CUAContract
-    plan = validate_plan(args.root) if args.root else specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment)
+    plan = validate_plan(args.root) if args.root else specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment,
+        mini_graph_mode=args.mini_graph_mode, mini_graph_packing=args.mini_graph_packing)
     if plan['provider'] != args.provider:
         raise ValueError('Grounding probe provider differs from frozen plan')
     selected = agent_class(plan['interface'], 'taskviews', plan['taskviews_profile'])
@@ -95,6 +99,8 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     source = project_identity()
     report = {'kind':'synthetic_mini_grounding', 'complete':False, 'cases':[],
+              'mini_graph_mode':plan.get('mini_graph_mode', 'legacy'),
+              'mini_graph':plan_policy(plan),
               'policy':policy, 'collection_complete':False, 'all_targets_passed':False,
               'started_utc':datetime.now(timezone.utc).isoformat(), 'project_source':source,
               'model':plan['model'], 'base_url':plan['base_url'], 'cua_contract':contract.snapshot(),
@@ -102,11 +108,22 @@ def main():
               'vm_started':False, 'gui_actions':0, 'benchmark_score':None,
               'benchmark_launch_qualification':False}
     os.environ.update(UI_KOBE_TASKVIEWS_PROFILE='mini_fixed_v1', UI_KOBE_MINI_CONTROLS_VIEW='disabled',
+        UI_KOBE_MINI_GRAPH_MODE=plan.get('mini_graph_mode', 'legacy'),
         UI_KOBE_TASKVIEWS_FEEDBACK_V10='0', UI_KOBE_GENERATION_PROFILE=plan['generation_profile']['name'],
         UI_KOBE_CUA_CONTRACT_JSON=json.dumps(contract.snapshot()),
         UI_KOBE_MINI_KEYBOARD_TOOLS='[]')
     from kobe_views.task_keyboard import environment
     os.environ.update(environment({}, arm='taskviews'))
+    if plan.get('mini_guidance') is not None:
+        from kobe_views.keyboard_guidance import ENV, policy as guidance_policy
+        # Localization uses its own original synthetic task; freeze and record
+        # that adaptation explicitly, never pass the benchmark instruction.
+        synthetic_guidance = guidance_policy({'instruction': INSTRUCTION, 'related_apps': []}, ['general'])
+        os.environ[ENV] = json.dumps(synthetic_guidance)
+        report['mini_guidance'] = plan['mini_guidance']
+        report['synthetic_guidance'] = synthetic_guidance
+    from kobe_views.mini_graph import environment as graph_environment
+    os.environ.update(graph_environment(plan))
     if plan['provider'] == 'sx':
         os.environ['UI_KOBE_SX_URL_ENV'] = plan['base_url_env']
     actor = None

@@ -12,7 +12,7 @@ from ui_kobe.api.kimi_budget import StepLedger
 from ui_kobe.api.kimi_stream import KimiStreamClient, StreamProtocolError
 from . import telemetry
 from .cua_contract import CUAContract, options_contract
-from .native_history import compact
+from .native_history import compact, policy as history_policy
 from .actor_context import ContextClient, protocol_feedback, repair_messages
 
 PROTOCOL = "kimi-k3-native-tools-official-cua-v7"
@@ -163,7 +163,8 @@ class KimiNativeAgent:
             folded=self.folded_prefix_count, contract=self.contract, system=system, current=user,
             instruction=instruction, actions=self.action_descriptions)
         telemetry.emit("history_trim", history_turns_omitted=removed, retained_history_turns=len(self.turns),
-                       retained_history_text_chars=text_chars, folded_prefix=self.folded_prefix_count)
+                       retained_history_text_chars=text_chars, folded_prefix=self.folded_prefix_count,
+                       history_policy=history_policy(self.contract))
         messages = [system, *(message for turn in self.turns for message in turn), user]
         # TaskViews can admit its supplement against the actual compacted actor
         # input before paying for analysis. The goal and native IDs are unchanged.

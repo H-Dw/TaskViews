@@ -31,11 +31,17 @@ def main():
     parser.add_argument('--coordinate-type', choices=('absolute', 'relative'), default='absolute')
     parser.add_argument('--experiment', choices=EXPERIMENTS)
     parser.add_argument('--task', choices=tuple(TASKS), default='invoice')
-    parser.add_argument('--keyboard-mode', choices=('task_names', 'manual'), default='task_names')
+    parser.add_argument('--mini-graph-mode', choices=('legacy', 'flat', 'linked'), default='linked')
+    parser.add_argument('--mini-graph-packing', choices=('linked_cost_shared_selection_v1', 'evidence_first_delivery_v2'))
+    parser.add_argument('--keyboard-mode', choices=('task_names', 'manual', 'task_capabilities'), default='task_capabilities')
     parser.add_argument('--keyboard-toolset', action='append', default=[])
+    parser.add_argument('--mini-review-prompt', choices=('full', 'compact'), default='full')
+    parser.add_argument('--mini-review-timing', choices=('stage',), default='stage')
+    parser.add_argument('--mini-review-budget', choices=('fixed_reference', 'refill'), default='refill')
     parser.add_argument('--benchmark-repo', type=Path, default=Path.home() / 'osworld-verified/OSWorld')
     parser.add_argument('--compiler-repo', type=Path, default=Path.home() / 'osworld2/OSWorld-V2')
     args = parser.parse_args()
+    from kobe_views.mini_graph import arm_policy
     if args.output.exists():
         raise FileExistsError('Keep prior validation evidence; use a new directory')
     args.output.mkdir(parents=True)
@@ -43,7 +49,9 @@ def main():
     task = verify_task(args.benchmark_repo, args.task)
     plan = specification(args.provider, args.sx_url_env, args.coordinate_type, args.experiment, args.task,
                          keyboard_task=task, keyboard_mode=args.keyboard_mode,
-                         keyboard_toolsets=args.keyboard_toolset)
+                         keyboard_toolsets=args.keyboard_toolset, mini_graph_mode=args.mini_graph_mode,
+                         mini_graph_packing=args.mini_graph_packing, mini_review_prompt=args.mini_review_prompt,
+                         mini_review_timing=args.mini_review_timing, mini_review_budget=args.mini_review_budget)
     actor_scope = None
     if args.task != 'invoice':
         from scripts.osworld_native_experiment import require_scope
@@ -78,10 +86,15 @@ def main():
 
     os.environ[plan['api_key_env']] = 'offline-fixture-only'
     from kobe_views.task_keyboard import environment
-    os.environ.update(environment({}, arm=args.arm))  # Synthetic validation must not inherit another task's archive.
+    # Same public task, mocked GUI/API. Exercise its actual guidance policy,
+    # but never inherit a different task's temporary research archive.
+    os.environ.update(environment({'mini_guidance': plan.get('mini_guidance')}, arm=args.arm))
+    from kobe_views.mini_graph import environment as graph_environment
+    os.environ.update(graph_environment(plan, args.arm))
     os.environ.update(UI_KOBE_GENERATION_PROFILE=plan['generation_profile']['name'],
         UI_KOBE_CUA_CONTRACT_JSON=json.dumps(plan['cua_contract']), UI_KOBE_TASKVIEWS_PROFILE='mini_fixed_v1',
-        UI_KOBE_MINI_CONTROLS_VIEW='disabled', UI_KOBE_TASKVIEWS_FEEDBACK_V10='0',
+        UI_KOBE_MINI_CONTROLS_VIEW='disabled',
+        UI_KOBE_MINI_GRAPH_MODE=plan['mini_graph_mode'] if args.arm == 'taskviews' else 'legacy', UI_KOBE_TASKVIEWS_FEEDBACK_V10='0',
         UI_KOBE_MINI_KEYBOARD_TOOLS=json.dumps(
             plan['mini_keyboard_tools']['enabled_toolsets'][1:] if args.arm == 'taskviews' else []),
         UI_KOBE_TELEMETRY_DIR=str(args.output / 'telemetry'), UI_KOBE_TASK_ID='synthetic-offline-fixture',
@@ -101,6 +114,7 @@ def main():
         initial_observation = {'screenshot': initial_image.getvalue()}
     counts = {'requests': 0, 'commands': 0, 'evaluations': 0, 'resets': 0}
     view_sets = []
+    packet_bytes = []
 
     def stream_frame(delta=None, finish=None, usage=None):
         value = {'id': 'fixture-response', 'model': plan['model'], 'created': 1,
@@ -133,9 +147,18 @@ def main():
         assert task['evaluator']['expected']['dest'] not in text
         mini_packet = None
         for part in body['messages'][-1]['content']:
-            if part.get('type') == 'text' and part.get('text', '').startswith('TaskViews:'):
+            if part.get('type') == 'text' and part.get('text', '').startswith(('TaskViews:', 'TaskViews graph:')):
+                from kobe_views.mini_graph import VERSION, DELIVERY_VERSION, expand
                 packet = json.loads(part['text'].split('\n', 1)[1])
-                mini_packet = packet
+                is_graph = packet.get('schema_version') in (VERSION, DELIVERY_VERSION)
+                assert is_graph == (args.mini_graph_mode != 'legacy')
+                if is_graph:
+                    assert packet['mode'] == args.mini_graph_mode
+                    assert bool(packet['links']) == (args.mini_graph_mode == 'linked')
+                size = len(part['text'].split('\n', 1)[1].encode('utf-8'))
+                assert size <= 3000
+                packet_bytes.append(size)
+                mini_packet = expand(packet) if is_graph else packet
                 view_sets.append(sorted(packet['views']))
         step = counts['requests']
         terminal = args.case == 'terminate' and step == 7
@@ -209,6 +232,7 @@ def main():
         assert counts['resets'] == counts['evaluations'] == 1 and scores == [0.125]
         assert counts['commands'] == (0 if args.case == 'empty' else 12 if args.case == 'terminate' else 2*plan['max_steps'])
         assert bool(view_sets) == (args.arm == 'taskviews')
+        assert len(packet_bytes) == (counts['requests'] if args.arm == 'taskviews' else 0)
         assert all(views == ['attempts', 'current', 'keyboard', 'lessons'] for views in view_sets)
         if args.arm=='baseline':
             from ui_kobe.osworld.kimi_native import KimiNativeAgent
@@ -225,7 +249,10 @@ def main():
         'counts': counts, 'round_limit': plan['max_steps'], 'view_sets': sorted(set(tuple(v) for v in view_sets)),
         'model':plan['model'], 'generation_fields':plan['generation_fields'], 'max_steps':plan['max_steps'],
         'experiment':plan['experiment'], 'task_key':plan['task_key'], 'task_id':plan['task_id'], 'domain':plan['domain'],
+        'mini_graph_mode':arm_policy(plan, args.arm)['mode'], 'mini_graph':arm_policy(plan, args.arm),
+        'mini_packet_count':len(packet_bytes), 'mini_packet_max_bytes':max(packet_bytes, default=0),
         'mini_keyboard_tools':plan['mini_keyboard_tools'], 'mini_keyboard_selection':plan['mini_keyboard_selection'],
+        **({'mini_guidance': plan['mini_guidance']} if 'mini_guidance' in plan else {}),
         'media_metric_tested_separately':args.task != 'invoice',
         'scope_limit_bytes':int((actor_scope/'memory.max').read_text()) if actor_scope else None,
         'scope_peak_bytes':int((actor_scope/'memory.peak').read_text()) if actor_scope else None,

@@ -43,8 +43,8 @@ def test_vlc_single_mini_keeps_pair_contract_and_cannot_dispatch_baseline(media_
     for field in previous.keys() - {'version', 'arms', 'arm_profiles', 'experiment'}:
         assert single[field] == previous[field], field
     assert single['arm_profiles'] == {'taskviews': previous['arm_profiles']['taskviews']}
-    with pytest.raises(ValueError, match='explicit baseline/Mini'):
-        pair.specification('sx','SX_URL_SB','relative','sx-mini-max-high40','gimp')
+    gimp = pair.specification('sx','SX_URL_SB','relative','sx-mini-max-high40','gimp')
+    assert gimp['arms'] == ['taskviews'] and gimp['task_key'] == 'gimp'
 
 
 @pytest.mark.parametrize('key', ['gimp','vlc'])
@@ -93,6 +93,8 @@ def test_gimp_integration_evidence_cannot_be_reused_for_vlc(tmp_path,monkeypatch
             row = {k:plan[k] for k in ('model','base_url','cua_contract','generation_fields','max_steps',
                                       'experiment','task_key','task_id','domain',
                                       'mini_keyboard_tools','mini_keyboard_selection')}
+            from kobe_views.mini_graph import arm_policy
+            row.update(mini_graph_mode=arm_policy(plan, arm)['mode'], mini_graph=arm_policy(plan, arm))
             row.update(passed=True,arm=arm,case=case,provider='sx',source_unchanged=True,
                 project_source=identity,live_api_called=False,vm_started=False)
             pair.write(tmp_path/f'{arm}-{case}'/'validation.json',row)

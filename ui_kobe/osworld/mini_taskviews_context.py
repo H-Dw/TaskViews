@@ -10,7 +10,10 @@ from kobe_views.controls_view import parse_note, record as controls_record
 from kobe_views.keyboard_view import key_topic, lookup_guide, record as keyboard_record, select_topic
 from . import telemetry
 from .actor_context import available_context_bytes
-from .checkpoints import ReadAnomaly
+from .checkpoints import ReadAnomaly, atomic
+from kobe_views import mini_graph
+from kobe_views import keyboard_guidance
+from kobe_views.review_presentation import schema as review_schema
 from .mini_interaction import interaction_contract
 from .mini_evidence import ACTIVE, MiniEvidence
 from kobe_views.artifact_view import CHECKS, REVIEW_SCHEMA, ReviewError, parse_review, unknown_checks, validate_review
@@ -50,6 +53,12 @@ class MiniTaskViewsContext:
         self.owner = owner
         self.cached = None
         self.trace = {}
+        self.graph_index = None
+        self.graph_audit = None
+        self.projection_inputs = None
+        self.guidance_selection = None
+        self.guidance_records = []
+        self.guidance_directory_visible = False
         self.delivery = {'profile': PROFILE, 'episode_id': None, 'frame_id': None,
                          'seq': 0, 'packet_sha256': None, 'count': 0}
 
@@ -196,25 +205,34 @@ class MiniTaskViewsContext:
             return
         if final and set(note['checks']) != set(CHECKS):
             raise ReviewError('missing_checks', 'Review all four checks before success')
+        issues = []
         for key, check in note['checks'].items():
+            # Report all explicit reference defects in this bounded four-field
+            # report. Never replace references or infer the model's facts.
+            label = f"{key}.ref={str(check['ref'])[:80]}"
             if check['ref'] > journal.current['seq']:
-                raise ReviewError('invalid_reference', f'{key}.ref: no observation at this seq in the current episode')
+                issues.append(('invalid_reference', f'{label}: no observation at this seq in the current episode'))
+                continue
             rows = self.read('SELECT seq,id,payload FROM events WHERE seq=?', (check['ref'],))
             if len(rows) != 1 or rows[0][1].get('kind') != 'observation':
-                raise ReviewError('invalid_reference', f'{key}.ref: must identify a real same-episode observation')
+                issues.append(('invalid_reference', f'{label}: must identify a real same-episode observation'))
+                continue
             observation = rows[0][1]
             same_task = journal.db.execute("SELECT 1 FROM events WHERE json_extract(payload,'$.instruction')=? AND "
                 "((json_extract(payload,'$.kind')='task_input' AND json_extract(payload,'$.observation')=?) OR "
                 "(json_extract(payload,'$.kind')='transition' AND json_extract(payload,'$.target')=?)) LIMIT 1",
                 (journal.task_input['instruction'], observation['id'], observation['id'])).fetchone()
             if not same_task:
-                raise ReviewError('wrong_task_reference', f'{key}.ref: observation belongs to a different task input')
+                issues.append(('wrong_task_reference', f'{label}: observation belongs to a different task input'))
+                continue
             image = observation.get('images', {}).get('original', {}).get('sha256')
             if not image or image != observation.get('frame', {}).get('original_sha256'):
                 raise ReadAnomaly('Artifact review image provenance differs')
         if final and note['checks']['content_previewed']['ref'] != journal.current['seq']:
-            raise ReviewError('stale_preview', 'content_previewed.ref must equal current.ref; '
-                              'preview candidate contents on the current observation before success')
+            issues.append(('stale_preview', 'content_previewed.ref must equal current.ref; '
+                           'preview candidate contents on the current observation before success'))
+        if issues:
+            raise ReviewError(issues[0][0], '; '.join(detail for _, detail in issues))
 
     def require_final_review(self, content):
         try:
@@ -231,6 +249,9 @@ class MiniTaskViewsContext:
 
     def context(self, instruction):
         self.cached = None
+        self.guidance_selection = None
+        self.guidance_records = []
+        self.guidance_directory_visible = False
         self.trace = {'profile': PROFILE, 'frame_id': self.owner.frame.metadata['frame_id'],
                       'delivered': False, 'artifact_protocol_in_packet': False, 'extra_role_requests': 0}
         journal = self.journal()
@@ -310,8 +331,91 @@ class MiniTaskViewsContext:
             repeated.pop('latest_event_id')
             repeated.pop('latest_event_sha256')
             original_current['recent_repetition'] = repeated
-        keyboard = None if self.owner.controls_view_enabled else self.keyboard_view(decisions)
-        if not self.owner.controls_view_enabled and keyboard is None:
+        guidance_enabled = self.owner.guidance_policy is not None
+        keyboard = None if self.owner.controls_view_enabled or guidance_enabled else self.keyboard_view(decisions)
+        delivery_v2 = self.owner.mini_graph_policy['packing'] == mini_graph.DELIVERY_PACKING
+        if guidance_enabled:
+            # Bounded original evidence only, including task boundaries. The
+            # journal is the checkpoint: rebuild phase on every call/restore.
+            routing_rows = self.read('SELECT seq,id,payload FROM events ORDER BY seq DESC LIMIT ?',
+                                     (keyboard_guidance.HISTORY,))
+            boundary = max((seq for seq, event, _ in routing_rows if event.get('kind') == 'task_input'
+                            and event.get('instruction') != instruction), default=0)
+            routing_decisions = [row for row in routing_rows if row[0] > boundary
+                                 and row[1].get('kind') == 'decision' and row[1].get('instruction') == instruction][:2]
+            proposals = [(seq, self.prose(event), event['step']) for seq, event, _ in routing_decisions]
+            from kobe_views.operation_support import build as operation_support, intent_excerpt
+            support = operation_support(rows=routing_rows, instruction=instruction, proposals=proposals,
+                step=journal.task_input['step'], observation_ref=current_ref,
+                decision_limit=self.owner.guidance_policy['decision_limit'])
+            original_current['artifact']['review_schema'] = review_schema(self.owner.guidance_policy, finishing=support['finishing'])
+            if support['finishing']:
+                original_current['completion'] = support['completion']
+            if support['feedback']:
+                original_current['action_conditions'] = support['feedback']
+                # The source-bound constraint replaces duplicate generic
+                # repeat counts; the full detection remains in local audit.
+                if support['audit'].get('cycle'):
+                    original_current.pop('recent_repetition', None)
+            if support['reading_progress']:
+                original_current['reading_progress'] = {'condition': support['reading_condition'],
+                                                         'reports': support['reading_progress']}
+            telemetry.emit('mini_operation_support_prepared', frame_id=self.trace['frame_id'],
+                episode_id=journal.episode_id, support=support)
+            self.guidance_selection = keyboard_guidance.route(instruction=instruction,
+                enabled=self.owner.guidance_policy['enabled_toolsets'], rows=routing_rows,
+                proposals=proposals, step=journal.task_input['step'], observation_ref=current_ref,
+                task_catalog=self.owner.task_keyboard, frozen_capabilities=self.owner.guidance_policy['capabilities'],
+                pending_effect=support['pending_effect'], readability=support['readability'],
+                adjustment_chain=support['adjustment_chain'])
+            by_seq = {row[0]: row for row in routing_rows}
+            lessons.extend(deepcopy(support['reading_progress']))
+            recall = support['navigation_recall']
+            if recall:
+                recalled = next((r for r in projected if r['ref'] == recall['ref']), None)
+                if recalled is None:
+                    row = by_seq[recall['ref']]
+                    recalled = evidence.operation(row)
+                    attempts.append(row)
+                    projected.append(recalled)
+                recalled['recall'] = {'query': {'ref': evidence.reference(by_seq[recall['query_ref']])},
+                    'basis': 'public_text_match', 'coordinates': 're_ground_current_image'}
+            # Attempts were already dispatched facts. Attach an optional short
+            # issuing intention so a coordinate can be understood in context;
+            # never invent a window name or infer success from that intention.
+            for row, record in zip(attempts, projected):
+                event = row[1]
+                issuing = next((r for r in routing_rows if r[0] < row[0]
+                    and r[1].get('kind') == 'decision' and event.get('decision_id')
+                    and r[1].get('id') == event['decision_id']
+                    and r[1].get('instruction') == instruction), None)
+                if issuing:
+                    text = intent_excerpt(self.prose(issuing[1]))
+                    if text:
+                        record['intent'] = {'ref': evidence.reference(issuing),
+                            'grade': 'model_intent_proposal', 'text': text}
+            for candidate in self.guidance_selection['groups']:
+                for item in candidate['record']['evidence']:
+                    if item['ref'] not in by_seq:
+                        raise ReadAnomaly('Guidance source exceeds bounded journal evidence')
+                    evidence.reference(by_seq[item['ref']])
+            for ref in mini_graph.references({key: original_current[key] for key in
+                    ('action_conditions', 'reading_progress') if key in original_current}):
+                if ref not in by_seq:
+                    raise ReadAnomaly('Operation support reference exceeds bounded journal evidence')
+                if by_seq[ref][1].get('kind') == 'observation':
+                    evidence.observation(by_seq[ref][1]['id'])
+                else:
+                    evidence.reference(by_seq[ref])
+            original_current['keyboard_lookup'] = {
+                'enabled': self.owner.guidance_policy['enabled_toolsets'],
+                'guide_names': [c['record']['guide_id'].split(':')[0] for c in self.guidance_selection['groups']],
+                'focus': 'unconfirmed'}
+        elif delivery_v2:
+            from kobe_views.mini_delivery import lookup_guide as delivery_lookup
+            original_current['keyboard_lookup'] = delivery_lookup(
+                [self.prose(e) for _, e, _ in decisions], self.owner.keyboard_toolsets, self.owner.task_keyboard)
+        elif not self.owner.controls_view_enabled and keyboard is None:
             original_current['keyboard_lookup'] = lookup_guide(self.owner.keyboard_toolsets, self.owner.task_keyboard)
         if keyboard:
             for memory in keyboard['memory']:
@@ -321,48 +425,165 @@ class MiniTaskViewsContext:
                 # can evict the actual keys and observed image delta.
                 for key in ('seq', 'source_event_id', 'source_sha256', 'receipt'):
                     memory.pop(key, None)
+        arguments = dict(frame_id=self.owner.frame.metadata['frame_id'], current=original_current,
+            attempts=projected, lessons=lessons,
+            totals={'attempts': attempt_total, 'lessons': error_total + decision_total + 1
+                    + (len(support['reading_progress']) if guidance_enabled else 0)}, max_bytes=limit,
+            keyboard=keyboard, sources=evidence.sources)
+        self.projection_inputs = deepcopy(arguments)
+        graph_mode = self.owner.mini_graph_mode
+        packet = None
         try:
-            packet = materialize(episode_id=journal.episode_id, frame_id=self.owner.frame.metadata['frame_id'],
-                current=original_current,
-                attempts=projected, lessons=lessons,
-                totals={'attempts': attempt_total, 'lessons': error_total + decision_total + 1}, max_bytes=limit,
-                controls=controls, keyboard=keyboard, sources=evidence.sources)
+            if guidance_enabled:
+                from kobe_views.guidance_delivery import materialize as deliver_guidance
+                if graph_mode != 'legacy':
+                    if self.graph_index is None:
+                        self.graph_index = mini_graph.GraphIndex(journal.episode_id, journal.task_id)
+                    self.graph_index.sync(self.read)
+                packet = deliver_guidance(episode_id=journal.episode_id, index=self.graph_index,
+                    instruction=instruction, graph_mode=graph_mode, packing=self.owner.mini_graph_policy['packing'],
+                    selection=self.guidance_selection, review_policy=self.owner.guidance_policy,
+                    finishing=support['finishing'], **arguments)
+            elif graph_mode == 'legacy':
+                packet = materialize(episode_id=journal.episode_id, controls=controls, **arguments)
+            else:
+                if self.graph_index is None:
+                    self.graph_index = mini_graph.GraphIndex(journal.episode_id, journal.task_id)
+                self.graph_index.sync(self.read)
+                for ref in evidence.sources:
+                    self.graph_index.event(int(ref), evidence.sources)
+                packet = mini_graph.materialize(index=self.graph_index, instruction=instruction,
+                    graph_mode=graph_mode, toolsets=self.owner.keyboard_toolsets,
+                    task_catalog=self.owner.task_keyboard, packing=self.owner.mini_graph_policy['packing'], **arguments)
             self.cached = dumps(packet) if packet is not None else None
+        except mini_graph.GraphIntegrityError as exc:
+            raise ReadAnomaly(str(exc)) from exc
         except (ValueError, TypeError) as exc:
             self.trace['omission_reason'] = type(exc).__name__
         if self.cached:
+            display = packet if graph_mode == 'legacy' else mini_graph.expand(packet)
+            if guidance_enabled:
+                self.guidance_records = display['views']['keyboard']['records']
+                self.guidance_directory_visible = 'keyboard_lookup' in display['views']['current']['records'][0]
             self.trace.update(packet_sha256=hashlib.sha256(self.cached.encode()).hexdigest(),
                               keyboard_lookup_omitted='keyboard_lookup' in original_current
-                                  and 'keyboard_lookup' not in packet['views']['current']['records'][0],
+                                  and 'keyboard_lookup' not in display['views']['current']['records'][0],
                               packet_bytes=len(self.cached.encode()), journal_seq=cursor,
-                              selected_operations=[row['tool']['arguments'] for row in packet['views']['attempts']['records']
+                              selected_operations=[row['tool']['arguments'] for row in display['views']['attempts']['records']
                                                    if row.get('tool')],
                               latest_operation_delivered=not projected or any(row['ref']==projected[0]['ref']
-                                  for row in packet['views']['attempts']['records']),
+                                  for row in display['views']['attempts']['records']),
                               artifact_review_delivered=not reviews or any(row.get('ref')==reviews[0]['ref']
-                                  for row in packet['views']['lessons']['records']),
+                                  for row in display['views']['lessons']['records']),
                               artifact_checks=unknown_checks(),
-                              artifact_protocol_in_packet=packet['views']['current']['records'][0]
-                                  ['artifact']['review_schema'] == REVIEW_SCHEMA,
+                              keyboard_delivery={'candidate': keyboard is not None,
+                                  'topic': keyboard['topic'] if keyboard else None,
+                                  'recipes': sum(len(r['recipes']) for r in display['views'].get('keyboard', {}).get('records', [])),
+                                  'recipes_omitted': sum(r.get('recipes_omitted', 0) for r in display['views'].get('keyboard', {}).get('records', [])),
+                                  'lookup_delivered': 'keyboard_lookup' in display['views']['current']['records'][0]},
+                              artifact_protocol_in_packet=display['views']['current']['records'][0]
+                                  ['artifact']['review_schema'] == (review_schema(self.owner.guidance_policy, finishing=support['finishing'])
+                                      if guidance_enabled else REVIEW_SCHEMA),
                               views={key: {'source_event_ids': [evidence.sources[str(row['ref'])]['id']
                                          for row in view['records'] if row.get('ref')],
                                     'omitted_records': view['omitted_records']}
-                                     for key, view in packet['views'].items()})
+                                     for key, view in display['views'].items()})
+            if guidance_enabled:
+                sent_current = display['views']['current']['records'][0]
+                self.trace['operation_support'] = {
+                    'review_prompt': self.owner.guidance_policy['review_prompt'],
+                    'review_timing': self.owner.guidance_policy['review_timing'],
+                    'review_budget': self.owner.guidance_policy['review_budget'],
+                    'review_full_format': support['finishing'],
+                    'pending_effect': support['pending_effect'],
+                    'conditions_prepared': len(original_current.get('action_conditions', [])),
+                    'conditions_in_packet': len(sent_current.get('action_conditions', [])),
+                    'reading_reports_prepared': len(original_current.get('reading_progress', {}).get('reports', [])),
+                    'reading_reports_in_packet': sum(r.get('grade') == 'model_reading_proposal'
+                        for r in display['views']['lessons']['records']),
+                    'reading_refs_in_packet': sorted({r['ref'] for r in display['views']['lessons']['records']
+                        if r.get('grade') == 'model_reading_proposal'}),
+                    'navigation_recall_prepared': support['navigation_recall'] is not None,
+                    'navigation_recall_in_packet': any(r.get('recall') for r in display['views']['attempts']['records']),
+                    'view_records_in_packet': {k: len(v['records']) for k, v in display['views'].items()},
+                    'model_adoption': 'unknown',
+                    'delivered': False,
+                    'completion_in_packet': 'completion' in sent_current,
+                    'packet_is_not_delivery_receipt': True}
+                delivered_recipe_count = sum(len(r['recipes']) for r in self.guidance_records)
+                self.trace['keyboard_delivery'].update(
+                    candidate=bool(self.guidance_selection['groups']),
+                    guidance_groups=len(self.guidance_records),
+                    recipes_omitted=sum(len(c['record']['recipes']) for c in self.guidance_selection['groups'])
+                        - delivered_recipe_count)
         else:
             self.trace.setdefault('omission_reason', 'whole_envelope_budget')
+        if guidance_enabled:
+            self.trace['guidance'] = keyboard_guidance.delivery_audit(self.guidance_selection,
+                self.guidance_records, self.guidance_directory_visible)
+            telemetry.emit('mini_guidance_prepared', frame_id=self.trace['frame_id'],
+                episode_id=journal.episode_id, journal_seq=cursor, policy=self.owner.guidance_policy,
+                selection=self.guidance_selection, event_sources=evidence.sources, metrics=self.trace['guidance'],
+                omission_reason=self.trace.get('omission_reason'))
+        if graph_mode != 'legacy':
+            if packet and delivery_v2:
+                from kobe_views.mini_delivery import unpack
+                audit_links = unpack(packet)['links']
+            else:
+                audit_links = packet['links'] if packet else []
+            refs = [r[0] for v in packet['views'].values() for r in v['record_refs']] if packet else []
+            graph_trace = {'mode': graph_mode, 'schema_version': self.owner.mini_graph_policy['schema_version'],
+                'id_version': mini_graph.ID_VERSION, 'packing': self.owner.mini_graph_policy['packing'], 'journal_seq': cursor,
+                'node_count': len(packet['nodes']) if packet else 0,
+                'link_count': len(audit_links),
+                'shared_reference_count': len(refs) - len(set(refs)),
+                'facts_sha256': mini_graph.sha({k: packet[k] for k in ('nodes', 'views', 'sources')}) if packet else None}
+            self.trace['graph'] = graph_trace
+            self.graph_audit = {**self.graph_index.audit(), 'policy': self.owner.mini_graph_policy.copy(),
+                'projection': {**graph_trace, 'packet_bytes': self.trace.get('packet_bytes', 0),
+                    'packet_sha256': self.trace.get('packet_sha256'), 'delivered': False,
+                    'omission_reason': self.trace.get('omission_reason')}, 'links': audit_links}
+            self.save_graph_audit()
         telemetry.emit('mini_fixed_views', **self.trace)
         return self.cached
 
     def delivered(self):
         self.trace['delivered'] = True
+        if 'operation_support' in self.trace:
+            self.trace['operation_support']['delivered'] = True
+            telemetry.emit('mini_operation_support_delivered', frame_id=self.trace['frame_id'],
+                episode_id=self.journal().episode_id, packet_sha256=self.trace['packet_sha256'],
+                metrics=self.trace['operation_support'])
+        self.guidance_delivery(True)
         self.delivery = {'profile': PROFILE, 'episode_id': self.journal().episode_id,
                          'frame_id': self.trace['frame_id'], 'seq': self.trace['journal_seq'],
                          'packet_sha256': self.trace['packet_sha256'], 'count': self.delivery['count'] + 1}
         telemetry.emit('mini_views_delivered', **self.delivery)
+        if self.graph_audit is not None:
+            self.graph_audit['projection']['delivered'] = True
+            self.save_graph_audit()
 
     def omitted(self, reason):
         self.trace.update(delivered=False, omission_reason=reason)
+        self.guidance_delivery(False)
         telemetry.emit('mini_views_request_omitted', frame_id=self.trace['frame_id'], reason=reason)
+        if self.graph_audit is not None:
+            self.graph_audit['projection'].update(delivered=False, omission_reason=reason)
+            self.save_graph_audit()
+
+    def save_graph_audit(self):
+        journal = self.journal()
+        atomic(journal.directory / (journal.episode_id + '.mini-graph.json'), self.graph_audit)
+
+    def guidance_delivery(self, delivered):
+        if self.guidance_selection is None:
+            return
+        metrics = keyboard_guidance.delivery_audit(self.guidance_selection, self.guidance_records,
+                                                   self.guidance_directory_visible, delivered)
+        self.trace['guidance'] = metrics
+        telemetry.emit('mini_guidance_delivery', frame_id=self.trace['frame_id'],
+            episode_id=self.journal().episode_id, packet_sha256=self.trace.get('packet_sha256'), metrics=metrics,
+            omission_reason=self.trace.get('omission_reason'))
 
     def snapshot(self):
         return deepcopy(self.delivery)
@@ -383,3 +604,5 @@ class MiniTaskViewsContext:
             raise ReadAnomaly('Mini delivery cursor exceeds restored journal')
         self.delivery = deepcopy(value)
         self.cached = None  # A restored old frame is never supplied as new context.
+        self.graph_index = None
+        self.graph_audit = None

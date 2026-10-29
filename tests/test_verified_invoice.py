@@ -39,7 +39,7 @@ def test_launch_evidence_requires_actual_mini_path_and_matching_units(tmp_path, 
     monkeypatch.setenv('SX_URL_SB','https://example.test/v1')
     plan=specification('sx','SX_URL_SB','relative')
     plan['project_source']={'test':'frozen'}
-    fields={k:plan[k] for k in ('model','base_url','generation_fields','cua_contract','project_source')}
+    fields={k:plan[k] for k in ('model','base_url','generation_fields','cua_contract','project_source','mini_graph_mode','mini_graph')}
     provider={**fields,'complete':True,'checks':['text','vision_native_tool','tool_reply']}
     module.write(tmp_path/'live-provider-check.json',provider)
     with pytest.raises(FileNotFoundError):
@@ -87,7 +87,7 @@ def test_mini_evaluation_records_localization_misses_without_hiding_protocol_fai
     monkeypatch.setenv('SX_URL_SB','https://example.test/v1')
     plan=specification('sx','SX_URL_SB','relative','sx-mini-max-high40')
     plan['project_source']={'test':'frozen'}
-    fields={k:plan[k] for k in ('model','base_url','generation_fields','cua_contract','project_source')}
+    fields={k:plan[k] for k in ('model','base_url','generation_fields','cua_contract','project_source','mini_graph_mode','mini_graph')}
     module.write(tmp_path/'live-provider-check.json',{**fields,'complete':True,
         'checks':['text','vision_native_tool','tool_reply']})
     evidence={**deepcopy(fields),'kind':'synthetic_mini_grounding','complete':True,
@@ -208,6 +208,10 @@ def test_runtime_refuses_already_loaded_benchmark(monkeypatch):
 @pytest.mark.parametrize('fail_first', [False, True])
 def test_serial_dispatch_waits_for_cleanup_and_stops_on_failure(tmp_path, monkeypatch, fail_first):
     from scripts import verified_invoice as module
+    from ui_kobe.osworld import verified_serial
+    # Simulated children must never acquire the live machine's evaluation lock.
+    monkeypatch.setattr(verified_serial, 'LOCK', tmp_path / 'unit-evaluation.lock')
+    monkeypatch.delenv(verified_serial.FD_ENV, raising=False)
     from scripts import osworld_native_experiment
     monkeypatch.setattr(osworld_native_experiment, 'require_scope', lambda limit: tmp_path)
     monkeypatch.setattr(module, 'validate_plan', lambda root: specification('qwen'))

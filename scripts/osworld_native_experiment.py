@@ -211,7 +211,9 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
             agent_interface='official-xml', compatibility=None, max_steps=None, checkpoints=False,
             taskviews_feedback=False, taskviews_profile='full_checkpoint', qwen_arm='taskviews',
             inspection_minutes=None, qwen_generation_profile=None, evaluation_steps=None, completion_pipeline=None,
-            keyboard_toolsets=None, keyboard_mode='task_names', keyboard_research=False, keyboard_research_config=None):
+            keyboard_toolsets=None, keyboard_mode='task_names', keyboard_research=False, keyboard_research_config=None,
+            mini_graph_mode='linked', mini_graph_packing=None, mini_review_prompt='full',
+            mini_review_timing='stage', mini_review_budget='refill'):
     from examples.osworld2_eval import official_identity
     from ui_kobe.osworld.task_examples import task_example
     from ui_kobe.osworld.runner import source_snapshot
@@ -291,7 +293,9 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     # remains in launch() and the VM guard, under the authorized resource policy.
     status = host_status()
     identity = official_identity(REPO, task, "osworld-v2.1")
-    keyboard = task_keyboard_policy(identity, mode=keyboard_mode, requested=keyboard_toolsets or ())
+    keyboard = task_keyboard_policy(identity, mode=keyboard_mode, requested=keyboard_toolsets or (),
+                                     review_prompt=mini_review_prompt, decision_limit=decisions,
+                                     review_timing=mini_review_timing, review_budget=mini_review_budget)
     assets = {str(ROOT / "assets/osworld-v2.1" / f"task_{task}" / name):
               digest(ROOT / "assets/osworld-v2.1" / f"task_{task}" / name)
               for name in task_example(task).assets}
@@ -381,7 +385,13 @@ def prepare(root, task, validation, purpose="evaluation", admission=None, profil
     plan['taskviews_feedback'] = taskviews_feedback
     plan['taskviews_profile'] = taskviews_profile
     if mini:
-        plan['mini_profile'] = frozen_profile(qwen_arm)
+        from kobe_views.mini_graph import policy as graph_policy
+        selected_graph = mini_graph_mode if qwen_arm == 'taskviews' else 'legacy'
+        if keyboard_mode == 'task_capabilities' and selected_graph != 'legacy' and mini_graph_packing is None:
+            mini_graph_packing = 'evidence_first_delivery_v2'
+        plan['mini_graph_mode'] = selected_graph
+        plan['mini_graph'] = graph_policy(selected_graph, mini_graph_packing)
+        plan['mini_profile'] = frozen_profile(qwen_arm, selected_graph, mini_graph_packing)
         if qwen_arm == 'taskviews':
             plan.update(keyboard)
         plan['source_branch'] = 'main'
@@ -533,10 +543,15 @@ def launch(root, arm):
         manifest['qwen_image_transport_policy'] = plan['qwen_image_transport_policy']
     if mini:
         manifest['mini_profile'] = plan['mini_profile']
+        for key in ('mini_graph_mode', 'mini_graph'):
+            if key in plan:
+                manifest[key] = plan[key]
         if 'mini_keyboard_tools' in plan:
             manifest['mini_keyboard_tools'] = plan['mini_keyboard_tools']
         if 'mini_keyboard_selection' in plan:
             manifest['mini_keyboard_selection'] = plan['mini_keyboard_selection']
+        if 'mini_guidance' in plan:
+            manifest['mini_guidance'] = plan['mini_guidance']
         if 'mini_keyboard_research' in plan:
             manifest['mini_keyboard_research'] = plan['mini_keyboard_research']
         manifest['source_branch'] = plan['source_branch']
@@ -930,11 +945,18 @@ def main():
     parser.add_argument('--checkpoints', action='store_true')
     parser.add_argument('--taskviews-feedback', action='store_true', help='Freeze the validated action feedback/pointer workflow for Qwen TaskViews')
     parser.add_argument('--taskviews-profile', choices=('full_checkpoint', 'mini_fixed_v1'), default='full_checkpoint')
+    parser.add_argument('--mini-graph-mode', choices=('legacy', 'flat', 'linked'), default='linked')
+    parser.add_argument('--mini-graph-packing', choices=('linked_cost_shared_selection_v1', 'evidence_first_delivery_v2'),
+                        help='Graph codec; capability guidance defaults to delivery v2')
     parser.add_argument('--qwen-arm', choices=('taskviews', 'ui_kobe_like'), default='taskviews')
     parser.add_argument('--keyboard-toolset', action='append', dest='keyboard_toolsets',
                         help='Add an explicit Linux keyboard directory to the task-name selection; repeat to add')
-    parser.add_argument('--keyboard-mode', choices=('task_names', 'manual'), default='task_names',
-                        help='Match software names in public task fields, or use general plus explicit directories only')
+    parser.add_argument('--keyboard-mode', choices=('task_names', 'manual', 'task_capabilities'), default='task_capabilities',
+                        help='Task capabilities and automatic guidance; task_names/manual retain old selection')
+    parser.add_argument('--mini-review-timing', choices=('stage',), default='stage')
+    parser.add_argument('--mini-review-budget', choices=('fixed_reference', 'refill'), default='refill')
+    parser.add_argument('--mini-review-prompt', choices=('full', 'compact'), default='full',
+                        help='Freeze a review-prompt ablation; validation and call budgets are unchanged')
     parser.add_argument('--keyboard-research', action='store_true',
                         help='Opt in to bounded API web research before freezing a new Mini TaskViews plan')
     parser.add_argument('--keyboard-research-config', type=Path,
@@ -951,7 +973,8 @@ def main():
                 args.agent_interface, args.k3_compatibility, args.max_steps, args.checkpoints, args.taskviews_feedback,
                 args.taskviews_profile, args.qwen_arm, args.inspection_minutes,
                 args.qwen_generation_profile, args.evaluation_steps, args.completion_pipeline, args.keyboard_toolsets,
-                args.keyboard_mode, args.keyboard_research, args.keyboard_research_config)
+                args.keyboard_mode, args.keyboard_research, args.keyboard_research_config, args.mini_graph_mode,
+                args.mini_graph_packing, args.mini_review_prompt, args.mini_review_timing, args.mini_review_budget)
     elif args.action == "launch":
         lock = Path.home() / ".cache/ui-kobe-osworld-experiment.lock"
         lock.parent.mkdir(parents=True, exist_ok=True)

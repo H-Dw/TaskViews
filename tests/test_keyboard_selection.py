@@ -92,7 +92,7 @@ def test_changed_selection_task_or_catalog_invalidates_a_frozen_plan(change):
         validate_task_keyboard(plan, task)
 
 
-@pytest.mark.parametrize('mode', ['task_names', 'manual'])
+@pytest.mark.parametrize('mode', ['task_names', 'manual', 'task_capabilities'])
 def test_verified_prepare_and_validation_use_the_actual_public_task(tmp_path, monkeypatch, mode):
     task = {'instruction': 'Use VLC and VS Code.', 'related_apps': ['Chrome']}
     task_file = tmp_path / verified.task_path('invoice')
@@ -118,7 +118,7 @@ def test_verified_prepare_and_validation_use_the_actual_public_task(tmp_path, mo
         keyboard_toolset=['type.browser'])
     verified.prepare(args)
     plan = verified.validate_plan(args.root)
-    expected = task_keyboard_policy(task, mode=mode, requested=['type.browser'])
+    expected = task_keyboard_policy(task, mode=mode, requested=['type.browser'], decision_limit=35)
     assert all(plan[key] == value for key, value in expected.items())
     assert observed == [expected['mini_keyboard_selection']] * 2
     # Even a rehashed plan cannot change its selection evidence silently.

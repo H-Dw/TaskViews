@@ -1,5 +1,15 @@
 # TaskViews
 
+2026-10-27：能力指导 v5 采用最小阶段上下文：当前事实/错误、一张完整操作卡、一条有来源的阅读报告和必要终态格式。相对缩放不再默认走数值框；输入后只确认，确认后只检查实际效果。新能力路径仅保留 `--mini-review-timing stage`，默认 `--mini-review-budget refill`；严格终态来源校验和 3000 bytes 上限不变。481 项回归及保存日志打包检查通过，详见[指导 v5 与两格实验说明](docs/taskviews-mini-guidance-v5.md)。两格发票/low 文件转移说明实验使用独立冻结的原 Mini v3 核心，不混入本次优化。
+
+2026-10-26：能力指导 v3 统一完整指导组，加入有来源的动作前置条件、短周期反馈、公开阅读进度和通用收尾。完整／压缩复核提示可独立冻结，严格终态验证不变；原 v3 整轮历史裁剪保持。实现与评估边界见[指导 v3 说明](docs/taskviews-mini-guidance-v3.md)；历史说明保留于[指导 v2](docs/taskviews-mini-guidance-v2.md)。
+
+2026-10-24：新增可选 `--mini-graph-packing evidence_first_delivery_v2`，在 3000 UTF-8 bytes 内恢复完整按键配方、查询入口与关键历史的送达。保留 legacy 和 Graph v1；同输入 flat/linked 仍共享事实选择。510 个日志快照的离线对比、版本溯源与后续图检索设计见 [送达 v2 说明](docs/taskviews-mini-delivery-v2.md)。本次离线验证不代表新的在线成绩。
+
+2026-10-23：新增 OSWorld-1 三任务 Mini `legacy/flat/linked × high/low` 串行矩阵、40分钟单次巡检和全实验最多10次修复账本。配置、入口与重测规则见[实验运行说明](docs/osworld-mini-graph-high-low40.md)。
+
+2026-10-22：Mini 新建运行默认采用跨 View Graph `linked` 模式，并提供 `--mini-graph-mode legacy|flat|linked` 消融选项。统一事件、观察、动作、总目标和配方身份；flat/linked 共用事实选择，按相同 3000 UTF-8 bytes 上限打包。历史缺省配置继续解释为 legacy。使用、恢复与离线比较见 [Graph v1 说明](docs/taskviews-mini-graph-v1.md)。
+
 2026-10-21 接口更新：当前 Mini 的 `scripts/verified_invoice.py` 入口默认使用 **AutoDL / Qwen3.5-397B-A17B**，API 地址为 `https://www.autodl.art/api/v1`，密钥从 `AUTODL_API_KEY` 读取，采用流式 Chat Completions。默认准备 `autodl-mini40`（Mini 单组、最多 40 轮）；`autodl-pair40` 提供 baseline/Mini 对照。支持现有 invoice、GIMP、VLC 任务。接入、离线验证与实际接口检查步骤见 [AutoDL 使用说明](docs/autodl-taskviews-mini-20261021.md)。旧 provider 与冻结实验配置保留。
 
 2026-10-21：最新 **TaskViews-mini** 已迁入 `main`；旧 `main` 保留为 `backup/main-20261021`。项目仓库为 [H-Dw/TaskViews](https://github.com/H-Dw/TaskViews)。Mini 的准备、启动、恢复和离线校验入口使用 `main`；旧实验保留原分支及源码记录。

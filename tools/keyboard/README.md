@@ -19,7 +19,23 @@
 
 “通用”表示在文档限定的平台和传统控件中可迁移。它不表示所有画布、游戏、终端、表格和自定义控件都遵循这些语义。当前 Mini 的平台为 Linux/X11；Windows、macOS 和 Android 的资料不会被发送为当前后端可用指令。相同快捷键可能对应不同动作：F2 在文件管理器重命名、Calc 编辑单元格、Blender 重命名对象；Ctrl+L 在浏览器聚焦地址栏，在 Word 对齐文本。
 
-## 指令与检索
+## 当前能力指导路径（2026-10-28）
+
+当前新建 Mini 计划使用 `--keyboard-mode task_capabilities`。`guidance.json` 定义完整操作卡，
+`guidance_semantics.py` 区分动作、对象和状态，`guidance_eligibility.py` 先检查能力、动作、软件对象及阶段，
+仅在通过检查的候选之间排序。软件目录已启用不表示窗口或焦点已确认。
+
+`<key_lookup>` 是补充请求，不能自行启用能力或软件，也不能仅凭主题名取得其中全部按键。
+例如查询 `app.evince.zoom` 还需要当前有明确的 Evince 缩放需求；“Zoom out in Evince”只返回缩小绑定。
+没有动作契约的旧目录绑定保留为参考，当前能力路径记录 `no_audited_operation_contract`，不会猜测适用性。
+目录文档中的查询标签是地址，不是执行许可。逐卡、逐目录的映射和限制见
+[本轮核验表](../../docs/taskviews-keyboard-eligibility-v7-audit.md)。
+
+旧 `task_names` / `manual` 路径的 topic 正则、显式查阅行为仍保留用于历史复现；下面有关这些模式的说明
+只适用于旧路径。当前策略版本为 `capability_guidance_v7`，与历史 Mini v7 的版本名称不同。
+变更后的冻结计划和 checkpoint 不可混用；历史计划须使用对应冻结源码运行。
+
+## 指令与检索（旧目录路径）
 
 每条配方继续使用当前按键 View 格式：
 

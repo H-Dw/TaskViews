@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import gc
 from io import BytesIO
 import json
 import os
@@ -21,6 +22,29 @@ from scripts.verified_invoice import EXPERIMENTS, project_identity, specificatio
 from ui_kobe.api.kimi_budget import StepLedger  # noqa: E402
 from ui_kobe.api.qwen_native import QwenTransportBudget  # noqa: E402
 from ui_kobe.osworld import telemetry  # noqa: E402
+
+
+def acknowledgement(choice):
+    """A terminal period is an acknowledgement variant, not a wire failure."""
+    message = choice.get('message') or {}
+    content = message.get('content')
+    if (choice.get('finish_reason') != 'stop' or not isinstance(content, str)
+            or content.strip() not in ('OK', 'OK.')
+            or message.get('tool_calls') or message.get('function_call')):
+        raise ValueError('Acknowledgement must be completed OK/OK. text without tools')
+    return {'exact_ok': content.strip() == 'OK',
+            'terminal_period_normalized': content.strip() == 'OK.', 'finish_reason': 'stop'}
+
+
+def tool_reply_messages(assistant):
+    """Check the original tool ID without uploading the validated image again."""
+    return [
+        {'role': 'user', 'content': 'Synthetic tool-reply diagnostic; no GUI action is executed.'},
+        assistant,
+        {'role': 'tool', 'tool_call_id': assistant['tool_calls'][0]['id'],
+         'content': 'Synthetic diagnostic only; no GUI action was executed.'},
+        {'role': 'user', 'content': 'Acknowledge the diagnostic result with exactly OK, without tools.'},
+    ]
 
 
 def vision_frame(contract, *, large=False):
@@ -94,8 +118,7 @@ def main(default_provider='autodl'):
 
     try:
         text = call([{'role': 'user', 'content': 'Reply with exactly OK.'}])
-        if (text.model_dump()['choices'][0]['message'].get('content') or '').strip() != 'OK':
-            raise ValueError('Text probe did not return the requested answer')
+        report['acknowledgements'] = {'text': acknowledgement(text.model_dump()['choices'][0])}
         report['checks'].append('text')
         write(args.output / 'report.json', report)
         from ui_kobe.osworld.official_base import verify_official_base
@@ -128,12 +151,14 @@ def main(default_provider='autodl'):
         report['checks'].append('vision_native_tool')
         write(args.output / 'report.json', report)
         assistant = result.model_dump()['choices'][0]['message']
-        messages += [assistant, {'role': 'tool', 'tool_call_id': assistant['tool_calls'][0]['id'],
-                                  'content': 'Synthetic diagnostic only; no GUI action was executed.'},
-                     {'role': 'user', 'content': 'Acknowledge the diagnostic result with exactly OK, without tools.'}]
-        reply = call(messages, tools, 'none').model_dump()['choices'][0]['message']
-        if (reply.get('content') or '').strip() != 'OK' or reply.get('tool_calls'):
-            raise ValueError('Tool reply probe did not acknowledge the result')
+        messages = tool_reply_messages(assistant)
+        # The full-size vision request already passed. This separate ID/reply
+        # check must release its image buffers before serializing another body.
+        del frame, screen
+        gc.collect()
+        report['tool_reply_resends_image'] = False
+        reply = call(messages, tools, 'none').model_dump()['choices'][0]
+        report['acknowledgements']['tool_reply'] = acknowledgement(reply)
         report['checks'].append('tool_reply')
         if project_identity() != identity:
             raise ValueError('Source changed during live probe')

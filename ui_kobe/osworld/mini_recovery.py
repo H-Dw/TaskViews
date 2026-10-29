@@ -2,7 +2,8 @@
 from copy import deepcopy
 import hashlib
 
-from kobe_views.artifact_view import ReviewError
+from kobe_views import artifact_view as artifact
+from kobe_views.artifact_view import CHECKS, ReviewError, tagged_review
 from ui_kobe.api.kimi_stream import StreamProtocolError
 from . import telemetry
 from .actor_context import repair_messages
@@ -10,6 +11,7 @@ from .checkpoints import ReadAnomaly
 from .native_history import context_size
 
 TASK_PREFIX = 'Generate the next move from the screenshot, task, and prior actions.\n\nTask: '
+REVIEW_FEEDBACK_VERSION = 'mini-review-feedback-v3'
 
 
 def check_tool_pairs(messages):
@@ -104,19 +106,37 @@ def admit_request(request, turn_lengths, *, contract, context='', label=''):
             target['content'].append(deepcopy(task))
 
 
-def report_feedback(request, error):
+def report_feedback(request, error, *, current_ref=None):
     """Do not replay rejected reasoning/content/tools or invent tool receipts.
 
     The full response remains in original transport telemetry. Omitting BOTH
     the rejected assistant call and its tool replies creates no orphan IDs.
     """
     result = deepcopy(request)
+    if current_ref is not None and (type(current_ref) is not int or current_ref < 1):
+        raise ReadAnomaly('Mini review feedback requires a real current observation seq')
     detail = str(error)
     if len(detail.encode('utf-8')) > 1200:
         detail = error.code + ': use the fields and bounds in current.artifact.review_schema'
+    reference = (f'Current observation seq={current_ref}. ' if current_ref is not None else '')
+    # This is a shape with typed placeholders, not a prefilled evidence report.
+    # JSON-string placeholders would teach a ref type rejected by validate_review.
+    template = tagged_review({'candidate': 'PATH', **{key: ['OBS_SEQ', 'VISIBLE_FACT'] for key in CHECKS}})
+    template = template.replace('"OBS_SEQ"', 'OBS_SEQ')
     text = ('Mini auxiliary report rejected; the previous success was NOT dispatched. '
-            + detail + '. Correct assistant.content per current.artifact.review_schema, '
-            'and return a complete native tool call. If evidence is missing, inspect before success. '
+            'Latest rejection: ' + detail + '. '
+            + reference + 'Refs are same-task observation seqs, not action IDs, step numbers or template examples. '
+            'content_previewed must cite current.ref AND describe candidate contents visible in that observation; '
+            'a valid number alone is not content proof. '
+            'Correct assistant.content: for success, put exactly ONE complete tagged JSON report there '
+            'in the SAME response as the native terminate/success call, not in reasoning or tool arguments. '
+            'Replace OBS_SEQ with an unquoted positive JSON integer observation seq, never a quoted number. '
+            'Replace every placeholder in this shape using your actual evidence: ' + template + ' '
+            f'No extra keys; candidate 1..{artifact.MAX_CANDIDATE_CHARS} chars; '
+            f'each fact 1..{artifact.MAX_OBSERVED_CHARS} chars; JSON<={artifact.MAX_REVIEW_BYTES} UTF8 bytes. '
+            'Only for tasks creating no file: ' + tagged_review({'no_artifact': 'WHY'}) +
+            f'; reason 1..{artifact.MAX_REASON_CHARS} chars. '
+            'If evidence is missing, return an inspection action instead of success. '
             'Unknown stays unknown; never invent facts or references.')
     result['messages'].append({'role': 'user', 'content': [{'type': 'text', 'text': text}]})
     return result
@@ -126,7 +146,8 @@ def generate_candidate(owner, transport, role, deadline, request, validator):
     """Use the original actor ledger/deadline for both distinct error paths."""
     candidate, parent = 1, None
     lengths = [len(turn) for turn in owner.turns]
-    trace = {'report_rejections': 0, 'native_rejections': 0, 'admissions': []}
+    trace = {'report_rejections': 0, 'native_rejections': 0, 'admissions': [],
+             'report_failures': [], 'feedback_version': REVIEW_FEEDBACK_VERSION}
     owner.mini_recovery_trace = trace
     ledger = owner.step_ledger
     while True:
@@ -145,11 +166,18 @@ def generate_candidate(owner, transport, role, deadline, request, validator):
         except ReviewError as exc:
             parent = getattr(transport, 'last_request_id', None)
             trace['report_rejections'] += 1
+            trace['report_failures'].append(exc.code)
             telemetry.emit('mini_report_rejected', request_id=parent, generation_attempt=candidate,
                            failure=exc.code, recovery='mini_report_feedback', action_executed=False)
-            if candidate > owner.contract.tool_repair_retries or not ledger.regenerate(role, owner.budget.connect_s):
+            exhausted = candidate > owner.contract.tool_repair_retries
+            if exhausted or not ledger.regenerate(role, owner.budget.connect_s):
+                telemetry.emit('mini_report_recovery_exhausted', request_id=parent,
+                    generation_attempt=candidate, failures=list(trace['report_failures']),
+                    reason='regeneration_limit' if exhausted else 'shared_budget_or_deadline',
+                    action_executed=False, feedback_version=REVIEW_FEEDBACK_VERSION)
                 raise
-            request = report_feedback(request, exc)
+            request = report_feedback(request, exc,
+                current_ref=owner.mini_context.journal().current['seq'])
             candidate += 1
             telemetry.emit('mini_report_regeneration', generation_attempt=candidate, parent_request_id=parent,
                            reason=exc.code, action_executed=False, step_tokens=ledger.snapshot())

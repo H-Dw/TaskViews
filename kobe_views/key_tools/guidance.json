@@ -1,0 +1,707 @@
+{
+  "version": "capability_guidance_v7",
+  "platform": "linux",
+  "sources": {
+    "files": "https://help.gnome.org/gnome-help/files-copy.html",
+    "rename": "https://help.gnome.org/gnome-help/files-rename.html",
+    "keys": "https://help.gnome.org/gnome-help/shell-keyboard-shortcuts.html",
+    "vlc": "https://docs.videolan.me/vlc-user/desktop/3.0/en/basic/tipsandtricks/index.html#take-a-snapshot",
+    "gimp": "https://docs.gimp.org/2.10/en/gimp-file-export-as.html",
+    "native_tools": "Frozen official Qwen computer tool schema and actions.py:left_click_drag; coordinate=destination, pointer=start."
+  },
+  "bindings": {
+    "copy": {
+      "intent": "copy selected content",
+      "keys": [
+        "ctrl",
+        "c"
+      ]
+    },
+    "cut": {
+      "intent": "cut selected content",
+      "keys": [
+        "ctrl",
+        "x"
+      ]
+    },
+    "paste": {
+      "intent": "paste clipboard content",
+      "keys": [
+        "ctrl",
+        "v"
+      ]
+    },
+    "select_text": {
+      "intent": "select field text",
+      "keys": [
+        "ctrl",
+        "a"
+      ]
+    },
+    "confirm": {
+      "intent": "confirm focused control",
+      "keys": [
+        "return"
+      ]
+    },
+    "dismiss": {
+      "intent": "dismiss popup",
+      "keys": [
+        "escape"
+      ]
+    },
+    "undo": {
+      "intent": "undo edit",
+      "keys": [
+        "ctrl",
+        "z"
+      ]
+    },
+    "find": {
+      "intent": "find content",
+      "keys": [
+        "ctrl",
+        "f"
+      ]
+    },
+    "open": {
+      "intent": "open document",
+      "keys": [
+        "ctrl",
+        "o"
+      ]
+    },
+    "save": {
+      "intent": "save document",
+      "keys": [
+        "ctrl",
+        "s"
+      ]
+    },
+    "page_down": {
+      "intent": "scroll down a page",
+      "keys": [
+        "pagedown"
+      ]
+    },
+    "page_up": {
+      "intent": "scroll up a page",
+      "keys": [
+        "pageup"
+      ]
+    },
+    "rename": {
+      "intent": "rename selected item",
+      "keys": [
+        "f2"
+      ]
+    },
+    "vlc_snapshot": {
+      "intent": "take video snapshot",
+      "keys": [
+        "shift",
+        "s"
+      ]
+    },
+    "gimp_export": {
+      "intent": "open Export As",
+      "keys": [
+        "ctrl",
+        "shift",
+        "e"
+      ]
+    },
+    "maximize": {
+      "intent": "toggle window maximization",
+      "keys": [
+        "alt",
+        "f10"
+      ]
+    },
+    "save_as": {
+      "intent": "open Save As dialog",
+      "keys": [
+        "ctrl",
+        "shift",
+        "s"
+      ]
+    }
+  },
+  "guides": {
+    "clipboard.copy_paste": {
+      "scope": "selected GUI content and intended destination; not a terminal",
+      "bindings": [
+        "copy",
+        "paste"
+      ],
+      "steps": "Confirm source selection; copy; navigate and focus the intended destination; paste; inspect the resulting content. Observe between stages.",
+      "source": "keys",
+      "workflow": true,
+      "dependencies": [
+        [
+          "copy",
+          "paste"
+        ]
+      ],
+      "operations": [
+        "copy"
+      ]
+    },
+    "clipboard.move_paste": {
+      "scope": "movable selected GUI content and intended destination; not a terminal",
+      "bindings": [
+        "cut",
+        "paste"
+      ],
+      "steps": "Confirm source selection; cut; navigate and focus the intended destination; paste; inspect both source and destination. Observe between stages.",
+      "source": "keys",
+      "workflow": true,
+      "dependencies": [
+        [
+          "cut",
+          "paste"
+        ]
+      ],
+      "operations": [
+        "cut"
+      ]
+    },
+    "clipboard.transfer": {
+      "scope": "selected GUI content and intended destination; not a terminal",
+      "bindings": [
+        "copy",
+        "cut",
+        "paste"
+      ],
+      "alternatives": [
+        [
+          "copy",
+          "cut"
+        ]
+      ],
+      "steps": "Choose copy to keep the source or cut to move it; never perform both. Confirm destination focus; paste; inspect the resulting content.",
+      "source": "keys",
+      "workflow": true,
+      "dependencies": [
+        [
+          "copy",
+          "paste"
+        ],
+        [
+          "cut",
+          "paste"
+        ]
+      ],
+      "operations": [
+        "copy",
+        "cut",
+        "transfer"
+      ]
+    },
+    "files.transfer": {
+      "scope": "GNOME Files or compatible file pane; verify focus",
+      "requires": [
+        "type.file_manager"
+      ],
+      "bindings": [
+        "copy",
+        "cut",
+        "paste"
+      ],
+      "alternatives": [
+        [
+          "copy",
+          "cut"
+        ]
+      ],
+      "steps": "Choose copy to keep the source, or cut to move it; never perform both. Navigate to destination; paste; inspect both locations. Observe between stages.",
+      "source": "files",
+      "workflow": true,
+      "dependencies": [
+        [
+          "copy",
+          "paste"
+        ],
+        [
+          "cut",
+          "paste"
+        ]
+      ],
+      "operations": [
+        "transfer",
+        "copy",
+        "cut",
+        "move"
+      ]
+    },
+    "clipboard.copy": {
+      "scope": "selected GUI content; not a terminal",
+      "bindings": [
+        "copy"
+      ],
+      "steps": "Confirm selection; copy; inspect selection and clipboard availability.",
+      "source": "keys",
+      "operations": [
+        "copy"
+      ]
+    },
+    "clipboard.cut": {
+      "scope": "selected movable GUI content; not a terminal",
+      "bindings": [
+        "cut"
+      ],
+      "steps": "Confirm source; cut; keep the intended destination in view before pasting.",
+      "source": "keys",
+      "operations": [
+        "cut"
+      ]
+    },
+    "clipboard.paste": {
+      "scope": "intended destination field or file pane; not a terminal",
+      "bindings": [
+        "paste"
+      ],
+      "steps": "Confirm clipboard source and destination focus; paste once; inspect resulting content.",
+      "source": "keys",
+      "operations": [
+        "paste"
+      ]
+    },
+    "clipboard.verify": {
+      "scope": "the destination of the previous paste",
+      "bindings": [],
+      "steps": "Inspect destination content and location; command return does not confirm the intended transfer. Do not paste again without checking.",
+      "source": "keys",
+      "workflow": true,
+      "operations": [
+        "paste"
+      ]
+    },
+    "files.copy": {
+      "scope": "GNOME Files or compatible file pane; verify focus",
+      "requires": [
+        "type.file_manager"
+      ],
+      "bindings": [
+        "copy",
+        "paste"
+      ],
+      "steps": "Select source; copy; navigate to intended destination; paste; inspect source and destination. Observe between steps.",
+      "source": "files",
+      "workflow": true,
+      "dependencies": [
+        [
+          "copy",
+          "paste"
+        ]
+      ],
+      "operations": [
+        "copy"
+      ]
+    },
+    "files.move": {
+      "scope": "GNOME Files or compatible file pane; verify focus",
+      "requires": [
+        "type.file_manager"
+      ],
+      "bindings": [
+        "cut",
+        "paste"
+      ],
+      "steps": "Select source; cut; navigate to intended destination; paste; inspect source and destination. Observe between steps.",
+      "source": "files",
+      "workflow": true,
+      "dependencies": [
+        [
+          "cut",
+          "paste"
+        ]
+      ],
+      "operations": [
+        "cut",
+        "move"
+      ]
+    },
+    "files.rename": {
+      "scope": "selected file in GNOME Files or compatible file pane",
+      "requires": [
+        "type.file_manager"
+      ],
+      "bindings": [
+        "rename",
+        "confirm"
+      ],
+      "steps": "Open rename; inspect selected basename and extension; enter the requested name; confirm and inspect the resulting name.",
+      "source": "rename",
+      "workflow": true,
+      "dependencies": [
+        [
+          "rename",
+          "confirm"
+        ]
+      ],
+      "operations": [
+        "rename"
+      ]
+    },
+    "text.edit": {
+      "scope": "focused editable text field; not a canvas or terminal",
+      "bindings": [
+        "select_text"
+      ],
+      "steps": "Confirm editable focus and intended replacement range; select text only if replacing the whole field; type the user-provided value; inspect it.",
+      "source": "keys",
+      "operations": [
+        "edit"
+      ]
+    },
+    "text.replace_confirm": {
+      "scope": "editable field in a dialog with a verified Enter-to-confirm action",
+      "bindings": [
+        "select_text",
+        "confirm"
+      ],
+      "steps": "Verify editable focus and replacement range; select the field text only for full replacement; type; inspect the value; confirm; inspect the resulting state.",
+      "source": "keys",
+      "workflow": true,
+      "dependencies": [
+        [
+          "select_text",
+          "confirm"
+        ]
+      ],
+      "operations": [
+        "edit",
+        "confirm"
+      ]
+    },
+    "text.confirm": {
+      "scope": "focused dialog control with a known confirm action",
+      "bindings": [
+        "confirm"
+      ],
+      "steps": "Inspect the entered value and active button before confirming; observe the resulting state.",
+      "source": "keys",
+      "operations": [
+        "confirm"
+      ]
+    },
+    "ui.dismiss": {
+      "scope": "active dismissible popup",
+      "bindings": [
+        "dismiss"
+      ],
+      "steps": "Check whether dismissing discards unsaved input; dismiss once and inspect focus.",
+      "source": "keys",
+      "operations": [
+        "dismiss"
+      ]
+    },
+    "history.undo": {
+      "scope": "editable content window supporting Undo",
+      "bindings": [
+        "undo"
+      ],
+      "steps": "Undo one edit; inspect the result before repeating.",
+      "source": "keys",
+      "operations": [
+        "undo"
+      ]
+    },
+    "document.find": {
+      "scope": "content window whose menu supports Find",
+      "bindings": [
+        "find"
+      ],
+      "steps": "Open Find; enter the desired query; inspect matches and navigation controls.",
+      "source": "keys",
+      "operations": [
+        "find"
+      ]
+    },
+    "document.open": {
+      "scope": "content window whose File menu supports Open",
+      "bindings": [
+        "open"
+      ],
+      "steps": "Open the file dialog; choose the intended file; confirm and inspect the opened content.",
+      "source": "keys",
+      "operations": [
+        "open"
+      ]
+    },
+    "document.save": {
+      "scope": "editable document whose File menu supports Save",
+      "bindings": [
+        "save"
+      ],
+      "steps": "Save; handle any name/location dialog; inspect the saved result. Save is not format export.",
+      "source": "keys",
+      "operations": [
+        "save"
+      ]
+    },
+    "navigation.down": {
+      "scope": "focused scrollable content pane",
+      "bindings": [
+        "page_down"
+      ],
+      "steps": "Scroll one page down and inspect the newly visible region.",
+      "source": "keys",
+      "operations": [
+        "down"
+      ]
+    },
+    "navigation.up": {
+      "scope": "focused scrollable content pane",
+      "bindings": [
+        "page_up"
+      ],
+      "steps": "Scroll one page up and inspect the newly visible region.",
+      "source": "keys",
+      "operations": [
+        "up"
+      ]
+    },
+    "capture.image": {
+      "scope": "application or desktop capture controls; confirm what will be captured",
+      "bindings": [],
+      "steps": "Use the visible capture command; choose the intended area/window; inspect capture settings and actual output location; open the resulting image.",
+      "source": "keys",
+      "workflow": true,
+      "operations": [
+        "capture"
+      ]
+    },
+    "export.file": {
+      "scope": "application with a visible Export command",
+      "bindings": [],
+      "steps": "Use Export or Export As; choose format, name and location; review format options; confirm and reopen the output. Do not assume Save exports.",
+      "source": "gimp",
+      "workflow": true,
+      "operations": [
+        "export"
+      ]
+    },
+    "vlc.capture": {
+      "scope": "VLC 3.x Linux player; verify menu binding, not a text field",
+      "requires": [
+        "app.vlc"
+      ],
+      "bindings": [
+        "vlc_snapshot"
+      ],
+      "steps": "Use Video > Take Snapshot or its verified shortcut; inspect the configured snapshot location and resulting image. Do not assume a default path.",
+      "source": "vlc",
+      "workflow": true,
+      "operations": [
+        "capture"
+      ]
+    },
+    "gimp.export": {
+      "scope": "GIMP image window; documented for 2.10, verify current menu binding",
+      "requires": [
+        "app.gimp"
+      ],
+      "bindings": [
+        "gimp_export"
+      ],
+      "steps": "Use File > Export As; choose format, name and location; inspect format options; confirm and reopen the output.",
+      "source": "gimp",
+      "workflow": true,
+      "operations": [
+        "export"
+      ]
+    },
+    "navigation.horizontal": {
+      "scope": "content pane with a visible horizontal scrollbar or supported horizontal scrolling",
+      "bindings": [],
+      "steps": "Confirm the pane and requested left/right direction; scroll a small amount using its visible control; inspect newly exposed content and the scrollbar position before repeating. Do not scroll vertically to reveal clipped columns.",
+      "source": "keys",
+      "operations": [
+        "horizontal_scroll"
+      ]
+    },
+    "view.zoom_value": {
+      "scope": "an exact zoom ratio is required and the editable zoom field is confirmed",
+      "bindings": [
+        "select_text",
+        "confirm"
+      ],
+      "steps": "Only for a required precise ratio: focus the field, select text, type the value, confirm once; inspect actual scale and content. If already entered, only confirm/check; if confirmed, only check. Readable content needs no arbitrary target percentage.",
+      "source": "keys",
+      "workflow": true,
+      "dependencies": [
+        [
+          "select_text",
+          "confirm"
+        ]
+      ],
+      "operations": [
+        "zoom_value"
+      ]
+    },
+    "view.zoom_confirm": {
+      "scope": "a zoom value was entered; verify the zoom field is still focused",
+      "bindings": [
+        "confirm"
+      ],
+      "steps": "Do not select or type again. If the zoom field is still focused, confirm once; inspect actual scale/content. If focus changed, inspect the field before any key. Read directly when readable; a key receipt does not prove zoom.",
+      "source": "keys",
+      "workflow": true,
+      "operations": [
+        "zoom_value"
+      ]
+    },
+    "view.zoom_check": {
+      "scope": "after confirmation of a proposed zoom entry",
+      "bindings": [],
+      "steps": "Inspect actual scale/content first. Enter or a new screenshot does not prove the change. If readable, read directly. If still unreadable, choose one applicable visible fit/window/zoom command and check its effect; do not repeat numeric entry without a precise-ratio need.",
+      "source": "keys",
+      "workflow": true,
+      "operations": [
+        "zoom_value"
+      ]
+    },
+    "view.readability": {
+      "scope": "reading goal or reported unreadability; inspect the current view",
+      "bindings": [],
+      "steps": "Readable now: read directly. Unreadable: choose ONE applicable visible fit command, window adjustment or frozen app zoom binding; verify app/focus, execute once, inspect readability. Use a numeric field only for a required precise ratio. Clipping is not clipboard cut.",
+      "source": "keys",
+      "operations": [
+        "reading",
+        "readability"
+      ]
+    },
+    "menu.open": {
+      "scope": "visible enabled application menu",
+      "bindings": [],
+      "steps": "Locate the named menu in the current image; open it once; inspect the expanded items before choosing. Do not substitute the document Open shortcut.",
+      "source": "keys",
+      "operations": [
+        "menu_open"
+      ]
+    },
+    "document.read": {
+      "scope": "focused scrollable document pane, not an input field",
+      "bindings": [
+        "page_down"
+      ],
+      "steps": "Read the visible region directly if readable; do not adjust to an arbitrary percentage. Reuse source-bound reading claims only for unchanged content. Advance only for an unseen region, then compare content. If unreadable, choose one direct adjustment and inspect its effect.",
+      "source": "keys",
+      "workflow": true,
+      "operations": [
+        "reading"
+      ]
+    },
+    "window.maximize": {
+      "scope": "GNOME active window; verify it is not already maximized",
+      "bindings": [
+        "maximize"
+      ],
+      "steps": "Toggle maximization once; inspect window bounds. This is a toggle: repeating it can undo the change. Re-locate controls after resizing.",
+      "source": "keys",
+      "workflow": true,
+      "operations": [
+        "maximize"
+      ]
+    },
+    "view.zoom_in": {
+      "scope": "confirmed visible Zoom In control; relative increase is needed",
+      "bindings": [],
+      "steps": "If already readable, read. Otherwise use the visible Zoom In command once and inspect readability/clipping. A frozen app binding is an alternative only after checking app/focus. Do not enter a number unless a precise ratio is required.",
+      "source": "keys",
+      "workflow": true,
+      "operations": [
+        "zoom_in"
+      ]
+    },
+    "view.zoom_out": {
+      "scope": "confirmed visible Zoom Out control; relative decrease is needed",
+      "bindings": [],
+      "steps": "If already readable with the needed bounds visible, read. Otherwise use the visible Zoom Out command once and inspect bounds/readability. A frozen app binding needs confirmed app/focus. Do not use numeric entry for an arbitrary percentage.",
+      "source": "keys",
+      "workflow": true,
+      "operations": [
+        "zoom_out"
+      ]
+    },
+    "focus.verify": {
+      "scope": "current visible GUI",
+      "bindings": [],
+      "steps": "Confirm application, modal dialog and focused control. Re-locate the target in the current image before retrying. If the expected change is absent, inspect a visible menu or another supported route; do not reuse old coordinates blindly. No shortcut is selected without a matching need.",
+      "source": "keys",
+      "operations": []
+    },
+    "pointer.drag": {
+      "scope": "visible draggable object and destination; native computer tool",
+      "bindings": [],
+      "steps": "Locate source in the current image; mouse_move to its coordinate, then left_click_drag to the destination coordinate. Duration changes speed, not start position. Inspect actual movement; if unclear, re-ground or use an applicable menu/clipboard workflow.",
+      "source": "native_tools",
+      "workflow": true,
+      "operations": [
+        "drag"
+      ]
+    },
+    "image.edit": {
+      "scope": "visible editable image canvas; confirm layer, selection and active tool",
+      "bindings": [
+        "undo"
+      ],
+      "steps": "Choose the applicable visible editing tool; inspect selection/affected region before an edit and the result after it. Repeated Delete without a changed selection is not evidence of progress. Check the whole requested result before finishing; export only when required by the public task.",
+      "source": "keys",
+      "workflow": true,
+      "operations": [
+        "image_edit"
+      ]
+    },
+    "window.locate": {
+      "scope": "a named application/window or desktop overview; focus unconfirmed",
+      "bindings": [],
+      "steps": "Locate the requested window in the current view or visible switcher; select it once and inspect its title/content. Do not use document Open as a window-switch command.",
+      "source": "keys",
+      "operations": [
+        "window_locate"
+      ]
+    },
+    "folder.open": {
+      "scope": "visible file manager, folder pane or location control",
+      "bindings": [],
+      "steps": "Locate the intended folder or location control; open/navigate once; inspect the displayed location. Do not substitute a document Open shortcut.",
+      "source": "keys",
+      "operations": [
+        "folder_open"
+      ]
+    },
+    "url.open": {
+      "scope": "confirmed browser address/navigation control",
+      "bindings": [],
+      "steps": "Use the visible address control for the requested URL; inspect the destination page after navigation. Do not substitute document Open.",
+      "source": "keys",
+      "operations": [
+        "url_open"
+      ]
+    },
+    "files.find": {
+      "scope": "file manager or file chooser with a visible file-search control",
+      "bindings": [],
+      "steps": "Use the visible search control for the named file/folder; inspect the scope and matches. Do not assume content Find searches files.",
+      "source": "keys",
+      "operations": [
+        "file_find"
+      ]
+    },
+    "document.save_as": {
+      "scope": "editable content whose File menu explicitly supports Save As; not Export",
+      "bindings": [
+        "save_as"
+      ],
+      "steps": "Use the verified Save As command; inspect name, location and format; confirm and inspect the saved file. Do not substitute Save or assume format export.",
+      "source": "keys",
+      "workflow": true,
+      "operations": [
+        "save_as"
+      ]
+    }
+  }
+}

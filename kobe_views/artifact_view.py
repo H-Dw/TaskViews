@@ -38,6 +38,18 @@ def review_schema():
 
 
 REVIEW_SCHEMA = review_schema()
+COMPACT_REVIEW_SCHEMA = (
+    'Success: assistant.content <artifact_review>JSON</artifact_review> + terminate. '
+    'JSON: candidate(path,1..300 chars), source_confirmed,content_previewed,name_correct,destination_confirmed; '
+    'checks=[positive same-task obs integer,fact 1..160 chars]; content_previewed[0]=current.ref. '
+    'No extra keys; <=2400 UTF8 bytes. No-file only: {"no_artifact":"reason 1..240 chars"}. Never invent evidence.'
+)
+
+
+def prompt_schema(mode):
+    if mode not in ('full', 'compact'):
+        raise ValueError('Unknown review prompt format')
+    return REVIEW_SCHEMA if mode == 'full' else COMPACT_REVIEW_SCHEMA
 
 
 class ReviewError(ValueError):

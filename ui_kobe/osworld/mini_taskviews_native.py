@@ -1,4 +1,5 @@
 """Mini views and bounded recovery on the shared native predict/compiler."""
+from copy import deepcopy
 import json
 import os
 
@@ -14,6 +15,8 @@ from kobe_views.artifact_view import GUIDANCE as ARTIFACT_GUIDANCE
 from kobe_views.keyboard_view import normalize_toolsets, policy as keyboard_policy
 from kobe_views.task_keyboard import ENV as RESEARCH_ENV, instruction_sha, load_bundle
 from .mini_recovery import generate_candidate as generate_mini_candidate
+from kobe_views import mini_graph
+from kobe_views import keyboard_guidance
 
 
 FRAME_CONTRACT_PREFIX = 'Trusted screenshot/coordinate contract: '
@@ -28,7 +31,12 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
     strict_native_input = True
 
     def __init__(self, **options):
+        # Frozen entrypoints always set this; absence preserves old callers/checkpoints.
+        self.mini_graph_mode = mini_graph.mode(os.environ.get(mini_graph.ENV, 'legacy'))
+        self.mini_graph_policy = mini_graph.policy(self.mini_graph_mode, os.environ.get(mini_graph.PACKING_ENV))
         self.keyboard_toolsets = normalize_toolsets(json.loads(os.environ.get('UI_KOBE_MINI_KEYBOARD_TOOLS', '[]')))
+        self.guidance_policy = json.loads(os.environ.get(keyboard_guidance.ENV) or 'null')
+        keyboard_guidance.validate(self.guidance_policy, self.keyboard_toolsets)
         research = os.environ.get(RESEARCH_ENV)
         self.task_keyboard = load_bundle(json.loads(research)) if research else None
         if (os.environ.get('UI_KOBE_TASKVIEWS_PROFILE', PROFILE) != PROFILE
@@ -38,10 +46,33 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
         if control_version not in ('disabled', VERSION):
             raise ValueError('Unknown Mini controls view')
         self.controls_view_enabled = control_version == VERSION
+        if self.guidance_policy is not None and self.controls_view_enabled:
+            raise ValueError('Capability guidance requires the four-view keyboard path')
+        if self.controls_view_enabled and self.mini_graph_mode != 'legacy':
+            raise ValueError('Legacy controls view requires legacy Mini graph mode')
         if self.controls_view_enabled and (self.keyboard_toolsets or self.task_keyboard is not None):
             raise ValueError('Scoped keyboard tools cannot use the legacy controls-only packet')
         self.native_parameter_repair_feedback = self.controls_view_enabled
         self.context_label = CONTROLS_LABEL if self.controls_view_enabled else LABEL
+        if self.mini_graph_mode != 'legacy':
+            self.context_label = (mini_graph.DELIVERY_LABEL if self.mini_graph_policy['packing'] ==
+                                  mini_graph.DELIVERY_PACKING else mini_graph.LABEL)
+        if self.guidance_policy is not None:
+            self.context_label = self.context_label.replace('sources[N]=[kind,base64 SHA256]',
+                'sources[N]=[kind]; full hashes are verified locally')
+            self.context_label += (' Guidance groups are conditional references: verify app/focus; '
+                                   'observe between workflow steps. Enabled directories do not confirm focus. '
+                                   'source_ref resolves in the local audit. A coverage gap does not enable new directories. '
+                                   'Lookup is optional: <key_lookup>guide_name</key_lookup>.')
+            if self.mini_graph_mode == 'legacy':
+                self.context_label = ('TaskViews: seq refs resolve original journal evidence; source_ref resolves local guidance audit. '
+                    'Reports/effects remain unverified. Cards require current app/focus; observe between steps. '
+                    'Optional <key_lookup>guide_name</key_lookup>:')
+            self.context_label += (
+                ' Current: pending effects; Attempts: dispatched actions; Lessons: reading reports/errors. '
+                'Reuse reports for unchanged content; re-read only missing/conflicting/expired information. '
+                'Re-ground recalled coordinates. Readable -> read; otherwise adjust once/check. '
+                'State brief subject-bound public findings, not repeated reasoning.')
         super().__init__(**options)
 
     def validate_actor_candidate(self, response):
@@ -83,7 +114,11 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
                     ('frame_id', 'coordinate_type', 'original_size', 'model_size')}
         text = (FRAME_CONTRACT_PREFIX + json.dumps(geometry, separators=(',', ':')) + '\n'
                 + units + 'Verify the expected visible change; if absent, re-ground. Confirm focus before typing. '
-                + ARTIFACT_GUIDANCE)
+                + ('Before success: public artifact_review per current.artifact.review_schema; current.ref is the current observation number. '
+                   if self.guidance_policy is not None else
+                   'Before success: public artifact_review per current.artifact.review_schema. '
+                   'Screenshots and receipts do not prove exported content. '
+                   if (self.guidance_policy or {}).get('review_prompt') == 'compact' else ARTIFACT_GUIDANCE))
         return [*super().current_frame_content(),
                 {'type': 'text', 'text': text}]
 
@@ -92,6 +127,9 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
         self.mini_context = MiniTaskViewsContext(self)
 
     def optional_context(self, instruction, obs):
+        if (self.guidance_policy is not None
+                and instruction_sha(instruction) != self.guidance_policy['instruction_sha256']):
+            raise ReadAnomaly('Frozen operation guidance belongs to a different original task')
         if self.task_keyboard is not None and instruction_sha(instruction) != self.task_keyboard['instruction_sha256']:
             raise ReadAnomaly('Temporary keyboard references belong to a different task')
         return self.mini_context.context(instruction)
@@ -120,9 +158,22 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
                  'keyboard_tools': keyboard_policy(self.keyboard_toolsets, self.task_keyboard)}
         if self.controls_view_enabled:
             value['controls_view'] = policy()
+        value['mini_graph_mode'] = self.mini_graph_mode
+        value['mini_graph'] = self.mini_graph_policy.copy()
+        if self.guidance_policy is not None:
+            value['mini_guidance'] = deepcopy(self.guidance_policy)
         return value
 
     def restore_checkpoint_state(self, value):
+        if not isinstance(value, dict) or value.get('mini_guidance') != self.guidance_policy:
+            raise ReadAnomaly('Mini checkpoint guidance cannot be switched')
+        try:
+            declared_graph = mini_graph.plan_policy(value)
+        except (ValueError, AttributeError) as exc:
+            raise ReadAnomaly('Mini checkpoint graph declaration is invalid') from exc
+        if declared_graph != self.mini_graph_policy:
+            raise ReadAnomaly('Mini checkpoint graph mode cannot be switched')
+        value = {k: v for k, v in value.items() if k not in ('mini_graph_mode', 'mini_graph', 'mini_guidance')}
         if (not isinstance(value, dict) or set(value) not in ({'contract', 'delivery', 'keyboard_tools'},
                 {'contract', 'delivery', 'keyboard_tools', 'controls_view'}) or value['contract'] != profile_contract()
                 or value['keyboard_tools'] != keyboard_policy(self.keyboard_toolsets, self.task_keyboard)):

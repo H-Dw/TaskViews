@@ -1,0 +1,57 @@
+{
+  "passed": true,
+  "time_utc": "2026-10-28T07:11:04.159074+00:00",
+  "source_sha256": {
+    "kobe_views/guidance_semantics.py": "05093f5200cfc8f25e02edaae274ec1b06f4e839f3effc546aec82b0a03f6d4e",
+    "kobe_views/guidance_eligibility.py": "1535a22a8ad004ed52e9286b5b8f725e233440ec0fd52a4a3ad14eac975d48a1",
+    "kobe_views/keyboard_guidance.py": "1550fbbadee5314cbedbb3daaebf8bd1e4b794766ca308cb0275a0711cdcf2b2",
+    "kobe_views/key_tools/guidance.json": "43aba702893e94ccbef2e7778a4ed4cbb43adcb0cb0a35ae69d67d32dce38af7",
+    "kobe_views/guidance_groups.py": "c55209207359fa8f36aa297951d635902a947d14ca271564bd9b01706dfc7725",
+    "kobe_views/operation_support.py": "339d45f23de8b79d09055db52bb95c086af8d135c91b0d268443a080360e810a",
+    "scripts/audit_keyboard_contracts.py": "72c64dcd1e90747b9430fd18cf59d24171f7fa198df54edc6f3744ee63aada58",
+    "tests/test_guidance_eligibility_v7.py": "9569da37a095db2fc31cd87162f99783a51c9cd4f5c7db790e2c905629083738",
+    "tests/test_keyboard_guidance.py": "9e5e94402bc0c09b009db273330e45ebae95d240bb484e82664a7209b8653c32",
+    "tests/test_guidance_semantics_v2.py": "c5ef079c6177de3817893bc73abcb2947fd2df304f69fdb578bc011aadef43ed",
+    "tests/test_guidance_minimal_v5.py": "a74a9c994a5e60abbfae25273e2fb8867c0ee79b3bbc48486f1fbeaff0d22dd5",
+    "tests/test_operation_support.py": "369ef2b0281f0a74ab04e0cb1032987da6fb3db03d8c977744900eaef9848108"
+  },
+  "checks": {
+    "ruff": 0,
+    "diff": 0
+  },
+  "tests": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "674",
+    "time": "73.137",
+    "timestamp": "2026-10-28T15:08:49.114465+08:00",
+    "hostname": "DAVEDWHUAN-NBZK"
+  },
+  "inventory": {
+    "cards": 43,
+    "topics": 99,
+    "bindings": 253,
+    "reference_only_platform": 63,
+    "conditional_contract": 47,
+    "no_audited_operation_contract": 143
+  },
+  "frozen_sources_unchanged": {
+    "verified-mini-clipboard-flow-invoice-low40-20261027-v1/current": true,
+    "verified-mini-clipboard-flow-invoice-low40-20261027-v1/workflow": true,
+    "verified-mini-clipboard-flow-invoice-low40-20261027-v1/clipboard": true,
+    "verified-mini-v3-exact-invoice-low40-20261027-v1/current": true,
+    "verified-mini-v3-exact-invoice-low40-20261027-v1/v3exact": true
+  },
+  "evidence_sha256": {
+    "regression.xml": "495751e224744a392054c5aa4b1bc053a719f90a1dc6072217898dc9a9c3dd10",
+    "inventory.json": "ad54efbc8b05df859d3d007770aa2c626aa30e7f14e04d5ab185c94319726c58",
+    "ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "diff.log": "e64ed390b13d305af3b1e9a712ec2326fa9bcbe2c8ee8d2c6f201d84ea9d417d"
+  },
+  "live_api_calls": 0,
+  "gui_dispatches": 0,
+  "scope_memory_max_bytes": 134217728,
+  "scope_swap_max_bytes": 0
+}
