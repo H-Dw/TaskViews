@@ -359,10 +359,17 @@ class MiniTaskViewsContext:
             support = operation_support(rows=routing_rows, instruction=instruction, proposals=proposals,
                 step=journal.task_input['step'], observation_ref=current_ref,
                 decision_limit=self.owner.guidance_policy['decision_limit'])
-            from kobe_views.decision_flow import attempt_recall
-            recall = attempt_recall(routing_rows, instruction, proposals, journal.task_input['step'])
-            recall = recall or support['navigation_recall']
+            from kobe_views.attempt_retrieval import retrieve as retrieve_attempt
+            retrieval = retrieve_attempt(routing_rows, instruction, proposals, journal.task_input['step'])
+            recall = retrieval['selected']
+            # No ungated navigation fallback can reintroduce rejected records.
             support['navigation_recall'] = recall
+            self.trace['attempt_retrieval'] = {'version': retrieval['audit']['version'],
+                'selected_ref': recall['ref'] if recall else None, 'in_packet_refs': [],
+                'delivered': False, 'delivery_status': 'pending' if recall else 'not_selected'}
+            telemetry.emit('mini_attempt_retrieval_prepared', frame_id=self.trace['frame_id'],
+                context_revision=self.trace['context_revision'], episode_id=journal.episode_id,
+                journal_seq=cursor, audit=retrieval['audit'])
             original_current['artifact']['review_schema'] = review_schema(self.owner.guidance_policy, finishing=support['finishing'])
             if support['finishing']:
                 original_current['completion'] = support['completion']
@@ -402,7 +409,8 @@ class MiniTaskViewsContext:
                     recalled.update(evidence.error(row))
                     recalled['grade'] = 'execution_attempt'
                 recalled['recall'] = {'query': {'ref': evidence.reference(by_seq[recall['query_ref']])},
-                    'basis': recall['basis'], 'coordinates': 're_ground_current_image', 'effect': 'unknown'}
+                    'basis': recall['basis'], 'purpose': recall['purpose'],
+                    'parameters': recall['parameters'], 'coordinates': 're_ground_current_image', 'effect': 'unknown'}
             # Attempts were already dispatched facts. Attach an optional short
             # issuing intention so a coordinate can be understood in context;
             # never invent a window name or infer success from that intention.
@@ -413,7 +421,8 @@ class MiniTaskViewsContext:
                     and r[1].get('id') == event['decision_id']
                     and r[1].get('instruction') == instruction), None)
                 if issuing:
-                    text = intent_excerpt(self.prose(issuing[1]))
+                    text = (recall['text'] if recall and row[0] == recall['ref'] else
+                            intent_excerpt(self.prose(issuing[1])))
                     if text:
                         record['intent'] = {'ref': evidence.reference(issuing),
                             'grade': 'model_intent_proposal', 'text': text}
@@ -515,6 +524,8 @@ class MiniTaskViewsContext:
                 sent_current = display['views']['current']['records'][0]
                 from kobe_views.decision_flow import VERSION as FLOW_VERSION
                 recalled_refs = [r['ref'] for r in display['views']['attempts']['records'] if r.get('recall')]
+                self.trace['attempt_retrieval'].update(in_packet_refs=recalled_refs,
+                    delivery_status=('packaged' if recalled_refs else 'omitted_budget' if recall else 'not_selected'))
                 self.trace['decision_flow'] = {'version': FLOW_VERSION,
                     'strategy_source': 'current_knowledge_request' if knowledge_query else 'prefetch_not_current_plan',
                     'strategy_ref': knowledge_query['seq'] if knowledge_query else None,
@@ -553,6 +564,8 @@ class MiniTaskViewsContext:
                         - delivered_recipe_count)
         else:
             self.trace.setdefault('omission_reason', 'whole_envelope_budget')
+            if guidance_enabled and recall:
+                self.trace['attempt_retrieval']['delivery_status'] = 'whole_envelope_budget'
         if guidance_enabled:
             self.trace['guidance'] = keyboard_guidance.delivery_audit(self.guidance_selection,
                 self.guidance_records, self.guidance_directory_visible)
@@ -612,6 +625,16 @@ class MiniTaskViewsContext:
         atomic(journal.directory / (journal.episode_id + '.mini-graph.json'), self.graph_audit)
 
     def guidance_delivery(self, delivered):
+        if 'attempt_retrieval' in self.trace:
+            metrics = self.trace['attempt_retrieval']
+            metrics['delivered'] = bool(delivered and metrics['in_packet_refs'])
+            if metrics['delivered']:
+                metrics['delivery_status'] = 'delivered'
+            elif not delivered and metrics['selected_ref'] is not None:
+                metrics['delivery_status'] = self.trace.get('omission_reason', 'request_not_delivered')
+            telemetry.emit('mini_attempt_retrieval_delivery', frame_id=self.trace['frame_id'],
+                context_revision=self.trace.get('context_revision', 0), episode_id=self.journal().episode_id,
+                packet_sha256=self.trace.get('packet_sha256'), metrics=metrics)
         if self.guidance_selection is None:
             return
         metrics = keyboard_guidance.delivery_audit(self.guidance_selection, self.guidance_records,

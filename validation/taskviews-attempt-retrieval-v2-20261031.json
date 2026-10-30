@@ -1,0 +1,67 @@
+{
+  "created_utc": "2026-10-30T18:01:13.735431+00:00",
+  "base_commit": "b763c1cf699d78db3f68d72cb0cd7f5173bfb2f6",
+  "policy": "eligible_attempt_retrieval_v2",
+  "source_sha256": {
+    "kobe_views/attempt_retrieval.py": "11eca59e32ad1d621047ca625d85065188bd36dcf6651d6f231bfff5fa2aaaaa",
+    "kobe_views/decision_flow.py": "3110b343e40b08cbdb6723d3a3f28e6a0f19ebbec2bc00e8c4c350b9cfa223f6",
+    "kobe_views/operation_support.py": "d19854bd2cc20fbca19b0e45b4bf08178a0da71a89b808dc37b74cb560ccbeee",
+    "kobe_views/guidance_delivery.py": "c77fe01a44c960df355191abd1bb741f198d6e7316513af91532097fc66b6b17",
+    "ui_kobe/osworld/mini_taskviews_context.py": "e89fc682c4d1cf0f6202c39f990791532b9436c3fcabaae4b482026fbec5b743",
+    "tests/test_attempt_retrieval.py": "9e6b88feabce8507284794a68215302d9ace5ea9b38c0570d1a7fccb12e27147",
+    "tests/test_reading_support_v6.py": "e3903afa7350d643744f214e0d859b0f9c0ca42dd12ec28e9d92f07e4a9ecfdd",
+    "docs/taskviews-attempt-retrieval-v2.md": "fb1c37aa24e5e943dbab3636adf22cffffae41b850e7b3739f128cc9ffb88b54"
+  },
+  "checks": [
+    {
+      "name": "pytest",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/test_attempt_retrieval.py",
+        "tests/test_decision_flow_v9.py",
+        "tests/test_reading_support_v6.py",
+        "tests/test_guidance_stage_v4.py",
+        "tests/test_guidance_minimal_v5.py",
+        "tests/test_mini_delivery.py",
+        "tests/test_keyboard_guidance.py",
+        "tests/test_guidance_selection_v10.py",
+        "tests/test_operation_support.py",
+        "tests/test_optional_keyboard_v8.py",
+        "tests/test_mini_graph.py",
+        "tests/test_mini_taskviews.py"
+      ],
+      "exit_code": 0,
+      "passed_tests": 305,
+      "log_sha256": "85d63f2d4b6911cd86a46cd0818294667bcad7acdfb82357e3d609874e789236"
+    },
+    {
+      "name": "ruff",
+      "command": [
+        "python",
+        "-m",
+        "ruff",
+        "check",
+        "kobe_views/attempt_retrieval.py",
+        "kobe_views/decision_flow.py",
+        "kobe_views/operation_support.py",
+        "kobe_views/guidance_delivery.py",
+        "ui_kobe/osworld/mini_taskviews_context.py",
+        "tests/test_attempt_retrieval.py",
+        "tests/test_reading_support_v6.py"
+      ],
+      "exit_code": 0,
+      "passed_tests": null,
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    }
+  ],
+  "live_api_calls": 0,
+  "gui_actions": 0,
+  "benchmark_scores_created": false,
+  "source_unchanged_during_validation": true,
+  "passed": true
+}

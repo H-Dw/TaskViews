@@ -1,8 +1,5 @@
 """Single-actor evidence use and bounded, public operation-knowledge requests."""
-import re
-
-from .guidance_semantics import operations
-from .operation_support import READ_TTL, intent_excerpt, public
+from .attempt_retrieval import policy as attempt_policy, retrieve
 
 VERSION = 'source_linked_five_stage_v1'
 TOOL = 'keyboard_lookup'
@@ -28,7 +25,7 @@ def policy():
             'dispatch': 'lookup_and_gui_are_separate', 'empty_keyboard': 'native_actor_decides',
             'prefetched_cards': 'optional_not_a_route_current_query_overrides',
             'knowledge_gap_usage': 'operation_knowledge_only_v2',
-            'attempt_retrieval': 'same_task_public_object_operation_overlap_v1'}
+            'attempt_retrieval': attempt_policy()}
 
 
 def tool_schema():
@@ -55,49 +52,5 @@ def validate_query(value):
 
 
 def attempt_recall(rows, instruction, proposals, step):
-    """One relevant dispatched attempt, including errors; never a success path.
-
-    Match operation AND non-generic object terms, not just a repeated verb.
-    Complete sources must exist. No cross-task or long-term memory is searched.
-    """
-    boundary = max((n for n, e, _ in rows if e.get('kind') == 'task_input'
-                    and e.get('instruction') != instruction), default=0)
-    rows = [r for r in rows if r[0] > boundary]
-    fresh = sorted((p for p in proposals if p[0] > boundary and 0 <= step - p[2] <= 2), reverse=True)
-    if not fresh or not fresh[0][1]:
-        return None
-    qref, query, _ = fresh[0]
-    query_ops = operations(query)
-    stop = set(('the this that with from into then again please would should want need will let open switch window '
-                'application app document file folder read review check compare back return copy cut paste move '
-                'select selected selection click visible current menu control text content use').split())
-
-    def terms(text):
-        words = {w.casefold() for w in re.findall(r'[a-zA-Z][a-zA-Z0-9_-]{2,}', text)} - stop
-        # Bigrams support ordinary Chinese object names without task-specific rules.
-        words |= {s[i:i+2] for s in re.findall(r'[\u4e00-\u9fff]+', text) for i in range(len(s)-1)} - {
-            '复制', '剪切', '粘贴', '打开', '返回', '文本', '文字', '当前', '窗口', '文件', '目录', '再次', '需要'}
-        return words
-
-    observations = {e.get('id'): n for n, e, _ in rows if e.get('kind') == 'observation'}
-    decisions = {e.get('id'): (n, e) for n, e, _ in rows if e.get('kind') == 'decision'
-                 and e.get('instruction') == instruction}
-    found = []
-    for seq, event, _ in rows:
-        if (seq >= qref or event.get('kind') != 'transition' or event.get('instruction') != instruction
-                or event.get('dispatch_observed') is not True or event.get('command_alignment') != 'matched'
-                or event.get('gaps') or not event.get('controller_receipts')
-                or not 0 <= step - event.get('step', -99) <= READ_TTL
-                or any(event.get(k) not in observations for k in ('source', 'target'))):
-            continue
-        if (event.get('tool') or {}).get('arguments', {}).get('action') in ('screenshot', 'wait'):
-            continue
-        issuer = decisions.get(event.get('decision_id'))
-        if not issuer or not observations.get(issuer[1].get('source'), seq) < issuer[0] < seq:
-            continue
-        text = intent_excerpt(public(issuer[1]))
-        overlap = terms(query) & terms(text)
-        if query_ops & operations(text) and overlap:
-            found.append((len(overlap), seq, {'ref': seq, 'query_ref': qref, 'intent_ref': issuer[0],
-                'text': text, 'matched_terms': sorted(overlap), 'basis': 'public_object_operation_match_not_success'}))
-    return max(found, key=lambda x: x[:2])[2] if found else None
+    """Compatibility entrypoint; the navigation path uses the same gate."""
+    return retrieve(rows, instruction, proposals, step)['selected']

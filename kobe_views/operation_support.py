@@ -415,39 +415,9 @@ def intent_excerpt(text):
 
 
 def navigation_recall(rows, instruction, proposals, step):
-    """At most one lexical match to a prior navigation intention.
-
-    It is an index into an attempted action, never a saved coordinate macro.
-    Ambiguous scores tie by latest seq; task boundaries are applied by caller.
-    """
-    navigation = NAVIGATION
-    stop = set('the this that with from into then again please would should want need will let open '
-               'switch window application app document file folder read review check compare back return'.split())
-    def terms(text):
-        return {w.casefold() for w in re.findall(r'[a-zA-Z][a-zA-Z0-9_-]{2,}', text)} - stop
-    query = next(((n, text) for n, text, when in proposals if 0 <= step - when <= 2
-                  and operations(text) & navigation and re.search(
-                      r'\b(?:again|reopen|back to|return to|switch back)\b|重新打开|再次打开|切回|返回', text, re.I)), None)
-    if not query:
-        return None
-    observations = {e.get('id'): n for n, e, _ in rows if e.get('kind') == 'observation'}
-    decisions = {e.get('id'): (n, e) for n, e, _ in rows if e.get('kind') == 'decision'
-                 and e.get('instruction') == instruction}
-    found = []
-    for seq, event, _ in rows:
-        if (seq >= query[0] or event.get('instruction') != instruction or not confirmed(event)
-                or not 0 <= step - event.get('step', -99) <= READ_TTL):
-            continue
-        issuer = decisions.get(event.get('decision_id'))
-        if not issuer or issuer[0] >= seq or observations.get(issuer[1].get('source'), seq) >= issuer[0]:
-            continue
-        text = intent_excerpt(public(issuer[1]))
-        overlap = terms(query[1]) & terms(text)
-        if operations(text) & navigation and overlap:
-            found.append((len(overlap), seq, {'ref': seq, 'query_ref': query[0],
-                'intent_ref': issuer[0], 'text': text, 'matched_terms': sorted(overlap),
-                'basis': 'public_text_match_not_target_or_success'}))
-    return max(found, key=lambda x: x[:2])[2] if found else None
+    """Navigation candidate source with the shared attempt eligibility gate."""
+    from .attempt_retrieval import retrieve
+    return retrieve(rows, instruction, proposals, step, navigation_only=True)['selected']
 
 
 def build(*, rows, instruction, proposals, step, observation_ref, decision_limit=None):

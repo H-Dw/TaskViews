@@ -104,18 +104,19 @@ def test_public_numeric_list_keeps_its_heading_and_whole_rows_not_anonymous_numb
 
 def test_recall_is_bounded_public_text_not_success_or_coordinate_plan():
     rows = [obs(1), decision(2, 'The value is 3. Open the Archive window.', 1, id='nav', step=1),
-            action(3, {'action': 'left_click', 'coordinate': [40, 50]}, decision_id='nav', step=1),
-            obs(4), decision(5, 'Open the Archive window again.', 4, id='query', step=3)]
-    proposals = [(5, 'Open the Archive window again.', 3)]
+            obs(3), action(4, {'action': 'left_click', 'coordinate': [40, 50]}, source='1', target='3',
+                           decision_id='nav', step=1),
+            obs(5), decision(6, 'Open the Archive window again.', 5, id='query', step=3)]
+    proposals = [(6, 'Open the Archive window again.', 3)]
     recall = navigation_recall(rows, 'Copy files', proposals, 4)
-    assert recall['ref'] == 3 and recall['intent_ref'] == 2 and recall['matched_terms'] == ['archive']
+    assert recall['ref'] == 4 and recall['intent_ref'] == 2 and recall['matched_terms'] == ['archive']
     assert recall['text'] == 'Open the Archive window.'
-    assert navigation_recall(rows, 'Copy files', [(5, 'Open the Archive window.', 3)], 4) is None
-    assert navigation_recall(rows, 'Copy files', [(5, 'Open the Settings window.', 3)], 4) is None
+    assert navigation_recall(rows, 'Copy files', [(6, 'Open the Archive window.', 3)], 4) is None
+    assert navigation_recall(rows, 'Copy files', [(6, 'Open the Settings window.', 3)], 4) is None
     assert navigation_recall(rows, 'Different task', proposals, 4) is None
     assert navigation_recall(rows, 'Copy files', proposals, 20) is None
-    rows[2][1]['controller_receipts'][0]['result']['success'] = False
-    assert navigation_recall(rows, 'Copy files', proposals, 4) is None
+    rows[3][1]['controller_receipts'][0]['result']['success'] = False
+    assert navigation_recall(rows, 'Copy files', proposals, 4)['purpose'] == 'avoid_repeat'
     assert intent_excerpt('Long report ' * 60 + '. Open the Archive window.') == 'Open the Archive window.'
 
 

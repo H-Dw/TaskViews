@@ -135,13 +135,12 @@ def materialize(*, episode_id, index, instruction, graph_mode, packing, selectio
         if condition['kind'] == 'held_modifiers' and admit_current('action_conditions', [condition]):
             admitted_conditions.append(condition)
 
-    # A current explicit strategy has just requested operation knowledge.
-    # Admit its recalled attempt/failed preconditions before optional recipes;
-    # otherwise retrieval may succeed locally while the actor never sees it.
-    if literal.get('strategy'):
-        for i, row in enumerate(attempts):
-            if row.get('recall'):
-                admit('attempts', i)
+    # Eligible attempt evidence is independent of Keyboard and its lookup.
+    # Latest dispatch/errors and held keys stay first. A whole recalled fact
+    # then competes before optional guidance, never using extra budget.
+    for i, row in enumerate(attempts):
+        if row.get('recall'):
+            admit('attempts', i)
 
     # One current-stage card; do not substitute a cheaper, irrelevant candidate
     # if the required group cannot fit. Candidates and rule explanations stay local.
