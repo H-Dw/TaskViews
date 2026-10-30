@@ -41,7 +41,7 @@ def summarize(paths, annotations=None):
             'context_revisions': len(frames),
             'request_receipts_including_retries': receipts,
             'packet_delivery_rate': ratio(total('packet_delivered'), len(frames)),
-            'no_match_frame_rate': (ratio(sum(m['selection_status'] == 'no_match' for m in metrics), len(frames))
+            'empty_keyboard_frame_rate': (ratio(sum(m['selection_status'] in ('empty', 'no_match') for m in metrics), len(frames))
                                     if all('selection_status' in m for m in metrics) else None),
             'delivered_reference_frame_rate': ratio(sum(bool(m['packet_delivered'] and m['delivered_group_ids'])
                                                        for m in metrics), len(frames)),

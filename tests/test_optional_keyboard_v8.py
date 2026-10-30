@@ -20,10 +20,10 @@ from test_keyboard_guidance import names, route
 def test_task_specific_or_missing_intent_has_no_substitute_reference(proposals):
     selection = route(instruction='Align the panels to the requested layout.', proposals=proposals)
     assert selection['groups'] == selection['needed_groups'] == []
-    assert selection['selection_status'] == 'no_match' and selection['guide_sources'] == {}
+    assert selection['selection_status'] == 'empty' and selection['guide_sources'] == {}
     assert 'focus.verify' not in guidance.LIBRARY['guides'] and 'focus.verify' not in GUIDE_OPS
     metrics = guidance.delivery_audit(selection, [], False, delivered=True)
-    assert metrics['packet_delivered'] and metrics['selection_status'] == 'no_match'
+    assert metrics['packet_delivered'] and metrics['selection_status'] == 'empty'
     assert metrics['needed_group_count'] == metrics['needed_groups_delivered'] == metrics['matching_group_count'] == 0
     assert metrics['needed_recipe_delivery_rate'] is metrics['workflow_completeness_rate'] is None
     assert metrics['adoption'] == 'unknown_parameter_match_is_not_use'
@@ -33,10 +33,10 @@ def test_empty_prose_does_not_revive_old_intention_or_disable_execution_phase():
     value = route(instruction='Read the content', step=3, proposals=[(6, '', 2), (3, 'Zoom in', 1)])
     assert names(value) == []
     assert any(x['reason'] == 'superseded_public_intention' for x in value['excluded'])
-    for phase, card in [('confirm_once', 'view.zoom_confirm'), ('inspect_effect', 'view.zoom_check')]:
+    for phase, card in [('confirm_once', 'view.zoom_confirm'), ('inspect_effect', None)]:
         value = route(instruction='Read the content', proposals=[(3, '', 1)],
                       pending_effect={'phase': phase, 'refs': [2, 3]})
-        assert names(value) == [card]  # A source-bound unfinished dependency remains useful.
+        assert names(value) == ([card] if card else [])
 
 
 def configure(monkeypatch, task, mode):
@@ -70,7 +70,7 @@ def test_native_actions_and_success_do_not_require_a_keyboard_match(monkeypatch,
             assert len(dumps(wire).encode()) <= 3000
             assert display['views']['keyboard'] == {'records': [], 'omitted_records': 0}
             current = display['views']['current']['records'][0]
-            assert current['guidance_status']['card'] == 'no_match'
+            assert 'guidance_status' not in current
             assert 'keyboard_lookup' not in current
             assert 'focus.verify' not in dumps(transport.requests[-1])
             assert actor.mini_context.trace['delivered']
@@ -146,7 +146,7 @@ def test_empty_keyboard_budget_and_flat_linked_same_input(monkeypatch, tmp_path)
                     assert len(dumps(value).encode()) <= min(3000, budget)
                     display = value if mode == 'legacy' else mini_graph.expand(value)
                     assert display['views']['keyboard'] == {'records': [], 'omitted_records': 0}
-                    assert display['views']['current']['records'][0]['guidance_status']['card'] == 'no_match'
+                    assert 'guidance_status' not in display['views']['current']['records'][0]
             assert (modes['flat'] is None) == (modes['linked'] is None)
             if modes['flat']:
                 assert {k: v for k, v in modes['flat'].items() if k not in ('links', 'mode')} == {
@@ -163,6 +163,6 @@ def test_audit_does_not_count_an_empty_keyboard_as_successful_reference_delivery
         {'event': 'mini_guidance_prepared', 'episode_id': 'synthetic', 'frame_id': 'f1', 'selection': selection, 'metrics': prepared},
         {'event': 'mini_guidance_delivery', 'episode_id': 'synthetic', 'frame_id': 'f1', 'metrics': receipt}]), encoding='utf-8')
     result = summarize([events])
-    assert result['packet_delivery_rate'] == result['no_match_frame_rate'] == 1
+    assert result['packet_delivery_rate'] == result['empty_keyboard_frame_rate'] == 1
     assert result['delivered_reference_frame_rate'] == 0
     assert result['needed_group_delivery_rate'] is result['needed_recipe_delivery_rate'] is None

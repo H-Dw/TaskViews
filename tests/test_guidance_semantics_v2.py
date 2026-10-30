@@ -63,7 +63,7 @@ def test_runtime_file_intent_is_independent_of_original_task_and_gap_is_explicit
 
 def test_cut_off_never_delivers_clipboard_and_menu_never_delivers_ctrl_o():
     value = route(instruction='Read content', proposals=[(3, 'The right edge is cut off', 1)])
-    assert names(value)[0] == 'view.readability'
+    assert names(value) == []
     assert not any('cut' in n for n in names(value))
     value = route(instruction='Inspect application', proposals=[(3, 'Open menu', 1)])
     assert names(value)[0] == 'menu.open'
@@ -75,7 +75,7 @@ def test_zoom_card_has_edit_confirmation_and_check_or_scoped_binding():
     card = value['groups'][0]['record']
     assert names(value)[0] == 'view.zoom_in'
     assert not card['recipes']
-    assert 'Zoom In control' in card['scope'] and 'inspect' in card['steps']
+    assert 'Zoom In control' in card['scope'] and 'Zoom In command' in card['steps']
     scoped = route(instruction='Read PDF', proposals=[(3, 'Zoom in Evince', 1)], enabled=['general', 'app.evince'])
     assert scoped['groups'][0]['record']['recipes'][0]['tool']['keys'] == ['ctrl', '+']
 

@@ -96,7 +96,7 @@ def record(topic, selection, memories=(), omitted=0, *, toolsets=(), task_catalo
         'source': source,
         **({'candidate_origin': catalog['candidate_origin'], 'verification': 'web_reference_not_guest_tested'}
            if temporary else {}),
-        'recipes': deepcopy(catalog['recipes']), 'check': catalog['check'],
+        'recipes': deepcopy(catalog['recipes']),
         'memory': deepcopy(list(memories)), 'memory_omitted': omitted}
 
 
@@ -108,6 +108,7 @@ def lookup_guide(toolsets=(), task_catalog=None):
 def policy(toolsets=(), task_catalog=None):
     enabled = normalize_toolsets(toolsets)
     return {'version': VERSION, 'platform': DATA['runtime_platform'],
+            'delivery': 'operation_reference_without_checks_v1',
             'enabled_toolsets': ['general', *enabled], 'topics': list(active_catalog(enabled, task_catalog)),
             **({'task_catalog': deepcopy(task_catalog['identity'])} if task_catalog is not None else {}),
             'max_key_edges': 32, 'max_memory_rows': 2,

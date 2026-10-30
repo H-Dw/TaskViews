@@ -56,7 +56,7 @@ class KeyboardLookup:
         owner.actor_input_messages = result['messages']
         owner.cached_context = owner.mini_context.context(journal.task_input['instruction'], knowledge_query=record)
         status = ('included' if owner.mini_context.guidance_records else
-                  'omitted_budget' if owner.mini_context.guidance_selection['groups'] else 'no_match')
+                  'omitted_budget' if owner.mini_context.guidance_selection['groups'] else 'empty')
         reply['content'] = dumps({'query_ref': record['seq'], 'status': status})
         evidence = {'query_ref': record['seq'], 'status': status, 'frame_id': owner.frame.metadata['frame_id'],
             'packet_sha256': owner.mini_context.trace.get('packet_sha256'), 'gui_dispatched': False,

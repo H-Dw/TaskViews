@@ -1,13 +1,12 @@
 {
-  "version": "capability_guidance_v10",
+  "version": "operation_knowledge_v11",
   "platform": "linux",
   "sources": {
     "files": "https://help.gnome.org/gnome-help/files-copy.html",
     "rename": "https://help.gnome.org/gnome-help/files-rename.html",
     "keys": "https://help.gnome.org/gnome-help/shell-keyboard-shortcuts.html",
     "vlc": "https://docs.videolan.me/vlc-user/desktop/3.0/en/basic/tipsandtricks/index.html#take-a-snapshot",
-    "gimp": "https://docs.gimp.org/2.10/en/gimp-file-export-as.html",
-    "native_tools": "Frozen official Qwen computer tool schema and actions.py:left_click_drag; coordinate=destination, pointer=start."
+    "gimp": "https://docs.gimp.org/2.10/en/gimp-file-export-as.html"
   },
   "bindings": {
     "copy": {
@@ -134,7 +133,7 @@
         "copy",
         "paste"
       ],
-      "steps": "Confirm source selection; copy; navigate and focus the intended destination; paste; inspect the resulting content. Observe between stages.",
+      "steps": "Select the source; copy; navigate to and focus the intended destination; paste.",
       "source": "keys",
       "workflow": true,
       "dependencies": [
@@ -145,6 +144,10 @@
       ],
       "operations": [
         "copy"
+      ],
+      "procedure_operations": [
+        "copy",
+        "paste"
       ]
     },
     "clipboard.move_paste": {
@@ -153,7 +156,7 @@
         "cut",
         "paste"
       ],
-      "steps": "Confirm source selection; cut; navigate and focus the intended destination; paste; inspect both source and destination. Observe between stages.",
+      "steps": "Select the movable source; cut; navigate to and focus the intended destination; paste.",
       "source": "keys",
       "workflow": true,
       "dependencies": [
@@ -164,6 +167,10 @@
       ],
       "operations": [
         "cut"
+      ],
+      "procedure_operations": [
+        "cut",
+        "paste"
       ]
     },
     "clipboard.transfer": {
@@ -179,7 +186,7 @@
           "cut"
         ]
       ],
-      "steps": "Choose copy to keep the source or cut to move it; never perform both. Confirm destination focus; paste; inspect the resulting content.",
+      "steps": "Choose copy to retain the source or cut to move it; never perform both. Focus the intended destination, then paste.",
       "source": "keys",
       "workflow": true,
       "dependencies": [
@@ -196,6 +203,12 @@
         "copy",
         "cut",
         "transfer"
+      ],
+      "procedure_operations": [
+        "copy",
+        "cut",
+        "transfer",
+        "paste"
       ]
     },
     "files.transfer": {
@@ -214,7 +227,7 @@
           "cut"
         ]
       ],
-      "steps": "Choose copy to keep the source, or cut to move it; never perform both. Navigate to destination; paste; inspect both locations. Observe between stages.",
+      "steps": "Select source files. Choose copy to retain them or cut to move them; never perform both. Navigate to the destination folder, then paste.",
       "source": "files",
       "workflow": true,
       "dependencies": [
@@ -232,6 +245,13 @@
         "copy",
         "cut",
         "move"
+      ],
+      "procedure_operations": [
+        "transfer",
+        "copy",
+        "cut",
+        "move",
+        "paste"
       ]
     },
     "clipboard.copy": {
@@ -239,9 +259,12 @@
       "bindings": [
         "copy"
       ],
-      "steps": "Confirm selection; copy; inspect selection and clipboard availability.",
+      "steps": "With the intended GUI content selected, copy the selection.",
       "source": "keys",
       "operations": [
+        "copy"
+      ],
+      "procedure_operations": [
         "copy"
       ]
     },
@@ -250,9 +273,12 @@
       "bindings": [
         "cut"
       ],
-      "steps": "Confirm source; cut; keep the intended destination in view before pasting.",
+      "steps": "With the intended movable GUI content selected, cut the selection.",
       "source": "keys",
       "operations": [
+        "cut"
+      ],
+      "procedure_operations": [
         "cut"
       ]
     },
@@ -261,19 +287,12 @@
       "bindings": [
         "paste"
       ],
-      "steps": "Confirm clipboard source and destination focus; paste once; inspect resulting content.",
+      "steps": "Focus the intended destination field or file pane, then paste the clipboard once.",
       "source": "keys",
       "operations": [
         "paste"
-      ]
-    },
-    "clipboard.verify": {
-      "scope": "the destination of the previous paste",
-      "bindings": [],
-      "steps": "Inspect destination content and location; command return does not confirm the intended transfer. Do not paste again without checking.",
-      "source": "keys",
-      "workflow": true,
-      "operations": [
+      ],
+      "procedure_operations": [
         "paste"
       ]
     },
@@ -286,7 +305,7 @@
         "copy",
         "paste"
       ],
-      "steps": "Select source; copy; navigate to intended destination; paste; inspect source and destination. Observe between steps.",
+      "steps": "Select source files; copy; navigate to the destination folder; paste.",
       "source": "files",
       "workflow": true,
       "dependencies": [
@@ -297,6 +316,10 @@
       ],
       "operations": [
         "copy"
+      ],
+      "procedure_operations": [
+        "copy",
+        "paste"
       ]
     },
     "files.move": {
@@ -308,7 +331,7 @@
         "cut",
         "paste"
       ],
-      "steps": "Select source; cut; navigate to intended destination; paste; inspect source and destination. Observe between steps.",
+      "steps": "Select source files; cut; navigate to the destination folder; paste.",
       "source": "files",
       "workflow": true,
       "dependencies": [
@@ -320,6 +343,11 @@
       "operations": [
         "cut",
         "move"
+      ],
+      "procedure_operations": [
+        "cut",
+        "move",
+        "paste"
       ]
     },
     "files.rename": {
@@ -331,7 +359,7 @@
         "rename",
         "confirm"
       ],
-      "steps": "Open rename; inspect selected basename and extension; enter the requested name; confirm and inspect the resulting name.",
+      "steps": "Open rename for the selected file; replace the requested basename or extension; enter the requested name; confirm.",
       "source": "rename",
       "workflow": true,
       "dependencies": [
@@ -342,6 +370,10 @@
       ],
       "operations": [
         "rename"
+      ],
+      "procedure_operations": [
+        "rename",
+        "confirm"
       ]
     },
     "text.edit": {
@@ -349,9 +381,12 @@
       "bindings": [
         "select_text"
       ],
-      "steps": "Confirm editable focus and intended replacement range; select text only if replacing the whole field; type the user-provided value; inspect it.",
+      "steps": "Focus the editable field; use Select All only for a full-field replacement, then type the user-provided value.",
       "source": "keys",
       "operations": [
+        "edit"
+      ],
+      "procedure_operations": [
         "edit"
       ]
     },
@@ -361,7 +396,7 @@
         "select_text",
         "confirm"
       ],
-      "steps": "Verify editable focus and replacement range; select the field text only for full replacement; type; inspect the value; confirm; inspect the resulting state.",
+      "steps": "Focus the editable field; use Select All only for a full-field replacement; type the value; confirm.",
       "source": "keys",
       "workflow": true,
       "dependencies": [
@@ -373,6 +408,10 @@
       "operations": [
         "edit",
         "confirm"
+      ],
+      "procedure_operations": [
+        "edit",
+        "confirm"
       ]
     },
     "text.confirm": {
@@ -380,9 +419,12 @@
       "bindings": [
         "confirm"
       ],
-      "steps": "Inspect the entered value and active button before confirming; observe the resulting state.",
+      "steps": "Use Enter on the focused dialog control whose confirm action is known.",
       "source": "keys",
       "operations": [
+        "confirm"
+      ],
+      "procedure_operations": [
         "confirm"
       ]
     },
@@ -391,9 +433,12 @@
       "bindings": [
         "dismiss"
       ],
-      "steps": "Check whether dismissing discards unsaved input; dismiss once and inspect focus.",
+      "steps": "Use Escape once on the active dismissible popup.",
       "source": "keys",
       "operations": [
+        "dismiss"
+      ],
+      "procedure_operations": [
         "dismiss"
       ]
     },
@@ -402,9 +447,12 @@
       "bindings": [
         "undo"
       ],
-      "steps": "Undo one edit; inspect the result before repeating.",
+      "steps": "Undo one edit in the focused editable content window.",
       "source": "keys",
       "operations": [
+        "undo"
+      ],
+      "procedure_operations": [
         "undo"
       ]
     },
@@ -413,9 +461,12 @@
       "bindings": [
         "find"
       ],
-      "steps": "Open Find; enter the desired query; inspect matches and navigation controls.",
+      "steps": "Open Find in the content window; type the desired query in the search field.",
       "source": "keys",
       "operations": [
+        "find"
+      ],
+      "procedure_operations": [
         "find"
       ]
     },
@@ -424,9 +475,12 @@
       "bindings": [
         "open"
       ],
-      "steps": "Open the file dialog; choose the intended file; confirm and inspect the opened content.",
+      "steps": "Open the file dialog; choose the intended file; confirm.",
       "source": "keys",
       "operations": [
+        "open"
+      ],
+      "procedure_operations": [
         "open"
       ]
     },
@@ -435,9 +489,12 @@
       "bindings": [
         "save"
       ],
-      "steps": "Save; handle any name/location dialog; inspect the saved result. Save is not format export.",
+      "steps": "Save the current editable document; supply a name and location if the application opens a dialog. Use Export for format export.",
       "source": "keys",
       "operations": [
+        "save"
+      ],
+      "procedure_operations": [
         "save"
       ]
     },
@@ -446,9 +503,12 @@
       "bindings": [
         "page_down"
       ],
-      "steps": "Scroll one page down and inspect the newly visible region.",
+      "steps": "Use PageDown in the focused scrollable content pane to advance one viewport.",
       "source": "keys",
       "operations": [
+        "down"
+      ],
+      "procedure_operations": [
         "down"
       ]
     },
@@ -457,30 +517,13 @@
       "bindings": [
         "page_up"
       ],
-      "steps": "Scroll one page up and inspect the newly visible region.",
+      "steps": "Use PageUp in the focused scrollable content pane to go back one viewport.",
       "source": "keys",
       "operations": [
         "up"
-      ]
-    },
-    "capture.image": {
-      "scope": "application or desktop capture controls; confirm what will be captured",
-      "bindings": [],
-      "steps": "Use the visible capture command; choose the intended area/window; inspect capture settings and actual output location; open the resulting image.",
-      "source": "keys",
-      "workflow": true,
-      "operations": [
-        "capture"
-      ]
-    },
-    "export.file": {
-      "scope": "application with a visible Export command",
-      "bindings": [],
-      "steps": "Use Export or Export As; choose format, name and location; review format options; confirm and reopen the output. Do not assume Save exports.",
-      "source": "gimp",
-      "workflow": true,
-      "operations": [
-        "export"
+      ],
+      "procedure_operations": [
+        "up"
       ]
     },
     "vlc.capture": {
@@ -491,10 +534,13 @@
       "bindings": [
         "vlc_snapshot"
       ],
-      "steps": "Use Video > Take Snapshot or its verified shortcut; inspect the configured snapshot location and resulting image. Do not assume a default path.",
+      "steps": "Use Video > Take Snapshot or Shift+S in the VLC player.",
       "source": "vlc",
       "workflow": true,
       "operations": [
+        "capture"
+      ],
+      "procedure_operations": [
         "capture"
       ]
     },
@@ -506,21 +552,25 @@
       "bindings": [
         "gimp_export"
       ],
-      "steps": "Use File > Export As; choose format, name and location; inspect format options; confirm and reopen the output.",
+      "steps": "Use File > Export As or Ctrl+Shift+E; choose format, name and location; set the format options; confirm export.",
       "source": "gimp",
       "workflow": true,
       "operations": [
+        "export"
+      ],
+      "procedure_operations": [
         "export"
       ]
     },
     "navigation.horizontal": {
       "scope": "content pane with a visible horizontal scrollbar or supported horizontal scrolling",
       "bindings": [],
-      "steps": "Confirm the pane and requested left/right direction; scroll a small amount using its visible control; inspect newly exposed content and the scrollbar position before repeating. Do not scroll vertically to reveal clipped columns.",
+      "steps": "Use the focused pane's visible horizontal scrollbar in the requested left/right direction.",
       "source": "keys",
       "operations": [
         "horizontal_scroll"
-      ]
+      ],
+      "procedure_operations": []
     },
     "view.zoom_value": {
       "scope": "an exact zoom ratio is required and the editable zoom field is confirmed",
@@ -528,7 +578,7 @@
         "select_text",
         "confirm"
       ],
-      "steps": "Only for a required precise ratio: focus the field, select text, type the value, confirm once; inspect actual scale and content. If already entered, only confirm/check; if confirmed, only check. Readable content needs no arbitrary target percentage.",
+      "steps": "For a required precise ratio, focus the editable zoom field; select its text; type the required value; confirm once. Do not re-enter an already submitted value.",
       "source": "keys",
       "workflow": true,
       "dependencies": [
@@ -539,6 +589,11 @@
       ],
       "operations": [
         "zoom_value"
+      ],
+      "procedure_operations": [
+        "zoom_value",
+        "edit",
+        "confirm"
       ]
     },
     "view.zoom_confirm": {
@@ -546,153 +601,116 @@
       "bindings": [
         "confirm"
       ],
-      "steps": "Do not select or type again. If the zoom field is still focused, confirm once; inspect actual scale/content. If focus changed, inspect the field before any key. Read directly when readable; a key receipt does not prove zoom.",
+      "steps": "If the zoom value has been entered and the field is still focused, confirm once with Enter. Do not select or type again.",
       "source": "keys",
       "workflow": true,
       "operations": [
         "zoom_value"
-      ]
-    },
-    "view.zoom_check": {
-      "scope": "after confirmation of a proposed zoom entry",
-      "bindings": [],
-      "steps": "Inspect actual scale/content first. Enter or a new screenshot does not prove the change. If readable, read directly. If still unreadable, choose one applicable visible fit/window/zoom command and check its effect; do not repeat numeric entry without a precise-ratio need.",
-      "source": "keys",
-      "workflow": true,
-      "operations": [
-        "zoom_value"
-      ]
-    },
-    "view.readability": {
-      "scope": "reading goal or reported unreadability; inspect the current view",
-      "bindings": [],
-      "steps": "Readable now: read directly. Unreadable: choose ONE applicable visible fit command, window adjustment or frozen app zoom binding; verify app/focus, execute once, inspect readability. Use a numeric field only for a required precise ratio. Clipping is not clipboard cut.",
-      "source": "keys",
-      "operations": [
-        "reading",
-        "readability"
+      ],
+      "procedure_operations": [
+        "zoom_value",
+        "confirm"
       ]
     },
     "menu.open": {
       "scope": "visible enabled application menu",
       "bindings": [],
-      "steps": "Locate the named menu in the current image; open it once; inspect the expanded items before choosing. Do not substitute the document Open shortcut.",
+      "steps": "Open the named enabled menu visible in the current application.",
       "source": "keys",
       "operations": [
         "menu_open"
-      ]
-    },
-    "document.read": {
-      "scope": "focused scrollable document pane, not an input field",
-      "bindings": [
-        "page_down"
       ],
-      "steps": "Read the visible region directly if readable; do not adjust to an arbitrary percentage. Reuse source-bound reading claims only for unchanged content. Advance only for an unseen region, then compare content. If unreadable, choose one direct adjustment and inspect its effect.",
-      "source": "keys",
-      "workflow": true,
-      "operations": [
-        "reading"
-      ]
+      "procedure_operations": []
     },
     "window.maximize": {
       "scope": "GNOME active window; verify it is not already maximized",
       "bindings": [
         "maximize"
       ],
-      "steps": "Toggle maximization once; inspect window bounds. This is a toggle: repeating it can undo the change. Re-locate controls after resizing.",
+      "steps": "Use Alt+F10 once on the active GNOME window. This toggles maximization; a second use restores the previous size.",
       "source": "keys",
       "workflow": true,
       "operations": [
+        "maximize"
+      ],
+      "procedure_operations": [
         "maximize"
       ]
     },
     "view.zoom_in": {
       "scope": "confirmed visible Zoom In control; relative increase is needed",
       "bindings": [],
-      "steps": "If already readable, read. Otherwise use the visible Zoom In command once and inspect readability/clipping. A frozen app binding is an alternative only after checking app/focus. Do not enter a number unless a precise ratio is required.",
+      "steps": "Use the visible Zoom In command once for a relative increase.",
       "source": "keys",
       "workflow": true,
       "operations": [
         "zoom_in"
-      ]
+      ],
+      "procedure_operations": []
     },
     "view.zoom_out": {
       "scope": "confirmed visible Zoom Out control; relative decrease is needed",
       "bindings": [],
-      "steps": "If already readable with the needed bounds visible, read. Otherwise use the visible Zoom Out command once and inspect bounds/readability. A frozen app binding needs confirmed app/focus. Do not use numeric entry for an arbitrary percentage.",
+      "steps": "Use the visible Zoom Out command once for a relative decrease.",
       "source": "keys",
       "workflow": true,
       "operations": [
         "zoom_out"
-      ]
-    },
-    "pointer.drag": {
-      "scope": "visible draggable object and destination; native computer tool",
-      "bindings": [],
-      "steps": "Locate source in the current image; mouse_move to its coordinate, then left_click_drag to the destination coordinate. Duration changes speed, not start position. Inspect actual movement; if unclear, re-ground or use an applicable menu/clipboard workflow.",
-      "source": "native_tools",
-      "workflow": true,
-      "operations": [
-        "drag"
-      ]
-    },
-    "image.edit": {
-      "scope": "visible editable image canvas; confirm layer, selection and active tool",
-      "bindings": [
-        "undo"
       ],
-      "steps": "Choose the applicable visible editing tool; inspect selection/affected region before an edit and the result after it. Repeated Delete without a changed selection is not evidence of progress. Check the whole requested result before finishing; export only when required by the public task.",
-      "source": "keys",
-      "workflow": true,
-      "operations": [
-        "image_edit"
-      ]
+      "procedure_operations": []
     },
     "window.locate": {
       "scope": "a named application/window or desktop overview; focus unconfirmed",
       "bindings": [],
-      "steps": "Locate the requested window in the current view or visible switcher; select it once and inspect its title/content. Do not use document Open as a window-switch command.",
+      "steps": "Select the requested application window in the visible desktop or window switcher.",
       "source": "keys",
       "operations": [
         "window_locate"
-      ]
+      ],
+      "procedure_operations": []
     },
     "folder.open": {
       "scope": "visible file manager, folder pane or location control",
       "bindings": [],
-      "steps": "Locate the intended folder or location control; open/navigate once; inspect the displayed location. Do not substitute a document Open shortcut.",
+      "steps": "Open the intended folder in the file manager, or enter its path in the visible location control.",
       "source": "keys",
       "operations": [
         "folder_open"
-      ]
+      ],
+      "procedure_operations": []
     },
     "url.open": {
       "scope": "confirmed browser address/navigation control",
       "bindings": [],
-      "steps": "Use the visible address control for the requested URL; inspect the destination page after navigation. Do not substitute document Open.",
+      "steps": "Enter the requested URL in the browser address control and navigate.",
       "source": "keys",
       "operations": [
         "url_open"
-      ]
+      ],
+      "procedure_operations": []
     },
     "files.find": {
       "scope": "file manager or file chooser with a visible file-search control",
       "bindings": [],
-      "steps": "Use the visible search control for the named file/folder; inspect the scope and matches. Do not assume content Find searches files.",
+      "steps": "Enter the named file or folder in the visible file-search control.",
       "source": "keys",
       "operations": [
         "file_find"
-      ]
+      ],
+      "procedure_operations": []
     },
     "document.save_as": {
       "scope": "editable content whose File menu explicitly supports Save As; not Export",
       "bindings": [
         "save_as"
       ],
-      "steps": "Use the verified Save As command; inspect name, location and format; confirm and inspect the saved file. Do not substitute Save or assume format export.",
+      "steps": "Use Save As; choose name, location and format; confirm. Save As and Export are distinct commands.",
       "source": "keys",
       "workflow": true,
       "operations": [
+        "save_as"
+      ],
+      "procedure_operations": [
         "save_as"
       ]
     }

@@ -96,9 +96,9 @@ def test_optional_lookup_is_same_decision_before_gui_with_shared_budget(monkeypa
             assert rows[0]['recipes'][0]['tool']['keys'] == ['ctrl', 'c']  # Still chose right-click.
             assert any(e['ref'] == record['seq'] for e in rows[0]['evidence'])
         else:
-            assert packet['views']['current']['records'][0]['guidance_status']['card'] == 'no_match'
+            assert 'guidance_status' not in packet['views']['current']['records'][0]
         tool = next(m for m in second['messages'] if m.get('tool_call_id') == 'knowledge-1')
-        assert json.loads(tool['content'])['status'] == ('included' if matched else 'no_match')
+        assert json.loads(tool['content'])['status'] == ('included' if matched else 'empty')
         assert 'recipes' not in tool['content']  # Card lives once, inside the budgeted packet.
         assert policy['decision_flow'] == flow.policy()
         actor.restore_checkpoint_state(actor.checkpoint_state())
@@ -125,8 +125,8 @@ def test_missing_frozen_capability_is_reported_but_does_not_block_native_action(
     try:
         native.predict(actor, obs)
         current = display(transport.requests[-1])['views']['current']['records'][0]
-        assert current['guidance_status']['coverage'] == 'gap'
-        assert 'move' in current['guidance_status']['missing']
+        assert 'guidance_status' not in current
+        assert 'move' in current['knowledge_gap']['missing']
         assert actor.last_trace['mini_recovery']['knowledge_roundtrips'] == 1
     finally:
         actor.close()

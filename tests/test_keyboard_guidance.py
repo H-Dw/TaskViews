@@ -83,11 +83,11 @@ def test_dispatch_advances_to_paste_with_empty_intent_and_never_claims_success(k
     assert value == route(rows=[event(keys)])  # Rebuild, not mutable carried state.
 
 
-def test_paste_moves_to_inspection_and_suppresses_stale_copy_and_paste_proposals():
+def test_paste_completes_keyboard_workflow_and_suppresses_stale_copy_and_paste_proposals():
     value = route(rows=[event(['ctrl', 'c']), event(['ctrl', 'v'], seq=8, step=2)], step=3,
                   proposals=[(7, 'copy then paste', 2)])
-    assert names(value) == ['clipboard.verify']
-    assert value['groups'][0]['record']['recipes'] == []
+    assert names(value) == []
+    assert value['workflow']['phase'] == 'completed'
     assert value['workflow']['effect_status'] == 'unknown'
 
 
@@ -121,7 +121,7 @@ def test_mixed_scoped_intent_does_not_veto_other_operations_and_unknown_is_optio
     assert names(value) == ['files.rename']  # The later stage is frozen, not selected now.
     no_match = route(instruction='Inspect the visible application', enabled=['general'])
     assert names(no_match) == []
-    assert no_match['needed_groups'] == [] and no_match['selection_status'] == 'no_match'
+    assert no_match['needed_groups'] == [] and no_match['selection_status'] == 'empty'
     assert names(route(instruction='Take a snapshot in VLC', enabled=['general', 'app.vlc']))[0] == 'vlc.capture'
     assert names(route(instruction='Export in GIMP', enabled=['general', 'app.gimp']))[0] == 'gimp.export'
 
@@ -265,12 +265,14 @@ def test_real_actor_dispatch_receipts_and_restore_without_extra_calls(monkeypatc
     actor, obs, transport = make_actor(monkeypatch, tmp_path, actions=actions)
     annotated(transport, lambda: '')
     try:
-        for expected in ('clipboard.copy', 'clipboard.paste', 'clipboard.verify'):
+        for expected in ('clipboard.copy', 'clipboard.paste', None):
             predict(actor, obs)
             wire = packet(transport)
             display = wire if mode == 'legacy' else mini_graph.expand(wire)
             records = display['views']['keyboard']['records']
-            assert records and records[0]['guide_id'].startswith(expected + ':')
+            assert bool(records) == bool(expected)
+            if expected:
+                assert records[0]['guide_id'].startswith(expected + ':')
             assert all(set(source) == {'kind'} for source in display['sources'].values())
             assert 'https://' not in json.dumps(records)
             assert all('source_ref' in r and 'source' not in r for r in records)
@@ -280,7 +282,7 @@ def test_real_actor_dispatch_receipts_and_restore_without_extra_calls(monkeypatc
             snapshot = actor.checkpoint_state()
             actor.restore_checkpoint_state(snapshot)
         assert len(transport.requests) == 3
-        assert actor.mini_context.trace['guidance']['needed_groups_delivered'] == 1
+        assert actor.mini_context.trace['guidance']['needed_groups_delivered'] == 0
         snapshot['mini_guidance']['pending_decision_ttl'] += 1
         with pytest.raises(Exception, match='guidance cannot be switched'):
             actor.restore_checkpoint_state(snapshot)

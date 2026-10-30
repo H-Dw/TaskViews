@@ -10,7 +10,7 @@
 
 ## type.file_manager.rename
 
-适用范围：GNOME Files/Explorer selected file; observe editable basename or complete name。
+适用范围：GNOME Files/Explorer selected file; editable basename or complete name; preserve the extension exactly once。
 
 同调用查询格式：`<key_lookup>type.file_manager.rename</key_lookup>`。
 

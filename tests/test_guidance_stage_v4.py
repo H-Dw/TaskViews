@@ -73,8 +73,7 @@ def test_triple_click_coverage_and_specific_card_not_generic_focus():
     assert card['guide_id'].startswith('view.zoom_confirm:')
     assert [r['tool']['keys'] for r in card['recipes']] == [['return']]
     pending['phase'] = 'inspect_effect'
-    card = route(instruction='Read a document', pending_effect=pending)['groups'][0]['record']
-    assert card['guide_id'].startswith('view.zoom_check:') and not card['recipes']
+    assert route(instruction='Read a document', pending_effect=pending)['groups'] == []
 
 
 @pytest.mark.parametrize('timing,wording,budget', CONDITIONS)

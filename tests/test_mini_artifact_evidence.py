@@ -152,7 +152,8 @@ def test_rename_reference_explains_selection_and_extension_once():
     from kobe_views.keyboard_view import record
     topic, reason = select_topic(['<key_lookup>type.file_manager.rename</key_lookup>'], ['type.file_manager'])
     value = record(topic, reason, toolsets=['type.file_manager'])
-    assert 'basename' in value['scope'] and 'extension exactly once' in value['check']
+    assert 'basename' in value['scope'] and 'extension exactly once' in value['scope']
+    assert 'check' not in value
     assert 'window_switch' in CATALOG and 'window_maximize' not in CATALOG and 'rename' not in CATALOG
 
 

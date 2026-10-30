@@ -33,7 +33,7 @@ def test_distinct_commands_share_reading_goal_but_do_not_prove_failure():
     support = build(rows=rows, instruction='Read the documents', proposals=[], step=4, observation_ref=10)
     assert support['feedback'][0]['kind'] == 'view_adjustment_chain'
     assert names(route(instruction='Read the documents', adjustment_chain=chain,
-                       proposals=[(8, 'Maximize the window.', 3)], step=4))[0] == 'view.readability'
+                       proposals=[(8, 'Maximize the window.', 3)], step=4)) == []
     rows[4][1]['response'] = json.dumps({'content': 'A zoom dropdown appeared. Let me select 100% to read clearly.'})
     assert len(adjustment_chain(rows, 'Read the documents', 4)['adjustments']) == 3
     # Numeric selection alone has no preceding zoom provenance.
@@ -62,11 +62,11 @@ def test_adjustment_chain_has_source_scope_and_lifetime(case):
 def test_ratio_proposal_is_not_a_precise_task_requirement_and_pending_stage_wins():
     args = dict(instruction='Read the document', proposals=[(2, 'Set zoom to 100%.', 1)])
     selection = route(**args)
-    assert names(selection)[0] == 'view.readability'
+    assert names(selection) == []
     assert selection['excluded'][0]['reason'] == 'proposed_ratio_not_task_requirement'
     assert names(route(**{**args, 'instruction': 'Set zoom to 125%'}))[0] == 'view.zoom_value'
     assert names(route(**args, pending_effect={'phase': 'confirm_once', 'refs': [2, 3]}))[0] == 'view.zoom_confirm'
-    assert names(route(**args, pending_effect={'phase': 'inspect_effect', 'refs': [2, 3]}))[0] == 'view.zoom_check'
+    assert names(route(**args, pending_effect={'phase': 'inspect_effect', 'refs': [2, 3]})) == []
 
 
 @pytest.mark.parametrize('text,expected', [

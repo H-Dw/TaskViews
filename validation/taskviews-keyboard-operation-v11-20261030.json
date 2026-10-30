@@ -1,0 +1,102 @@
+{
+  "schema": "taskviews-offline-validation-v1",
+  "policy_version": "operation_knowledge_v11",
+  "selection_version": "operation_knowledge_selection_v2",
+  "passed": true,
+  "verified_at": "2026-10-30T23:12:21.259685+08:00",
+  "base_commit": "7956b016cd0afce5aafd9eceb776af736940005d",
+  "verification_kind": "Offline full repository regression; no model API, GUI or benchmark run",
+  "regression": {
+    "tests": 2146,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "checks": {
+    "ruff": {
+      "exit_code": 0,
+      "output": "All checks passed!"
+    },
+    "generated_keyboard_docs": {
+      "exit_code": 0,
+      "output": "{\"check\": true, \"changed\": []}"
+    },
+    "diff": {
+      "exit_code": 0,
+      "output": ""
+    }
+  },
+  "verification_runs": {
+    "full_repository": {
+      "tests": 2146,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "graph_suite_rerun": {
+      "tests": 22,
+      "failures": 0,
+      "errors": 0
+    },
+    "resolved_after_updating_budget_snapshot_assertion": [
+      {
+        "original": "tests.test_mini_graph.test_legacy_fixture_change_removes_only_keyboard_check_metadata",
+        "verified": "tests.test_mini_graph.test_legacy_fixture_changes_only_checks_and_budget_admitted_key_memory"
+      }
+    ]
+  },
+  "inventory": {
+    "cards": 34,
+    "topics": 99,
+    "bindings": 253
+  },
+  "removed_cards": [
+    "view.zoom_check",
+    "view.readability",
+    "clipboard.verify",
+    "capture.image",
+    "export.file",
+    "image.edit",
+    "pointer.drag",
+    "document.read"
+  ],
+  "delivery": {
+    "empty_keyboard_records": true,
+    "no_match_pseudo_card": false,
+    "generic_when": false,
+    "catalog_check_in_steps": false,
+    "result_check_coverage": false,
+    "procedure_coverage": "explicit_operation_contract"
+  },
+  "source_sha256": {
+    "README.md": "983012a9ca3dfb45257c7bd1a51cd7193142e3cc3cead9109c2abee7098bcf6e",
+    "docs/taskviews-mini-operation-knowledge-v11.md": "6ad840fe762192911fe99a68951fe8b75c058e39839e8652087c0d321edc86b6",
+    "kobe_views/decision_flow.py": "a74239a99dea9663fcb5ec79a6a8f2a9632468ec981dcb1ad676e6d136b3cc0d",
+    "kobe_views/guidance_delivery.py": "6694f47e9b796358941ebb8aa7517dd6ed0925067b78c8ecbf489a9a051a78ef",
+    "kobe_views/guidance_eligibility.py": "9dc0f96c320a08af50da392b3fc8998e07eec50ea826e4fd81ad3849df051df7",
+    "kobe_views/guidance_groups.py": "4867c0f76ae88c7f102fe20489c2e38a6de2f492ed7b82d86ad5abd356974f82",
+    "kobe_views/guidance_selection.py": "acfe1836eca66ee1e3d9832af5e317de78dd4033651b9580ae5954e7080578ee",
+    "kobe_views/key_tools/catalog.json": "5143a3a1ffce4bfe8706379b159b3eb48f682ddc4b73d8b31e844eed14850f58",
+    "kobe_views/key_tools/guidance.json": "da40766f2b4ebc37461b276004c6b3cd67c7db8982192fb0915ed2a2dae0d8e2",
+    "kobe_views/keyboard_guidance.py": "ea15fe7f02fd3af481c9b14d501f18b64966cf670e7d146cc5163e3b1084e436",
+    "kobe_views/keyboard_view.py": "3bc66645011b82297d9f926593b5871ceaa69f1fc845db0a761d306a912099b6",
+    "scripts/audit_mini_guidance.py": "1f63adc2bc17e6b9eca2b5f8197b6269fe00f87fd427fb4fd8641ebdfe6d14f1",
+    "tests/fixtures/mini_graph_legacy_v11.json": "dd451b763575189124260f1074a55e6dc77aef716b5f2904ec9e5c334c94a7ae",
+    "tests/test_decision_flow_v9.py": "4dd6341495aa9779339c0939d1a5110ab103d84a4375f649ed260f4d6b1e91af",
+    "tests/test_guidance_eligibility_v7.py": "3462940e74a3baac5a0bb31b1c65ae145f86cf1cf88e4f2ba4df3c11130df98f",
+    "tests/test_guidance_minimal_v5.py": "938872dabbe249680d29deb56146b55d8d9fe7c474b5ab4326f8e08363e394a0",
+    "tests/test_guidance_selection_v10.py": "f8e034f9a0643662aacac4d1408042fdfed75e7d1466dcd23142a38396a6cd6b",
+    "tests/test_guidance_semantics_v2.py": "96fbf7812516be5c4d9d2f881b5a36dbe602356aa95f01d7b981f7a2bcf9f05b",
+    "tests/test_guidance_stage_v4.py": "1ac8a76641a7efa41fec04972ef29e693ae06c1e7c0c132747cea327a31412ca",
+    "tests/test_keyboard_guidance.py": "9b13e6af1fb6234997af1efd1a9e3ae96c7662a98317e4861b5b90aa11798042",
+    "tests/test_keyboard_operation_knowledge_v11.py": "3292f6da997f7dcb762f6ac863fd102df5b46354aae4fbf530cdeb7c3dc80971",
+    "tests/test_mini_artifact_evidence.py": "5b7c564cd64a6e40332173ba5958ea8a92b11cd2a7a36beac4853bc55177af72",
+    "tests/test_mini_graph.py": "1a5c8484173b0ce1575173bd759a43e3d435ed3a8139e6583ce6c0b36a43790f",
+    "tests/test_operation_support.py": "55abb59c811f3259b0a5cf866bb774da57afa0e2c3a7ea450f8e41d72db3f78e",
+    "tests/test_optional_keyboard_v8.py": "150a3abfc26437c81c297498b3790880d759aee93985ee00116b631b5ec9c82d",
+    "tests/test_reading_support_v6.py": "31da405588c770dc08b1f4ad147bf820c0f15ff27ffc4fbf5ac22db487aa16bd",
+    "tools/keyboard/README.md": "4b5af1e4b7e3d71cd5e46fd49eff4df8719ad0cc6c2079a8d2e041cebef6b287",
+    "tools/keyboard/types/file_manager.md": "331126316e4b2ecd924f73cc181aa28fb6a8e759db4cfc63c5452f16d89b1d11",
+    "ui_kobe/osworld/mini_keyboard_lookup.py": "fdb85e186894a78fb937a0dd890f0fa60820d9d249ea5b1b21863809d739ad03"
+  }
+}

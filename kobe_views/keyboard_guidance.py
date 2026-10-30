@@ -19,15 +19,15 @@ from . import guidance_selection as selection
 from .guidance_eligibility import (VERSION as ELIGIBILITY_VERSION, catalog_operation,
                                   contextual_reason, guide_reason, owner, software_reason)
 
-VERSION = 'capability_guidance_v10'
+VERSION = 'operation_knowledge_v11'
 ENV = 'UI_KOBE_MINI_GUIDANCE'
 LIBRARY = json.loads((Path(__file__).parent / 'key_tools/guidance.json').read_text(encoding='utf-8'))
 validate_library(LIBRARY)
-PACKING = 'layered_guidance_v10'
+PACKING = 'operation_knowledge_v11'
 SOURCE_ENCODING = 'journal_seq_local_audit_v1'
 HISTORY = 96
 TTL = 6
-VERIFY_TTL = 2
+COMPLETED_TTL = 2
 
 REFERENCE_INTENTS = {'zoom_in': 'zoom in', 'zoom_out': 'zoom out', 'actual_pixels': 'actual pixels', 'play': 'toggle playback',
                      'stop': 'stop playback', 'fullscreen': 'toggle full screen',
@@ -59,7 +59,7 @@ def policy(fields, enabled, *, review_prompt='full', decision_limit=None,
             'instruction_sha256': hashlib.sha256(fields['instruction'].encode()).hexdigest(),
             'task_input_sha256': digest(fields), 'capabilities': capabilities(fields['instruction']),
             'enabled_toolsets': sorted(set(enabled)), 'history_events': HISTORY,
-            'pending_decision_ttl': TTL, 'verification_decision_ttl': VERIFY_TTL,
+            'pending_decision_ttl': TTL, 'completed_decision_ttl': COMPLETED_TTL,
             'extra_model_calls': 'zero_automatic_at_most_one_optional_knowledge_roundtrip',
             'decision_flow': decision_flow_policy(), 'focus_confirmation': 'required_not_inferred',
             'intent_sources': ['original_task', 'bounded_public_proposals', 'current_public_knowledge_request',
@@ -141,9 +141,9 @@ def workflow(rows, instruction, step):
             state = None
             invalidations.append({'ref': seq, 'reason': 'dismissed'})
         if key in (('c', 'ctrl'), ('ctrl', 'x'), ('ctrl', 'v')):
-            phase = 'verify' if key == ('ctrl', 'v') else 'pending_paste'
+            phase = 'completed' if key == ('ctrl', 'v') else 'pending_paste'
             state = {'phase': phase, 'ref': seq, 'started_step': event['step'],
-                     'expires_step': event['step'] + (VERIFY_TTL if phase == 'verify' else TTL),
+                     'expires_step': event['step'] + (COMPLETED_TTL if phase == 'completed' else TTL),
                      'effect_status': 'unknown'}
     if state and step > state['expires_step']:
         invalidations.append({'ref': state['ref'], 'reason': 'expired'})
@@ -169,10 +169,8 @@ def guide(name, evidence, *, library=LIBRARY):
 
 def model_card(record):
     """Keep every actionable field; source URL and ranking stay in local audit."""
-    result = {k: deepcopy(v) for k, v in record.items() if k not in ('source', 'basis', 'applicability')}
+    result = {k: deepcopy(v) for k, v in record.items() if k not in ('source', 'basis', 'applicability', 'when', 'check')}
     result['source_ref'] = 's-' + digest(record['source'])[:12]
-    # A short precondition replaces the verbose internal applicability enum.
-    result['when'] = 'Verify app, scope and focus in the current image.'
     return result
 
 
@@ -300,12 +298,9 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
                            'sources': sources, **r})[:12], **deepcopy(r)} for r in selected])
         body = {'grade': 'operation_guidance', 'scope': entry['scope'], 'recipes': recipes,
                 'group_kind': 'alternatives' if len(recipes) > 1 else 'single_operation',
-                'steps': 'Choose the applicable binding; do not execute alternatives as a sequence. ' + entry['check'],
+                'steps': 'Choose one applicable binding; alternatives are not a sequence.',
                 'source': sources, 'evidence': [{'ref': n} for n in sorted({observation_ref, *refs})],
                 'applicability': 'conditional_verify_app_and_focus'}
-        if selected and all(r['intent'].casefold() in ('zoom in', 'zoom out') for r in selected):
-            body['steps'] = ('If already readable, read. Otherwise verify app/focus, use ONE applicable binding once, '
-                             'then inspect readability/bounds. Do not chase an arbitrary percentage. ' + entry['check'])
         identity = 'catalog.' + topic + ':' + digest({k: v for k, v in body.items() if k != 'evidence'})[:12]
         body['guide_id'] = identity
         body['basis'] = origin
@@ -328,7 +323,8 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
         value = {'record': guide(name, [observation_ref, *refs], library=library),
                  'origin': origin, 'workflow': bool(entry.get('workflow')) or origin == 'executed_workflow',
                  'contract': selection.contract(entry['operations'], entry['bindings'],
-                    scope=selection.scope_for_guide(entry), workflow=entry.get('workflow')),
+                    scope=selection.scope_for_guide(entry), workflow=entry.get('workflow'),
+                    procedure_operations=entry['procedure_operations']),
                  'requested_reference': requested}
         value['record']['basis'] = origin
         selection.merge_candidate(candidates, name, value)
@@ -368,22 +364,16 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
                      'move': 'files.move' if file_task else None,
                      'transfer': 'files.transfer' if file_task else None,
                      'paste': 'clipboard.paste', 'rename': 'files.rename',
-                     'capture': 'vlc.capture' if 'app.vlc' in enabled else 'capture.image',
-                     'export': 'gimp.export' if 'app.gimp' in enabled else 'export.file',
+                     'capture': 'vlc.capture' if 'app.vlc' in enabled else None,
+                     'export': 'gimp.export' if 'app.gimp' in enabled else None,
                      'edit': 'text.edit', 'confirm': 'text.confirm', 'dismiss': 'ui.dismiss',
                      'undo': 'history.undo', 'find': 'document.find', 'open': 'document.open',
                      'save': 'document.save', 'save_as': 'document.save_as', 'down': 'navigation.down', 'up': 'navigation.up',
-                     'menu_open': 'menu.open', 'reading': 'document.read', 'maximize': 'window.maximize',
-                     'readability': 'view.readability',
+                     'menu_open': 'menu.open', 'maximize': 'window.maximize',
                      'horizontal_scroll': 'navigation.horizontal', 'zoom_value': 'view.zoom_value',
                      'zoom_in': 'view.zoom_in', 'zoom_out': 'view.zoom_out',
-                     'image_edit': 'image.edit', 'drag': 'pointer.drag',
                      'window_locate': 'window.locate', 'folder_open': 'folder.open',
                      'url_open': 'url.open', 'file_find': 'files.find'}
-            # Enabled software is not the current software. Specific export
-            # and capture bindings must establish their own target contract.
-            if op in ('capture', 'export'):
-                add('capture.image' if op == 'capture' else 'export.file', origin, refs)
             if names.get(op):
                 add(names[op], origin, refs)
             matched = False
@@ -434,10 +424,6 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
             continue
         choose(immediate_actions(parsed), proposal_origin, [seq],
                file_task=parsed['file_context'], text=parsed['text'])
-        if any(item['kind'] in ('non_clipboard_expression', 'unreadable') for item in parsed['states']):
-            context['ops'] = {'readability'}
-            add('view.readability', 'reported_clipping_unverified', [seq])
-            context['ops'] = immediate_actions(parsed)
         if position == 0:
             lookup = re.findall(r'<key_lookup>([a-z0-9_.]+)</key_lookup>', text or '')
             if (len(lookup) == 1 and (text or '').count('<key_lookup') == 1
@@ -468,33 +454,14 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
     # Literal repetition stays in the audit. It does not establish a keyboard
     # need and must not manufacture a generic refocusing card. Source-bound
     # execution conditions, where present, are delivered through Current.
-    # A concrete pending action takes priority over a generic re-grounding
-    # card. Its focus remains conditional and its exact provenance is audited.
-    if pending_effect:
-        name = 'view.zoom_confirm' if pending_effect['phase'] == 'confirm_once' else 'view.zoom_check'
-        context.update(ops={'zoom_value'}, text=current_text, phase=pending_effect['phase'])
-        add(name, 'executed_zoom_effect_unconfirmed', pending_effect['refs'])
-    elif reading_goal:
-        # A model's chosen percentage does not make it a user requirement.
-        # Keep the proposal locally, but first inspect whether adjustment is
-        # needed. Explicit precise-ratio tasks and image editing are excluded.
-        if 'view.zoom_value' in candidates:
-            old = candidates.pop('view.zoom_value')
-            refs = [e['ref'] for e in old['record']['evidence']]
-            context.update(ops={'readability'}, phase=None)
-            add('view.readability', 'readability_before_proposed_ratio', refs)
-            excluded.append({'guide': 'view.zoom_value', 'reason': 'proposed_ratio_not_task_requirement'})
-        if adjustment_chain:
-            context.update(ops={'readability'}, phase=None)
-            add('view.readability', 'reading_adjustment_effect_unconfirmed',
-                [e['ref'] for e in adjustment_chain['evidence']])
-    # A source-bound readability report is conditional advice, not visual
-    # certification. It can retire an arbitrary zoom target, never a task's
-    # explicitly required precise ratio. Pending input stays in local audit.
-    if readable_now:
-        context.update(ops={'reading'}, phase=None)
-        add('document.read', 'public_readability_report_unverified',
-            [readability['ref'], readability['before']])
+    # Keyboard supplies the remaining Enter operation only. Actual scale,
+    # readability and post-action verification remain in Current/feedback.
+    if pending_effect and pending_effect['phase'] == 'confirm_once':
+        context.update(ops={'zoom_value'}, text=current_text, phase='confirm_once')
+        add('view.zoom_confirm', 'executed_zoom_entry', pending_effect['refs'])
+    elif reading_goal and 'view.zoom_value' in candidates:
+        candidates.pop('view.zoom_value')
+        excluded.append({'guide': 'view.zoom_value', 'reason': 'proposed_ratio_not_task_requirement'})
     if pending_effect:
         # Neither stale prose nor an explicit lookup may restart a completed
         # entry stage; retain excluded candidates in audit for diagnosis.
@@ -516,7 +483,7 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
             if name in candidates:
                 del candidates[name]
                 excluded.append({'guide': name, 'reason': 'superseded_by_execution_phase'})
-        name = 'clipboard.verify' if state['phase'] == 'verify' else 'clipboard.paste'
+        name = 'clipboard.paste' if state['phase'] == 'pending_paste' else None
         # Explicit legacy clipboard lookups also cannot revive the earlier
         # phase. Other catalog lookups remain available as supplemental advice.
         for key, value in list(candidates.items()):
@@ -526,21 +493,21 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
         # A destination-entry/dismissal proposal can be more immediate than
         # paste; keep paste as a candidate without pretending focus is ready.
         context.update(ops={'paste'}, text=current_text, phase=state['phase'])
-        if add(name, 'executed_workflow', [state['ref']]):
+        if name and add(name, 'executed_workflow', [state['ref']]):
             candidates[name]['record']['workflow'] = {k: v for k, v in state.items() if k != 'started_step'}
     # Phase compatibility is a named rule, never a numeric preference.
     phase_names = None
     phase_kind = 'clipboard_' + state['phase'] if state else 'unconstrained'
     if readable_now:
-        phase_names = {'document.read'}
+        phase_names = set()
         phase_kind = 'readable_report'
     elif pending_effect:
-        phase_names = {'view.zoom_confirm' if pending_effect['phase'] == 'confirm_once' else 'view.zoom_check'}
+        phase_names = {'view.zoom_confirm'} if pending_effect['phase'] == 'confirm_once' else set()
         phase_kind = 'zoom_' + pending_effect['phase']
     elif adjustment_chain and reading_goal:
-        phase_names = {'view.readability'}
+        phase_names = set()
         phase_kind = 'view_adjustment_inspection'
-    if phase_names:
+    if phase_names is not None:
         for key in list(candidates):
             if key not in phase_names:
                 del candidates[key]
@@ -562,7 +529,7 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
         sources[alias] = source
     return {'version': VERSION, 'groups': ordered, 'workflow': state, 'invalidations': invalidations,
             'excluded': excluded, 'needed_groups': [ordered[0]['record']['guide_id']] if ordered else [],
-            'selection_status': 'matched' if ordered else 'no_match',
+            'selection_status': 'matched' if ordered else 'empty',
             'selection_explanation': explanation,
             'coverage_gaps': gaps, 'semantic_audit': semantic_audit, 'guide_sources': sources, 'literal_cycle': cycle,
             'need_basis': 'deterministic_router_estimate_not_ground_truth',
@@ -584,7 +551,7 @@ def delivery_audit(selection, records, directory_visible, delivered=False):
     eligible = {c['record']['guide_id']: c['record'] for c in selection['groups']}
     invalid = sum(r['guide_id'] not in eligible or not equal(r, eligible[r['guide_id']]) for r in records) if delivered else 0
     return {'packet_delivered': delivered, 'directory_visible': delivered and directory_visible,
-            'selection_status': selection.get('selection_status', 'matched' if selection['groups'] else 'no_match'),
+            'selection_status': selection.get('selection_status', 'matched' if selection['groups'] else 'empty'),
             'matching_group_count': len(selection['groups']),
             'coverage_gap_count': len(selection.get('coverage_gaps', [])),
             'needed_recipe_count': len(needed_recipes), 'needed_recipes_delivered': len(needed_recipes & sent_recipes),

@@ -18,7 +18,7 @@ def test_candidates_use_named_criteria_without_numeric_priorities():
     assert all('score' not in c and set(c['criteria']) == set(rules.LAYERS) for c in value['groups'])
     why = value['selection_explanation']
     assert why['winner_criteria']['software_object'] == 'explicit_application'
-    assert why['comparisons'][0]['deciding_layer'] == 'software_object'
+    assert why['comparisons'] == []  # No generic export fallback competes with the app command.
     assert rules.policy()['numeric_priorities'] is False
 
 
@@ -38,12 +38,11 @@ def test_explicit_reference_is_an_intent_choice_and_cannot_override_eligibility(
     kwargs = {'instruction': 'Export in GIMP', 'enabled': ['general', 'app.gimp'],
               'proposals': [(3, 'Export in GIMP <key_lookup>export.file</key_lookup>', 1)]}
     value = route(**kwargs)
-    assert names(value)[0] == 'export.file'
-    assert value['selection_explanation']['comparisons'][0]['deciding_layer'] == 'intent_match'
+    assert names(value) == ['gimp.export']
+    assert any(c.get('reason') == 'lookup_not_enabled_or_unknown' for c in value['coverage_gaps'])
     # An explicitly requested card that lacks the needed binding is still rejected.
     value = route(**kwargs, missing_knowledge='Exact export keyboard shortcut')
     assert names(value)[0] == 'gimp.export'
-    assert any(c['reason'] == 'knowledge_gap_not_covered' for c in value['excluded'])
     assert not any(gap['reason'] == 'knowledge_gap_not_covered' for gap in value['coverage_gaps'])
 
 
@@ -69,37 +68,35 @@ def test_detailed_gap_is_a_filter_not_permission_to_expand_frozen_capabilities()
 
 @pytest.mark.parametrize('gap,matched', [
     ('Exact keyboard binding for editing the image', False),
-    ('The procedure for editing the image', True),
-    ('A binding or procedure for editing the image', True),
+    ('The procedure for editing the image', False),
+    ('A binding or procedure for editing the image', False),
 ])
 def test_unrelated_undo_binding_does_not_fill_an_image_edit_binding_gap(gap, matched):
     value = route(instruction='Edit the image', missing_knowledge=gap)
     assert bool(value['groups']) == matched
-    if matched:
-        assert names(value)[0] == 'image.edit'
+    assert 'image.edit' not in g.LIBRARY['guides']
 
 
 @pytest.mark.parametrize('gap,matched', [
     ('Exact keyboard shortcut for dragging', False),
-    ('Procedure and parameters for dragging', True),
-    ('Keyboard binding or applicable procedure', True),
+    ('Procedure and parameters for dragging', False),
+    ('Keyboard binding or applicable procedure', False),
 ])
 def test_procedure_can_be_useful_without_a_binding_but_not_when_a_binding_is_required(gap, matched):
     value = route(instruction='Drag the object', missing_knowledge=gap)
     assert bool(value['groups']) == matched
-    if matched:
-        assert selected(value)['record']['recipes'] == []
+    assert 'pointer.drag' not in g.LIBRARY['guides']
 
 
 def test_app_directory_alone_is_not_an_application_match():
     value = route(instruction='Export the document', enabled=['general', 'app.gimp'])
-    assert names(value) == ['export.file']
+    assert names(value) == []
     value = route(instruction='Export the document', enabled=['general', 'app.gimp'],
                   missing_knowledge='Exact export keyboard binding')
     assert names(value) == []  # No invented GIMP shortcut from an enabled directory.
 
 
-@pytest.mark.parametrize('phase,name', [('confirm_once', 'view.zoom_confirm'), ('inspect_effect', 'view.zoom_check')])
+@pytest.mark.parametrize('phase,name', [('confirm_once', 'view.zoom_confirm')])
 def test_phase_is_a_gate_before_explicit_reference_or_scope(phase, name):
     value = route(instruction='Read content', proposals=[(3, 'Zoom in <key_lookup>view.zoom_in</key_lookup>', 1)],
                   pending_effect={'phase': phase, 'refs': [3, 4]})
@@ -113,9 +110,7 @@ def test_readability_conflict_has_one_named_branch_and_preserves_proposal_grade(
     value = route(instruction='Read the document', proposals=[(3, 'Read the document', 1)],
         pending_effect={'phase': 'inspect_effect', 'refs': [3, 4]},
         readability={'state': 'readable', 'ref': 3, 'before': 2})
-    assert names(value) == ['document.read']
-    assert selected(value)['origins'] == ['public_proposal', 'public_readability_report_unverified']
-    assert {'ref': 2} in selected(value)['record']['evidence']
+    assert names(value) == []  # Reading report and verification remain outside Keyboard.
     assert value['selection_explanation']['phase']['kind'] == 'readable_report'
     assert value['selection_explanation']['phase']['readability_is'] == 'unverified_public_report'
 
@@ -126,8 +121,8 @@ def test_explicit_destination_action_precedes_pending_paste_without_a_threshold(
     assert selected(value)['criteria']['phase'] == 'current_prerequisite'
     assert next(c for c in value['groups'] if c['record']['guide_id'].startswith('clipboard.paste:'))['criteria']['phase'] == 'pending_continuation'
     value = route(rows=[event(['ctrl', 'v'])], proposals=[(3, 'Type the destination path', 1)])
-    assert names(value)[0] == 'clipboard.verify'
-    assert selected(value)['criteria']['phase'] == 'post_action_check'
+    assert names(value)[0] == 'text.edit'
+    assert selected(value)['criteria']['phase'] == 'unconstrained'
 
 
 @pytest.mark.parametrize('kind', ['pending_effect', 'readability', 'adjustment_chain'])
@@ -135,7 +130,7 @@ def test_expired_source_state_is_filtered_before_phase_selection(kind):
     record = {'refs': [3], 'ref': 3, 'before': 2, 'evidence': [{'ref': 3}],
               'phase': 'confirm_once', 'state': 'readable', 'expires_step': 1}
     value = route(instruction='Read content', **{kind: record})
-    assert names(value) == ['document.read']
+    assert names(value) == []
     assert any(c['reason'] == 'expired_or_outside_task_state' for c in value['excluded'])
 
 
@@ -146,9 +141,9 @@ def test_unknown_gap_is_not_reported_as_proven_coverage():
 
 
 def test_or_gap_reports_which_alternative_is_available_without_inventing_a_binding():
-    value = route(instruction='Drag the object', missing_knowledge='A keyboard binding or procedure')
+    value = route(instruction='Copy selected text', missing_knowledge='A keyboard binding or result check')
     assert selected(value)['criteria']['knowledge_gap'] == 'alternative_covered'
-    assert selected(value)['gap_coverage']['requirements'] == {'binding': False, 'procedure': True}
+    assert selected(value)['gap_coverage']['requirements'] == {'binding': True, 'result_check': False}
 
 
 def test_uncovered_workflow_does_not_become_proven_by_a_steps_field_alone():

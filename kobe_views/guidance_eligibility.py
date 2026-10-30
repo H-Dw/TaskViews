@@ -8,25 +8,23 @@ import re
 
 from .guidance_semantics import NEGATIVE, LITERALS
 
-VERSION = 'guidance_applicability_v2'
+VERSION = 'operation_knowledge_applicability_v3'
 
 GUIDE_OPS = {
     'clipboard.copy_paste': ['copy'], 'clipboard.move_paste': ['cut'],
     'clipboard.transfer': ['copy', 'cut', 'transfer'], 'files.transfer': ['transfer', 'copy', 'cut', 'move'],
     'clipboard.copy': ['copy'], 'clipboard.cut': ['cut'], 'clipboard.paste': ['paste'],
-    'clipboard.verify': ['paste'], 'files.copy': ['copy'], 'files.move': ['cut', 'move'],
+    'files.copy': ['copy'], 'files.move': ['cut', 'move'],
     'files.rename': ['rename'], 'text.edit': ['edit'], 'text.replace_confirm': ['edit', 'confirm'],
     'text.confirm': ['confirm'], 'ui.dismiss': ['dismiss'], 'history.undo': ['undo'],
     'document.find': ['find'], 'document.open': ['open'], 'document.save': ['save'],
     'document.save_as': ['save_as'],
-    'navigation.down': ['down'], 'navigation.up': ['up'], 'capture.image': ['capture'],
-    'export.file': ['export'], 'vlc.capture': ['capture'], 'gimp.export': ['export'],
+    'navigation.down': ['down'], 'navigation.up': ['up'],
+    'vlc.capture': ['capture'], 'gimp.export': ['export'],
     'navigation.horizontal': ['horizontal_scroll'], 'view.zoom_value': ['zoom_value'],
-    'view.zoom_confirm': ['zoom_value'], 'view.zoom_check': ['zoom_value'],
-    'view.readability': ['reading', 'readability'], 'menu.open': ['menu_open'],
-    'document.read': ['reading'], 'window.maximize': ['maximize'],
+    'view.zoom_confirm': ['zoom_value'], 'menu.open': ['menu_open'],
+    'window.maximize': ['maximize'],
     'view.zoom_in': ['zoom_in'], 'view.zoom_out': ['zoom_out'],
-    'pointer.drag': ['drag'], 'image.edit': ['image_edit'],
     'window.locate': ['window_locate'], 'folder.open': ['folder_open'],
     'url.open': ['url_open'], 'files.find': ['file_find'],
 }
@@ -116,9 +114,8 @@ def guide_reason(name, entry, *, ops, frozen, enabled, text, origin, data, phase
     if required:
         return 'directory_not_frozen', sorted(required)
     supported = set(entry['operations'])
-    if name in ('view.zoom_confirm', 'view.zoom_check', 'clipboard.verify'):
-        expected = {'view.zoom_confirm': 'confirm_once', 'view.zoom_check': 'inspect_effect', 'clipboard.verify': 'verify'}[name]
-        if phase != expected:
+    if name == 'view.zoom_confirm':
+        if phase != 'confirm_once':
             return 'execution_phase_not_established', []
     if not supported & ops:
         return 'operation_mismatch', []

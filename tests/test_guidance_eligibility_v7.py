@@ -22,14 +22,11 @@ CARD_CASES = [
     ('document.open', 'Open the document'), ('document.save', 'Save the document'),
     ('document.save_as', 'Save as a new document'),
     ('navigation.down', 'Scroll down'), ('navigation.up', 'Scroll up'),
-    ('capture.image', 'Take a desktop screenshot'), ('export.file', 'Export the document'),
     ('vlc.capture', 'Take a snapshot in VLC'), ('gimp.export', 'Export in GIMP'),
     ('navigation.horizontal', 'Scroll right'), ('view.zoom_value', 'Set zoom to 125%'),
-    ('view.readability', 'Adjust the zoom'), ('menu.open', 'Open the View menu'),
-    ('document.read', 'Read the document'), ('window.maximize', 'Maximize the window'),
+    ('menu.open', 'Open the View menu'), ('window.maximize', 'Maximize the window'),
     ('view.zoom_in', 'Zoom in'), ('view.zoom_out', 'Zoom out'),
-    ('pointer.drag', 'Drag the object'),
-    ('image.edit', 'Edit the image'), ('window.locate', 'Find the Archive window'),
+    ('window.locate', 'Find the Archive window'),
     ('folder.open', 'Enter the folder'), ('url.open', 'Open the website'),
     ('files.find', 'Find the file'),
 ]
@@ -42,13 +39,14 @@ def test_each_authored_card_has_a_matching_public_need(card, text):
     assert not value['groups'][0]['record']['recipes'] or value['groups'][0]['record']['scope']
 
 
-def test_three_phase_cards_require_real_phase_and_complete_contract_inventory():
-    assert names(route(rows=[event(['ctrl', 'v'])]))[0] == 'clipboard.verify'
-    for phase, name in [('confirm_once', 'view.zoom_confirm'), ('inspect_effect', 'view.zoom_check')]:
+def test_confirmation_requires_real_phase_and_complete_contract_inventory():
+    assert names(route(rows=[event(['ctrl', 'v'])])) == []
+    for phase, name in [('confirm_once', 'view.zoom_confirm')]:
         assert names(route(instruction='Read content', pending_effect={'phase': phase, 'refs': [4]}))[0] == name
         value = route(instruction='Read content', proposals=[(3, f'<key_lookup>{name}</key_lookup>', 1)])
         assert name not in names(value)
-    assert {n for n, _ in CARD_CASES} | {'clipboard.verify', 'view.zoom_confirm', 'view.zoom_check'} == set(g.LIBRARY['guides'])
+    assert names(route(instruction='Read content', pending_effect={'phase': 'inspect_effect', 'refs': [4]})) == []
+    assert {n for n, _ in CARD_CASES} | {'view.zoom_confirm'} == set(g.LIBRARY['guides'])
     bad = deepcopy(g.LIBRARY)
     bad['guides']['document.open']['operations'] = ['menu_open']
     with pytest.raises(ValueError, match='contract mismatch'):
@@ -108,9 +106,8 @@ def test_missing_frozen_capability_blocks_all_origins_and_keeps_explicit_gap():
     value = route(instruction='Read the text', proposals=[(3, 'Move the file. <key_lookup>files.move</key_lookup>', 1)])
     assert names(value) == []
     assert any('move' in gap['missing'] for gap in value['coverage_gaps'])
-    for card in ('clipboard.paste', 'clipboard.verify'):
-        value = route(instruction='Read content', rows=[event(['ctrl', 'v'], instruction='Read content')])
-        assert card not in names(value)
+    value = route(instruction='Read content', rows=[event(['ctrl', 'c'], instruction='Read content')])
+    assert value['groups'] == []
     assert any(gap['reason'] == 'capability_not_frozen' for gap in value['coverage_gaps'])
 
 
@@ -118,12 +115,12 @@ def test_current_need_lookup_and_software_must_agree_before_ranking():
     value = route(instruction='Read then export in GIMP',
                   proposals=[(3, 'Read the document. <key_lookup>gimp.export</key_lookup>', 1)],
                   enabled=['general', 'app.gimp'])
-    assert names(value) == ['document.read']
+    assert names(value) == []
     assert any(e['reason'] == 'operation_mismatch' for e in value['excluded'])
     value = route(instruction='Take a desktop screenshot', enabled=['general', 'app.vlc'])
-    assert names(value) == ['capture.image']
+    assert names(value) == []
     value = route(instruction='Take a desktop screenshot in VLC', enabled=['general', 'app.vlc'])
-    assert names(value) == ['capture.image']
+    assert names(value) == []
     value = route(instruction='Read PDF', proposals=[(3, 'Zoom out', 1)], enabled=['general', 'app.gimp', 'app.evince'])
     assert names(value) == ['view.zoom_out']
     value = route(instruction='Read PDF', proposals=[(3, 'Zoom out in Evince', 1)], enabled=['general', 'app.gimp', 'app.evince'])
@@ -151,10 +148,10 @@ def test_unmapped_catalog_binding_stays_local_with_explicit_gap():
 
 def test_old_intent_and_future_task_stage_do_not_compete_with_current_need():
     value = route(instruction='Read the document, then move files')
-    assert names(value) == ['document.read']
+    assert names(value) == []
     value = route(instruction='Read the document, then move files', step=3,
         proposals=[(6, 'Read the content', 2), (3, 'Move the files', 1)])
-    assert names(value) == ['document.read']
+    assert names(value) == []
     assert any(e['reason'] == 'superseded_public_intention' for e in value['excluded'])
     value = route(instruction='Read documents and move files')
     assert names(value) == []

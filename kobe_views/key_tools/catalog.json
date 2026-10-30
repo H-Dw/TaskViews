@@ -2032,7 +2032,7 @@
       "note": "",
       "topics": {
         "rename": {
-          "scope": "GNOME Files/Explorer selected file; observe editable basename or complete name",
+          "scope": "GNOME Files/Explorer selected file; editable basename or complete name; preserve the extension exactly once",
           "sources": [
             "files_rename",
             "windows"

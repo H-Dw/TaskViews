@@ -25,9 +25,9 @@ def policy():
     return {'version': VERSION, 'stages': ['route', 'attempt_reuse', 'optional_knowledge', 'ground', 'feedback'],
             'actor': 'same_native_actor', 'lookup_tool': TOOL, 'max_lookups_per_predict': MAX_LOOKUPS,
             'max_query_utf8_bytes': MAX_QUERY_BYTES, 'lookup_budget': 'shared_actor_deadline_and_output',
-            'dispatch': 'lookup_and_gui_are_separate', 'no_match': 'native_actor_decides',
+            'dispatch': 'lookup_and_gui_are_separate', 'empty_keyboard': 'native_actor_decides',
             'prefetched_cards': 'optional_not_a_route_current_query_overrides',
-            'knowledge_gap_usage': 'layered_guidance_selection_v1_public_requirements',
+            'knowledge_gap_usage': 'operation_knowledge_only_v2',
             'attempt_retrieval': 'same_task_public_object_operation_overlap_v1'}
 
 
@@ -40,7 +40,7 @@ def tool_schema():
             'intent': {'type': 'string', 'minLength': 1, 'maxLength': 160,
                        'description': 'Brief intended operation, target app/object and stage; no private reasoning.'},
             'missing_knowledge': {'type': 'string', 'minLength': 1, 'maxLength': 120,
-                                 'description': 'The specific binding, procedure or result check needed; state required followups, not a task plan.'}},
+                                 'description': 'The specific operation binding or procedure needed; state required followups. Task/result verification belongs to Current and execution feedback.'}},
             'required': ['intent', 'missing_knowledge'], 'additionalProperties': False}}}
 
 

@@ -10,9 +10,31 @@ from kobe_views.model import dumps
 from mini_graph_support import actor_fixture, legacy_capture, projection_snapshot
 
 
-def test_original_legacy_packets_and_actor_requests_match_prechange_capture(monkeypatch, tmp_path):
-    expected = json.loads(Path(__file__).with_name('fixtures').joinpath('mini_graph_legacy.json').read_text())
+def test_legacy_packets_and_actor_requests_match_operation_only_capture(monkeypatch, tmp_path):
+    expected = json.loads(Path(__file__).with_name('fixtures').joinpath('mini_graph_legacy_v11.json').read_text())
     assert legacy_capture(monkeypatch, tmp_path) == expected
+
+
+def test_legacy_fixture_changes_only_checks_and_budget_admitted_key_memory():
+    fixtures = Path(__file__).with_name('fixtures')
+    before = json.loads((fixtures / 'mini_graph_legacy.json').read_text())
+    after = json.loads((fixtures / 'mini_graph_legacy_v11.json').read_text())
+    assert before['label'] == after['label']
+    assert len(before['packets']) == len(after['packets'])
+    for old, new in zip(before['packets'], after['packets']):
+        packet = json.loads(old)
+        updated = json.loads(new)
+        for row, replacement in zip(packet['views']['keyboard']['records'], updated['views']['keyboard']['records']):
+            row.pop('check', None)
+            # Removing the long generic check leaves room for one existing
+            # source-bound key record; it does not fabricate success/history.
+            assert replacement['memory'][:len(row['memory'])] == row['memory']
+            assert len(row['memory']) + row['memory_omitted'] == len(replacement['memory']) + replacement['memory_omitted']
+            for memory in replacement['memory'][len(row['memory']):]:
+                assert memory['ref'] == 6 and str(memory['ref']) in updated['sources']
+                assert memory['keys'] == ['ctrl', 'a'] and memory['effect_status'] == 'unknown'
+            row['memory'], row['memory_omitted'] = replacement['memory'], replacement['memory_omitted']
+        assert packet == updated
 
 
 def snapshot(actor):

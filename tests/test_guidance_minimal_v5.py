@@ -50,7 +50,7 @@ def test_report_requires_source_and_fresh_view_and_overrides_arbitrary_zoom_only
     assert readability_report(rows, 'Copy files', 5) is None
     assert readability_report(rows[1:], 'Copy files', 3) is None
     assert readability_report(rows + [action(3, {'action': 'scroll', 'direction': 'down', 'pixels': 40})], 'Copy files', 4) is None
-    assert names(route(instruction='Read content', proposals=[(2, 'Zoom in', 2)], step=3, readability=report))[0] == 'document.read'
+    assert names(route(instruction='Read content', proposals=[(2, 'Zoom in', 2)], step=3, readability=report)) == []
     precise = route(instruction='Set zoom to 125%', readability=report)
     assert names(precise)[0] == 'view.zoom_value'
     card = precise['groups'][0]['record']
@@ -78,8 +78,7 @@ def test_silent_input_uses_bounded_context_and_never_certifies_focus():
     rows += [action(7, {'action': 'key', 'keys': ['return']}, step=3), obs(8)]
     state, _ = pending_effect(rows, 'Copy files', 4)
     assert state['phase'] == 'inspect_effect' and state['effect'] == 'unknown'
-    assert names(route(instruction='Read content', pending_effect=state))[0] == 'view.zoom_check'
-    assert not route(instruction='Read content', pending_effect=state)['groups'][0]['record']['recipes']
+    assert names(route(instruction='Read content', pending_effect=state)) == []
 
 
 @pytest.mark.parametrize('case', ['no_source', 'other_intent', 'scope_changed', 'wrong_task', 'failed_input', 'expired'])

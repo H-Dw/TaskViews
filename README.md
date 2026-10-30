@@ -20,7 +20,7 @@ TaskViews 为 computer-use agent 按信息职责组织上下文：让基础操�
 
 当前开发版已[移除 `focus.verify` 无匹配回退卡](docs/taskviews-mini-optional-keyboard-v8.md)，并接入[同一 actor 的五阶段流程](docs/taskviews-mini-five-stage-v9.md)：先结合 Current、Lessons 与 Attempts 判断路线，按需通过 `keyboard_lookup` 补充具体操作知识，再构建原生命令。没有适用指导仍可直接决策。每步最多一次可选知识往返，共用原时间和 token 预算；尚无新的在线性能结论。
 
-Keyboard 当前采用[分层选择规则 v10](docs/taskviews-mini-layered-selection-v10.md)，已移除数值评分，依次检查阶段、当前需求、软件与对象和声明的知识缺口，最后以稳定内容 ID 决定同条件顺序。
+Keyboard 当前采用[操作知识边界 v11](docs/taskviews-mini-operation-knowledge-v11.md)：保留分层选择，移除核验、泛化截图／导出、图像编辑和拖拽提示卡。结果核验由 Current 与执行反馈承担；空结果直接呈现空 Keyboard，不生成 `no_match` 卡片状态。`when` 和目录 `check` 不再送入操作卡，也不计为知识覆盖；方法覆盖须有明确的主操作契约。
 
 **Graph 模式也尚未开发完毕，keyboard 的优化仍是当前未完成的前置工作。** 表中 Graph 测试数值包含当时 keyboard 匹配及有效指导送达缺陷的干扰，不能据此单独归因 Graph／links 的收益。当前只实现了部分身份、共享事实与引用组织；linked 尚未包含完整图检索或路径规划。历史实验使用各自冻结的 keyboard，不等于当前优化候选已经完成验证。
 

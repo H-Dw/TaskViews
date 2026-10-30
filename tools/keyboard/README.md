@@ -25,6 +25,8 @@
 `guidance_semantics.py` 区分动作、对象和状态，`guidance_eligibility.py` 先检查能力、动作、软件对象及阶段，
 仅在通过检查的候选之间排序。软件目录已启用不表示窗口或焦点已确认。
 
+当前 [操作知识边界 v11](../../docs/taskviews-mini-operation-knowledge-v11.md) 已移除核验及泛化替代卡。Keyboard 不负责任务／结果核验；送达卡不再附加通用 `when`，目录原始 `check` 仅留在来源文档，不送达为操作步骤，也不能计为方法或核验知识覆盖。没有适用操作知识时直接返回空 Keyboard。
+
 `<key_lookup>` 是补充请求，不能自行启用能力或软件，也不能仅凭主题名取得其中全部按键。
 例如查询 `app.evince.zoom` 还需要当前有明确的 Evince 缩放需求；“Zoom out in Evince”只返回缩小绑定。
 没有动作契约的旧目录绑定保留为参考，当前能力路径记录 `no_audited_operation_contract`，不会猜测适用性。

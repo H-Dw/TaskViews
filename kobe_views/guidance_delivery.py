@@ -37,10 +37,11 @@ def materialize(*, episode_id, index, instruction, graph_mode, packing, selectio
             literal['completion'] = {'remaining_decisions': literal['completion']['remaining_decisions']}
     missing = sorted({need for gap in selection.get('coverage_gaps', []) for need in gap['missing']})
     first = next(iter(selection['groups']), None)
-    literal['guidance_status'] = {'card': 'omitted_budget' if first else 'no_match',
-        'coverage': 'gap' if missing else 'matched' if first else 'no_match'}
+    literal.pop('guidance_status', None)
+    if first:
+        literal['guidance_status'] = {'card': 'omitted_budget', 'coverage': 'gap' if missing else 'matched'}
     if missing:
-        literal['guidance_status']['missing'] = missing
+        literal['knowledge_gap'] = {'missing': missing}
     raw['views']['current']['records'] = [literal]
     lookup = literal.pop('keyboard_lookup', None)
     optional = {k: literal.pop(k) for k in ('action_conditions', 'reading_progress',
@@ -178,8 +179,7 @@ def materialize(*, episode_id, index, instruction, graph_mode, packing, selectio
         # dispatched value/phase + sources, not a second copy of its advice.
         value = deepcopy(condition)
         cards = raw['views']['keyboard']['records']
-        if value.get('kind') == 'zoom_pending' and cards and cards[0]['guide_id'].split(':')[0] in (
-                'view.zoom_confirm', 'view.zoom_check'):
+        if value.get('kind') == 'zoom_pending' and cards and cards[0]['guide_id'].split(':')[0] == 'view.zoom_confirm':
             value.pop('constraint', None)
             if {e['ref'] for e in value.get('evidence', [])} <= {e['ref'] for e in cards[0]['evidence']}:
                 value['evidence'] = 'see_current_card'

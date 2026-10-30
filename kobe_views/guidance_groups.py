@@ -30,6 +30,7 @@ def model_structure(value):
 
 def validate_library(library):
     from .guidance_eligibility import GUIDE_OPS
+    from .guidance_selection import BINDING_OPS
     if set(library['guides']) != set(GUIDE_OPS):
         raise ValueError('Guidance contracts must cover every authored card')
     for name, entry in library['guides'].items():
@@ -38,6 +39,12 @@ def validate_library(library):
         bindings = entry['bindings']
         if len(bindings) != len(set(bindings)) or not set(bindings) <= library['bindings'].keys():
             raise ValueError('Invalid guidance binding set: ' + name)
+        procedures = entry.get('procedure_operations')
+        covered = set(entry['operations']).union(*(BINDING_OPS.get(b, set()) for b in bindings))
+        if (not isinstance(procedures, list) or len(procedures) != len(set(procedures))
+                or not set(procedures) <= covered
+                or procedures and not bindings):
+            raise ValueError('Invalid explicit operation procedure contract: ' + name)
         for pair in entry.get('dependencies', []):
             if (not isinstance(pair, list) or len(pair) != 2 or pair[0] == pair[1]
                     or not set(pair) <= set(bindings)):

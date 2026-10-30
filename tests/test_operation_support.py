@@ -37,9 +37,7 @@ def test_task_freezes_reading_and_image_operations_without_objects_or_answers():
     assert 'image_edit' in capabilities('Make the picture transparent.')
     assert 'image_edit' not in capabilities('Do not remove the background.')
     value = route(instruction='Remove the background of a photo', proposals=[], enabled=['general', 'app.gimp'])
-    assert value['groups'][0]['record']['guide_id'].startswith('image.edit:')
-    assert all('ctrl' not in r['tool']['keys'] or r['tool']['keys'] != ['ctrl', 'a']
-               for r in value['groups'][0]['record']['recipes'])
+    assert value['groups'] == []  # Image-edit verification does not produce Keyboard knowledge.
 
 
 def test_zoom_lookup_narrows_alternatives_to_explicit_direction_and_order_is_stable(monkeypatch):
