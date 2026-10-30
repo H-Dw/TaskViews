@@ -17,6 +17,7 @@ from kobe_views.task_keyboard import ENV as RESEARCH_ENV, instruction_sha, load_
 from .mini_recovery import generate_candidate as generate_mini_candidate
 from kobe_views import mini_graph
 from kobe_views import keyboard_guidance
+from kobe_views.decision_flow import PROMPT as DECISION_FLOW_PROMPT
 
 
 FRAME_CONTRACT_PREFIX = 'Trusted screenshot/coordinate contract: '
@@ -60,19 +61,10 @@ class MiniTaskViewsNativeAgent(KimiNativeAgent):
         if self.guidance_policy is not None:
             self.context_label = self.context_label.replace('sources[N]=[kind,base64 SHA256]',
                 'sources[N]=[kind]; full hashes are verified locally')
-            self.context_label += (' Guidance groups are conditional references: verify app/focus; '
-                                   'observe between workflow steps. Enabled directories do not confirm focus. '
-                                   'source_ref resolves in the local audit. A coverage gap does not enable new directories. '
-                                   'Lookup is optional: <key_lookup>guide_name</key_lookup>.')
             if self.mini_graph_mode == 'legacy':
                 self.context_label = ('TaskViews: seq refs resolve original journal evidence; source_ref resolves local guidance audit. '
-                    'Reports/effects remain unverified. Cards require current app/focus; observe between steps. '
-                    'Optional <key_lookup>guide_name</key_lookup>:')
-            self.context_label += (
-                ' Current: pending effects; Attempts: dispatched actions; Lessons: reading reports/errors. '
-                'Reuse reports for unchanged content; re-read only missing/conflicting/expired information. '
-                'Re-ground recalled coordinates. Readable -> read; otherwise adjust once/check. '
-                'State brief subject-bound public findings, not repeated reasoning.')
+                    'Reports/effects remain unverified. ')
+            self.context_label += ' ' + DECISION_FLOW_PROMPT
         super().__init__(**options)
 
     def validate_actor_candidate(self, response):

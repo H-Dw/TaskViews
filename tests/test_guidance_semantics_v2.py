@@ -51,14 +51,14 @@ def test_freeze_capabilities_and_auxiliary_directories_from_generic_relations():
 def test_runtime_file_intent_is_independent_of_original_task_and_gap_is_explicit():
     kwargs = {'instruction': 'Inspect visible application', 'proposals': [(3, 'Move the files into a folder', 1)]}
     value = route(**kwargs)
-    assert names(value) == ['focus.verify']
+    assert names(value) == []
     assert any('move' in gap['missing'] for gap in value['coverage_gaps'])
     disabled = route(**kwargs, enabled=['general'])
     assert any(g['reason'] == 'capability_not_frozen' for g in disabled['coverage_gaps'])
     directory_only = route(instruction='Move files', enabled=['general'])
     assert any(g['reason'] == 'directory_not_frozen' for g in directory_only['coverage_gaps'])
     assert disabled['enabled_directories'] == ['general']
-    assert names(disabled) == ['focus.verify']
+    assert names(disabled) == []
 
 
 def test_cut_off_never_delivers_clipboard_and_menu_never_delivers_ctrl_o():
@@ -113,7 +113,7 @@ def test_exact_toggle_cycle_is_advisory_and_clipboard_is_not_failure():
     value = route(rows=rows)
     assert value['literal_cycle']['period'] == 2
     assert value['literal_cycle']['effect_status'] == 'unknown'
-    assert names(value)[0] == 'focus.verify'
+    assert names(value) == ['files.copy']
     for _, row, _ in rows:
         if row['kind'] == 'transition':
             row['tool']['arguments']['keys'] = ['ctrl', 'c']

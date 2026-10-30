@@ -12,7 +12,7 @@ def summarize(paths, annotations=None):
                 row = json.loads(line)
                 if row.get('event') not in ('mini_guidance_prepared', 'mini_guidance_delivery'):
                     continue
-                key = (row['episode_id'], row['frame_id'])
+                key = (row['episode_id'], row['frame_id'], row.get('context_revision', 0))
                 item = frames.setdefault(key, {'prepared': None, 'delivered': None})
                 if row['event'] == 'mini_guidance_prepared':
                     if item['prepared'] is not None and item['prepared']['metrics'] != row['metrics']:
@@ -37,8 +37,14 @@ def summarize(paths, annotations=None):
     delivered_groups = sum(len(m['delivered_group_ids']) for m in metrics)
     invalid = total('known_stale_or_inapplicable_groups')
     result = {'measurement_unit': 'episode_and_frame_any_successful_request_receipt', 'frames': len(frames),
+            'decision_frames': len({key[:2] for key in frames}),
+            'context_revisions': len(frames),
             'request_receipts_including_retries': receipts,
             'packet_delivery_rate': ratio(total('packet_delivered'), len(frames)),
+            'no_match_frame_rate': (ratio(sum(m['selection_status'] == 'no_match' for m in metrics), len(frames))
+                                    if all('selection_status' in m for m in metrics) else None),
+            'delivered_reference_frame_rate': ratio(sum(bool(m['packet_delivered'] and m['delivered_group_ids'])
+                                                       for m in metrics), len(frames)),
             'directory_visibility_rate': ratio(total('directory_visible'), len(frames)),
             'needed_recipe_count': total('needed_recipe_count'),
             'needed_recipes_delivered': total('needed_recipes_delivered'),
@@ -50,11 +56,13 @@ def summarize(paths, annotations=None):
             'semantic_inapplicability_rate': None, 'adoption': 'unknown',
             'need_basis': 'deterministic_router_estimate_requires_independent_annotation',
             'benchmark_score': None}
+    if any(key[2] for key in frames):
+        result['measurement_unit'] = 'episode_frame_and_context_revision_any_successful_request_receipt'
     if annotations is not None:
         seen = set()
         needed = sent = workflows = complete = stale = reviewed = 0
         for label in annotations:
-            key = (label['episode_id'], label['frame_id'])
+            key = (label['episode_id'], label['frame_id'], label.get('context_revision', 0))
             if key not in frames or key in seen:
                 raise ValueError('Annotation has an unknown or duplicate episode/frame')
             seen.add(key)

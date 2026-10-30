@@ -1,5 +1,5 @@
 {
-  "version": "capability_guidance_v7",
+  "version": "capability_guidance_v10",
   "platform": "linux",
   "sources": {
     "files": "https://help.gnome.org/gnome-help/files-copy.html",
@@ -625,13 +625,6 @@
       "operations": [
         "zoom_out"
       ]
-    },
-    "focus.verify": {
-      "scope": "current visible GUI",
-      "bindings": [],
-      "steps": "Confirm application, modal dialog and focused control. Re-locate the target in the current image before retrying. If the expected change is absent, inspect a visible menu or another supported route; do not reuse old coordinates blindly. No shortcut is selected without a matching need.",
-      "source": "keys",
-      "operations": []
     },
     "pointer.drag": {
       "scope": "visible draggable object and destination; native computer tool",

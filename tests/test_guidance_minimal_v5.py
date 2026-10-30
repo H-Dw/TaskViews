@@ -149,7 +149,7 @@ def test_stage_only_new_defaults_and_old_full_round_policy_rejected():
 
 
 @pytest.mark.parametrize('mode', ['legacy', 'flat'])
-def test_actual_request_attempts_intent_and_minimum_reading_with_complete_card(monkeypatch, tmp_path, mode):
+def test_actual_request_keeps_attempts_and_reading_without_a_matching_card(monkeypatch, tmp_path, mode):
     from test_mini_taskviews import TASK, make_actor, packet, predict
     from test_mini_artifact_protocol import annotate
     from kobe_views.model import dumps
@@ -170,10 +170,10 @@ def test_actual_request_attempts_intent_and_minimum_reading_with_complete_card(m
         assert attempt['effect_status'] == 'unknown'
         assert attempt['intent']['text'] == 'The table shows 12.75.'
         assert str(attempt['intent']['ref']) in display['sources']
-        assert display['views']['keyboard']['records']
+        assert display['views']['keyboard']['records'] == []
         assert not any(r.get('grade') == 'model_intent_proposal' for r in display['views']['lessons']['records'])
         current = display['views']['current']['records'][0]
-        assert 'keyboard_lookup' not in current or actor.mini_context.guidance_selection['coverage_gaps'] or not actor.mini_context.guidance_selection['groups'][0]['score']
+        assert 'keyboard_lookup' not in current or actor.mini_context.guidance_selection['coverage_gaps']
         assert len(current['reading_progress']['reports']) == 1
         report = next(r for r in display['views']['lessons']['records'] if r.get('grade') == 'model_reading_proposal')
         assert current['reading_progress']['reports'][0]['ref'] == report['ref']

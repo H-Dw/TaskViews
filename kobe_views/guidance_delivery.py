@@ -36,8 +36,9 @@ def materialize(*, episode_id, index, instruction, graph_mode, packing, selectio
             # Do not repeat the generic save/check checklist on every late turn.
             literal['completion'] = {'remaining_decisions': literal['completion']['remaining_decisions']}
     missing = sorted({need for gap in selection.get('coverage_gaps', []) for need in gap['missing']})
-    literal['guidance_status'] = {'card': 'omitted_budget',
-        'coverage': 'gap' if missing else 'matched' if selection['groups'][0]['score'] else 'no_match'}
+    first = next(iter(selection['groups']), None)
+    literal['guidance_status'] = {'card': 'omitted_budget' if first else 'no_match',
+        'coverage': 'gap' if missing else 'matched' if first else 'no_match'}
     if missing:
         literal['guidance_status']['missing'] = missing
     raw['views']['current']['records'] = [literal]
@@ -133,13 +134,22 @@ def materialize(*, episode_id, index, instruction, graph_mode, packing, selectio
         if condition['kind'] == 'held_modifiers' and admit_current('action_conditions', [condition]):
             admitted_conditions.append(condition)
 
+    # A current explicit strategy has just requested operation knowledge.
+    # Admit its recalled attempt/failed preconditions before optional recipes;
+    # otherwise retrieval may succeed locally while the actor never sees it.
+    if literal.get('strategy'):
+        for i, row in enumerate(attempts):
+            if row.get('recall'):
+                admit('attempts', i)
+
     # One current-stage card; do not substitute a cheaper, irrelevant candidate
-    # if the required group cannot fit. All candidates/scores remain in audit.
-    candidate = deepcopy(raw)
-    candidate['views']['keyboard']['records'] = [model_card(whole(selection['groups'][0]['record']))]
-    candidate['views']['keyboard']['omitted_records'] -= 1
-    candidate['views']['current']['records'][0]['guidance_status']['card'] = 'included'
-    accept(candidate)  # Exact parameters, conditions, followups and checks stay atomic.
+    # if the required group cannot fit. Candidates and rule explanations stay local.
+    if first is not None:
+        candidate = deepcopy(raw)
+        candidate['views']['keyboard']['records'] = [model_card(whole(first['record']))]
+        candidate['views']['keyboard']['omitted_records'] -= 1
+        candidate['views']['current']['records'][0]['guidance_status']['card'] = 'included'
+        accept(candidate)  # Exact parameters, conditions, followups and checks stay atomic.
 
     if 'reading_progress' in optional:
         if review_policy:
@@ -207,7 +217,9 @@ def materialize(*, episode_id, index, instruction, graph_mode, packing, selectio
                 admit(key, i)
     # Minimal path does not fill spare bytes with broad catalogs, repeated
     # intent prose or ordinary history. Explicit omissions remain auditable.
-    if lookup is not None and (not review_policy or missing or not selection['groups'][0]['score']):
+    # An unmatched task-specific action is valid. Do not turn an empty result
+    # into a broad catalog or a request to look something up before acting.
+    if lookup is not None and first is not None and (not review_policy or missing):
         admit_current('keyboard_lookup', lookup)
     if not review_policy and 'interaction_contract' in optional:
         admit_current('interaction_contract', optional['interaction_contract'])

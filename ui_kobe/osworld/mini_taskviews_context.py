@@ -247,13 +247,14 @@ class MiniTaskViewsContext:
             checks_reported=list(note.get('checks', {})), verification=unknown_checks(),
             grade='model_report_not_independent_verification', extra_role_requests=0)
 
-    def context(self, instruction):
+    def context(self, instruction, *, knowledge_query=None):
         self.cached = None
         self.guidance_selection = None
         self.guidance_records = []
         self.guidance_directory_visible = False
         self.trace = {'profile': PROFILE, 'frame_id': self.owner.frame.metadata['frame_id'],
                       'delivered': False, 'artifact_protocol_in_packet': False, 'extra_role_requests': 0}
+        self.trace['context_revision'] = knowledge_query['seq'] if knowledge_query else 0
         journal = self.journal()
         self.boundary()
         current = journal.current
@@ -344,10 +345,24 @@ class MiniTaskViewsContext:
             routing_decisions = [row for row in routing_rows if row[0] > boundary
                                  and row[1].get('kind') == 'decision' and row[1].get('instruction') == instruction][:2]
             proposals = [(seq, self.prose(event), event['step']) for seq, event, _ in routing_decisions]
+            if knowledge_query is not None:
+                found = next((r for r in routing_rows if r[0] == knowledge_query['seq']), None)
+                if (not found or found[1]['kind'] != 'knowledge_query' or found[1]['id'] != knowledge_query['id']
+                        or found[1].get('instruction') != instruction or found[1].get('step') != journal.task_input['step']
+                        or found[1].get('source') != current['id']):
+                    raise ReadAnomaly('Knowledge request is not sourced to the current task/frame')
+                from kobe_views.decision_flow import validate_query
+                query = validate_query(found[1]['query'])
+                proposals = [(found[0], query['intent'], found[1]['step'])]
+                original_current['strategy'] = {'ref': evidence.reference(found), 'grade': 'model_strategy_proposal'}
             from kobe_views.operation_support import build as operation_support, intent_excerpt
             support = operation_support(rows=routing_rows, instruction=instruction, proposals=proposals,
                 step=journal.task_input['step'], observation_ref=current_ref,
                 decision_limit=self.owner.guidance_policy['decision_limit'])
+            from kobe_views.decision_flow import attempt_recall
+            recall = attempt_recall(routing_rows, instruction, proposals, journal.task_input['step'])
+            recall = recall or support['navigation_recall']
+            support['navigation_recall'] = recall
             original_current['artifact']['review_schema'] = review_schema(self.owner.guidance_policy, finishing=support['finishing'])
             if support['finishing']:
                 original_current['completion'] = support['completion']
@@ -367,19 +382,27 @@ class MiniTaskViewsContext:
                 proposals=proposals, step=journal.task_input['step'], observation_ref=current_ref,
                 task_catalog=self.owner.task_keyboard, frozen_capabilities=self.owner.guidance_policy['capabilities'],
                 pending_effect=support['pending_effect'], readability=support['readability'],
-                adjustment_chain=support['adjustment_chain'])
+                adjustment_chain=support['adjustment_chain'],
+                proposal_origin='public_knowledge_request' if knowledge_query else 'public_proposal',
+                missing_knowledge=query['missing_knowledge'] if knowledge_query else None)
             by_seq = {row[0]: row for row in routing_rows}
             lessons.extend(deepcopy(support['reading_progress']))
-            recall = support['navigation_recall']
             if recall:
+                row = by_seq[recall['ref']]
                 recalled = next((r for r in projected if r['ref'] == recall['ref']), None)
                 if recalled is None:
-                    row = by_seq[recall['ref']]
                     recalled = evidence.operation(row)
                     attempts.append(row)
                     projected.append(recalled)
+                # Recalled failures are useful conditions to avoid, never a
+                # reusable success path. Preserve their real error signals.
+                failed = journal.db.execute('SELECT 1 FROM events e WHERE e.seq=? AND ' + ERROR_FILTER,
+                                            (row[0],)).fetchone()
+                if failed:
+                    recalled.update(evidence.error(row))
+                    recalled['grade'] = 'execution_attempt'
                 recalled['recall'] = {'query': {'ref': evidence.reference(by_seq[recall['query_ref']])},
-                    'basis': 'public_text_match', 'coordinates': 're_ground_current_image'}
+                    'basis': recall['basis'], 'coordinates': 're_ground_current_image', 'effect': 'unknown'}
             # Attempts were already dispatched facts. Attach an optional short
             # issuing intention so a coordinate can be understood in context;
             # never invent a window name or infer success from that intention.
@@ -490,6 +513,18 @@ class MiniTaskViewsContext:
                                      for key, view in display['views'].items()})
             if guidance_enabled:
                 sent_current = display['views']['current']['records'][0]
+                from kobe_views.decision_flow import VERSION as FLOW_VERSION
+                recalled_refs = [r['ref'] for r in display['views']['attempts']['records'] if r.get('recall')]
+                self.trace['decision_flow'] = {'version': FLOW_VERSION,
+                    'strategy_source': 'current_knowledge_request' if knowledge_query else 'prefetch_not_current_plan',
+                    'strategy_ref': knowledge_query['seq'] if knowledge_query else None,
+                    'current_observation_ref': current_ref,
+                    'attempt_retrieved_ref': recall['ref'] if recall else None,
+                    'attempt_delivered_refs': recalled_refs,
+                    'attempt_omitted_budget': bool(recall and recall['ref'] not in recalled_refs),
+                    'knowledge_matched': bool(self.guidance_selection['groups']),
+                    'knowledge_delivered': bool(self.guidance_records),
+                    'model_use': 'unobserved_not_inferred_from_parameter_match'}
                 self.trace['operation_support'] = {
                     'review_prompt': self.owner.guidance_policy['review_prompt'],
                     'review_timing': self.owner.guidance_policy['review_timing'],
@@ -522,6 +557,7 @@ class MiniTaskViewsContext:
             self.trace['guidance'] = keyboard_guidance.delivery_audit(self.guidance_selection,
                 self.guidance_records, self.guidance_directory_visible)
             telemetry.emit('mini_guidance_prepared', frame_id=self.trace['frame_id'],
+                context_revision=self.trace['context_revision'],
                 episode_id=journal.episode_id, journal_seq=cursor, policy=self.owner.guidance_policy,
                 selection=self.guidance_selection, event_sources=evidence.sources, metrics=self.trace['guidance'],
                 omission_reason=self.trace.get('omission_reason'))
@@ -582,6 +618,7 @@ class MiniTaskViewsContext:
                                                    self.guidance_directory_visible, delivered)
         self.trace['guidance'] = metrics
         telemetry.emit('mini_guidance_delivery', frame_id=self.trace['frame_id'],
+            context_revision=self.trace.get('context_revision', 0),
             episode_id=self.journal().episode_id, packet_sha256=self.trace.get('packet_sha256'), metrics=metrics,
             omission_reason=self.trace.get('omission_reason'))
 

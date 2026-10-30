@@ -28,7 +28,7 @@ CARD_CASES = [
     ('view.readability', 'Adjust the zoom'), ('menu.open', 'Open the View menu'),
     ('document.read', 'Read the document'), ('window.maximize', 'Maximize the window'),
     ('view.zoom_in', 'Zoom in'), ('view.zoom_out', 'Zoom out'),
-    ('focus.verify', 'Inspect the application'), ('pointer.drag', 'Drag the object'),
+    ('pointer.drag', 'Drag the object'),
     ('image.edit', 'Edit the image'), ('window.locate', 'Find the Archive window'),
     ('folder.open', 'Enter the folder'), ('url.open', 'Open the website'),
     ('files.find', 'Find the file'),
@@ -106,7 +106,7 @@ def test_explicit_sequence_and_purpose_do_not_compete_by_score(text, expected):
 
 def test_missing_frozen_capability_blocks_all_origins_and_keeps_explicit_gap():
     value = route(instruction='Read the text', proposals=[(3, 'Move the file. <key_lookup>files.move</key_lookup>', 1)])
-    assert names(value) == ['focus.verify']
+    assert names(value) == []
     assert any('move' in gap['missing'] for gap in value['coverage_gaps'])
     for card in ('clipboard.paste', 'clipboard.verify'):
         value = route(instruction='Read content', rows=[event(['ctrl', 'v'], instruction='Read content')])
@@ -134,17 +134,17 @@ def test_current_need_lookup_and_software_must_agree_before_ranking():
 
 def test_terminal_is_not_generic_clipboard_and_lookup_is_not_a_bypass():
     value = route(instruction='Copy text from the terminal', proposals=[(3, 'Copy terminal text. <key_lookup>clipboard</key_lookup>', 1)])
-    assert names(value) == ['focus.verify']
+    assert names(value) == []
     assert any(e['reason'] == 'terminal_requires_distinct_bindings' for e in value['excluded'])
     value = route(instruction='Copy terminal text', rows=[event(['ctrl', 'c'], instruction='Copy terminal text')])
-    assert names(value) == ['focus.verify']
+    assert names(value) == []
     value = route(instruction='Copy the file terminal.txt')
     assert names(value) == ['files.copy']
 
 
 def test_unmapped_catalog_binding_stays_local_with_explicit_gap():
     value = route(instruction='Read content', proposals=[(3, '<key_lookup>slider_adjust</key_lookup>', 1)])
-    assert names(value) == ['focus.verify']
+    assert names(value) == []
     assert any(e['reason'] == 'no_audited_operation_contract' for e in value['coverage_gaps'])
     assert all(not c['record']['recipes'] for c in value['groups'])
 
@@ -157,7 +157,7 @@ def test_old_intent_and_future_task_stage_do_not_compete_with_current_need():
     assert names(value) == ['document.read']
     assert any(e['reason'] == 'superseded_public_intention' for e in value['excluded'])
     value = route(instruction='Read documents and move files')
-    assert names(value) == ['focus.verify']
+    assert names(value) == []
     assert value['coverage_gaps'][0]['reason'] == 'current_phase_unspecified'
 
 

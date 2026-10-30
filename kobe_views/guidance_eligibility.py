@@ -8,7 +8,7 @@ import re
 
 from .guidance_semantics import NEGATIVE, LITERALS
 
-VERSION = 'guidance_applicability_v1'
+VERSION = 'guidance_applicability_v2'
 
 GUIDE_OPS = {
     'clipboard.copy_paste': ['copy'], 'clipboard.move_paste': ['cut'],
@@ -25,7 +25,7 @@ GUIDE_OPS = {
     'view.zoom_confirm': ['zoom_value'], 'view.zoom_check': ['zoom_value'],
     'view.readability': ['reading', 'readability'], 'menu.open': ['menu_open'],
     'document.read': ['reading'], 'window.maximize': ['maximize'],
-    'view.zoom_in': ['zoom_in'], 'view.zoom_out': ['zoom_out'], 'focus.verify': [],
+    'view.zoom_in': ['zoom_in'], 'view.zoom_out': ['zoom_out'],
     'pointer.drag': ['drag'], 'image.edit': ['image_edit'],
     'window.locate': ['window_locate'], 'folder.open': ['folder_open'],
     'url.open': ['url_open'], 'files.find': ['file_find'],
@@ -116,8 +116,6 @@ def guide_reason(name, entry, *, ops, frozen, enabled, text, origin, data, phase
     if required:
         return 'directory_not_frozen', sorted(required)
     supported = set(entry['operations'])
-    if name == 'focus.verify':
-        return None, []
     if name in ('view.zoom_confirm', 'view.zoom_check', 'clipboard.verify'):
         expected = {'view.zoom_confirm': 'confirm_once', 'view.zoom_check': 'inspect_effect', 'clipboard.verify': 'verify'}[name]
         if phase != expected:

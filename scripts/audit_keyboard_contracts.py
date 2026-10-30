@@ -36,7 +36,9 @@ def inventory():
                 'sources': entry['sources'], 'runtime_platform_eligible': runtime, 'recipes': recipes})
     counts = {status: sum(r['status'] == status for e in references for r in e['recipes'])
               for status in ('reference_only_platform', 'conditional_contract', 'no_audited_operation_contract')}
-    return {'policy_version': guidance.VERSION, 'keywords': PATTERNS, 'cards': cards, 'references': references,
+    from kobe_views.guidance_selection import policy as selection_policy
+    return {'policy_version': guidance.VERSION, 'selection_policy': selection_policy(),
+            'keywords': PATTERNS, 'cards': cards, 'references': references,
             'summary': {'cards': len(cards), 'topics': len(references), 'bindings': sum(counts.values()), **counts},
             'meaning': 'Contract coverage, not empirical GUI validity or model adoption',
             'source_sha256': {name: hashlib.sha256((PROJECT / name).read_bytes()).hexdigest() for name in (
@@ -48,18 +50,21 @@ def inventory():
 def render(data):
     def safe(value):
         return str(value).replace('|', '\\|').replace('\n', ' ')
-    lines = ['# Keyboard 逐项契约核验（2026-10-28）', '',
+    lines = ['# Keyboard 逐项契约核验（' + data['policy_version'] + '）', '',
         '本表核对动作词、对象、操作卡、绑定和适用条件。快捷键来源沿用冻结目录；本轮没有重新访问所有官方网页，'
         '也没有启动 guest 逐键实测，因此不将“映射通过”写成“实际软件均可执行”。', '',
-        '新的 capability_guidance_v7 不是历史 Mini v7。task_capabilities 路径先过滤、再排序；'
+        '当前 ' + data['policy_version'] + ' 是指导模块版本。task_capabilities 路径先过滤、再排序；'
         '旧 task_names/manual 及历史冻结源码保留原行为。不能拿新代码静默恢复旧 checkpoint。', '',
+        'Keyboard 是可选参考。没有匹配的操作时返回空卡列表，由 native actor 自行决定；'
+        '不以通用聚焦卡或目录枚举替代缺失的知识。', '',
         '核验范围：`' + json.dumps(data['summary'], ensure_ascii=False) + '`。', '',
         '## 检查顺序', '',
         '1. 从公开任务冻结能力及依赖；公开运行意图只能在该集合内选择，不能自行扩容。',
         '2. 区分动作、状态、否定、假设、字面字符串和对象类型；显式 then/然后及目的从句不作为当前步骤。',
         '3. 使用最新公开意图；过时意图进入排除审计。未明确当前阶段的跨类复合任务标为 current_phase_unspecified。',
         '4. 检查启用目录、动作契约、软件目标、相反对象和已有执行阶段；lookup 走相同检查。',
-        '5. 仅对合格候选按相关性和稳定 ID 排序；当前包仍最多 3000 UTF-8 bytes，完整卡原子打包。', '',
+        '5. 合格候选按阶段、当前操作匹配、软件与对象、知识缺口逐层分组，最后按稳定 ID；不使用分数或权重。'
+        '当前包仍最多 3000 UTF-8 bytes，完整卡原子打包。', '',
         '软件名称只是条件线索，不是焦点证明。不能用任务中出现过 GIMP/VLC 或启用了目录，推断当前窗口。'
         '未知软件时优先无按键的可见控件指导；缺少契约则记录具体缺口，不发送猜测绑定。', '',
         '## 本次发现与修正', '',

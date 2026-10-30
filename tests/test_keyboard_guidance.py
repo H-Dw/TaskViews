@@ -116,12 +116,12 @@ def test_expiry_task_boundary_dismiss_and_failed_intervening_key_invalidate():
     assert route(rows=[copy, event(['ctrl', 'x'], seq=9)])['workflow']['ref'] == 9
 
 
-def test_mixed_scoped_intent_does_not_veto_other_operations_and_unknown_has_safe_fallback():
+def test_mixed_scoped_intent_does_not_veto_other_operations_and_unknown_is_optional():
     value = route(instruction='Rename the file, then paste.', proposals=[(3, 'Rename the file, then paste.', 1)])
     assert names(value) == ['files.rename']  # The later stage is frozen, not selected now.
     no_match = route(instruction='Inspect the visible application', enabled=['general'])
-    assert names(no_match) == ['focus.verify']
-    assert not no_match['groups'][0]['record']['recipes']
+    assert names(no_match) == []
+    assert no_match['needed_groups'] == [] and no_match['selection_status'] == 'no_match'
     assert names(route(instruction='Take a snapshot in VLC', enabled=['general', 'app.vlc']))[0] == 'vlc.capture'
     assert names(route(instruction='Export in GIMP', enabled=['general', 'app.gimp']))[0] == 'gimp.export'
 
@@ -140,7 +140,7 @@ def test_order_invariant_routing_and_stable_content_identity():
 
 def test_supplemental_lookup_retains_old_topics_but_cannot_enable_software():
     value = route(proposals=[(3, '<key_lookup>app.gimp.zoom</key_lookup>', 1)], enabled=['general', 'app.gimp'])
-    assert names(value) == ['focus.verify']  # A directory tag cannot establish action or focus.
+    assert names(value) == []  # A directory tag cannot establish action or focus.
     value = route(instruction='Zoom out in GIMP', proposals=[(3, 'Zoom out in GIMP <key_lookup>app.gimp.zoom</key_lookup>', 1)],
                   enabled=['general', 'app.gimp'])
     assert names(value)[0] == 'catalog.app.gimp.zoom'
@@ -180,7 +180,8 @@ def test_existing_observations_support_literal_repetition_but_not_semantic_succe
         rows.append(event([], seq=seq, source=source, target=target,
                           tool={'arguments': {'action': 'left_click', 'coordinate': [10, 10]}}))
     value = route(rows=rows, step=3)
-    assert names(value)[0] == 'focus.verify'
+    assert names(value) == ['files.copy']
+    assert value['literal_cycle']  # Detection remains auditable, not a new keyboard need.
     assert value['observed_deltas'] == [
         {'ref': 7, 'before': 3, 'after': 6, 'pixels': 'same', 'effect_status': 'unknown'},
         {'ref': 4, 'before': 2, 'after': 3, 'pixels': 'same', 'effect_status': 'unknown'}]

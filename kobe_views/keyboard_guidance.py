@@ -14,14 +14,16 @@ from .model import dumps
 from .guidance_semantics import PATTERNS, VERSION as SEMANTICS_VERSION, analyze, capabilities, immediate_actions
 from .guidance_semantics import operations as operations
 from .guidance_groups import catalog_alternatives, model_structure, structure, validate_library
+from .decision_flow import policy as decision_flow_policy
+from . import guidance_selection as selection
 from .guidance_eligibility import (VERSION as ELIGIBILITY_VERSION, catalog_operation,
                                   contextual_reason, guide_reason, owner, software_reason)
 
-VERSION = 'capability_guidance_v7'
+VERSION = 'capability_guidance_v10'
 ENV = 'UI_KOBE_MINI_GUIDANCE'
 LIBRARY = json.loads((Path(__file__).parent / 'key_tools/guidance.json').read_text(encoding='utf-8'))
 validate_library(LIBRARY)
-PACKING = 'minimal_reading_guidance_v6'
+PACKING = 'layered_guidance_v10'
 SOURCE_ENCODING = 'journal_seq_local_audit_v1'
 HISTORY = 96
 TTL = 6
@@ -58,11 +60,15 @@ def policy(fields, enabled, *, review_prompt='full', decision_limit=None,
             'task_input_sha256': digest(fields), 'capabilities': capabilities(fields['instruction']),
             'enabled_toolsets': sorted(set(enabled)), 'history_events': HISTORY,
             'pending_decision_ttl': TTL, 'verification_decision_ttl': VERIFY_TTL,
-            'extra_model_calls': 0, 'focus_confirmation': 'required_not_inferred',
-            'intent_sources': ['original_task', 'bounded_public_proposals', 'executed_actions', 'original_observation_refs'],
+            'extra_model_calls': 'zero_automatic_at_most_one_optional_knowledge_roundtrip',
+            'decision_flow': decision_flow_policy(), 'focus_confirmation': 'required_not_inferred',
+            'intent_sources': ['original_task', 'bounded_public_proposals', 'current_public_knowledge_request',
+                               'executed_actions', 'original_observation_refs'],
             'workflow_invalidations': ['task_change', 'expiry', 'dismissal', 'unconfirmed_or_partial_key', 'later_clipboard_write'],
             'eligibility': ELIGIBILITY_VERSION,
-            'ranking': 'applicability_then_phase_relevance_then_stable_content_id',
+            'usage': 'optional_reference_not_action_requirement',
+            'unmatched': 'empty_keyboard_native_actor_decides',
+            'selection': selection.policy(),
             'group_semantics': 'atomic_dependencies_alternatives_are_explicit',
             'need_measurement': 'router_estimate_not_ground_truth'}
 
@@ -205,7 +211,8 @@ def repeated_cycle(actions, observations):
 
 
 def route(*, instruction, enabled, rows, proposals, step, observation_ref, library=LIBRARY, task_catalog=None,
-          frozen_capabilities=None, pending_effect=None, readability=None, adjustment_chain=None):
+          frozen_capabilities=None, pending_effect=None, readability=None, adjustment_chain=None,
+          proposal_origin='public_proposal', missing_knowledge=None):
     """Rank complete cards, not catalog prefixes. Returns reproducible audit data.
 
     needed_groups are router estimates, not an oracle for the actual next GUI
@@ -220,6 +227,23 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
     frozen = set(capabilities(instruction) if frozen_capabilities is None else frozen_capabilities)
     candidates, excluded = {}, []
     gaps, semantic_audit = [], [{'origin': 'original_task', **task_semantics}]
+    knowledge = selection.gap_request(missing_knowledge)
+
+    def live_state(value, kind):
+        if not value:
+            return value
+        expiry = value.get('expires_step')
+        refs = set(value.get('refs', [])) | {e['ref'] for e in value.get('evidence', [])}
+        refs |= {value[k] for k in ('ref', 'before') if type(value.get(k)) is int}
+        if (expiry is not None and (type(expiry) is not int or step > expiry)) or any(r <= boundary for r in refs):
+            excluded.append({'guide': kind, 'reason': 'expired_or_outside_task_state', 'missing': [],
+                             'evidence': [{'ref': r} for r in sorted(refs)]})
+            return None
+        return value
+
+    pending_effect = live_state(pending_effect, 'pending_effect')
+    readability = live_state(readability, 'readability_report')
+    adjustment_chain = live_state(adjustment_chain, 'adjustment_chain')
     observations = {e.get('id'): (seq, e) for seq, e, _ in rows if e.get('kind') == 'observation' and e.get('id')}
     observed = []
     actions = [(seq, e) for seq, e, _ in sorted(rows, reverse=True)
@@ -244,7 +268,7 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
                       'software_target_not_established', 'temporary_catalog_requires_audited_contract'):
             gaps.append(value)
 
-    def catalog_card(topic, selected, score, origin, refs):
+    def catalog_card(topic, selected, origin, refs, *, requested=False):
         reason = software_reason(owner(topic), context['text'], DATA)
         if reason:
             reject('catalog.' + topic, reason, refs)
@@ -285,26 +309,32 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
         identity = 'catalog.' + topic + ':' + digest({k: v for k, v in body.items() if k != 'evidence'})[:12]
         body['guide_id'] = identity
         body['basis'] = origin
-        old = candidates.get(identity)
-        if old is None or old['score'] < score:
-            candidates[identity] = {'record': body, 'score': score, 'origin': origin, 'workflow': False}
+        topic_owner = owner(topic)
+        scope = ('explicit_application' if topic_owner.startswith('app.') else
+                 'matching_object_type' if topic_owner.startswith('type.') else 'general_scope')
+        ops = sorted({catalog_operation(recipe) for recipe in selected})
+        info = selection.contract(ops, [], scope=scope)
+        info['binding_operations'] = ops
+        selection.merge_candidate(candidates, identity, {'record': body, 'origin': origin, 'workflow': False,
+            'contract': info, 'requested_reference': requested})
 
-    def add(name, score, origin, refs=()):
+    def add(name, origin, refs=(), *, requested=False):
         entry = library['guides'][name]
         reason, missing = guide_reason(name, entry, ops=context['ops'], frozen=frozen,
             enabled=enabled, text=context['text'], origin=origin, data=DATA, phase=context['phase'])
         if reason:
             reject(name, reason, refs, missing)
             return False
-        value = {'record': guide(name, [observation_ref, *refs], library=library), 'score': score,
-                 'origin': origin, 'workflow': bool(entry.get('workflow'))}
+        value = {'record': guide(name, [observation_ref, *refs], library=library),
+                 'origin': origin, 'workflow': bool(entry.get('workflow')) or origin == 'executed_workflow',
+                 'contract': selection.contract(entry['operations'], entry['bindings'],
+                    scope=selection.scope_for_guide(entry), workflow=entry.get('workflow')),
+                 'requested_reference': requested}
         value['record']['basis'] = origin
-        old = candidates.get(name)
-        if old is None or old['score'] < score:
-            candidates[name] = value
+        selection.merge_candidate(candidates, name, value)
         return True
 
-    def choose(ops, score, origin, refs=(), file_task=False, text=''):
+    def choose(ops, origin, refs=(), file_task=False, text=''):
         context.update(ops=set(ops), text=text, phase=None)
         missing = ops - frozen
         if missing:
@@ -312,17 +342,26 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
             ops = ops - missing
             context['ops'] = ops
         if 'copy' in ops and ops & {'cut', 'move'}:
-            add('files.transfer' if file_task else 'clipboard.transfer', score, origin, refs)
+            add('files.transfer' if file_task else 'clipboard.transfer', origin, refs)
             ops = ops - {'copy', 'cut', 'move', 'paste', 'transfer'}
         elif 'paste' in ops and ops & {'copy', 'cut', 'move'}:
             moving = bool(ops & {'cut', 'move'})
             name = ('files.move' if moving else 'files.copy') if file_task else (
                 'clipboard.move_paste' if moving else 'clipboard.copy_paste')
-            add(name, score, origin, refs)
+            add(name, origin, refs)
             ops = ops - {'copy', 'cut', 'move', 'paste', 'transfer'}
         if {'edit', 'confirm'} <= ops:
-            add('text.replace_confirm', score, origin, refs)
+            add('text.replace_confirm', origin, refs)
             ops = ops - {'edit', 'confirm'}
+        # A concrete knowledge gap can request dependencies of this operation,
+        # but cannot introduce an unrelated operation or expand frozen scope.
+        if 'paste' in knowledge['operations'] or knowledge['workflow_requested']:
+            if 'copy' in ops:
+                add('files.copy' if file_task else 'clipboard.copy_paste', origin, refs)
+            if ops & {'cut', 'move'}:
+                add('files.move' if file_task else 'clipboard.move_paste', origin, refs)
+        if 'edit' in ops and 'confirm' in knowledge['operations']:
+            add('text.replace_confirm', origin, refs)
         for op in sorted(ops):
             names = {'copy': 'files.copy' if file_task else 'clipboard.copy',
                      'cut': 'files.move' if file_task else 'clipboard.cut',
@@ -344,30 +383,32 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
             # Enabled software is not the current software. Specific export
             # and capture bindings must establish their own target contract.
             if op in ('capture', 'export'):
-                add('capture.image' if op == 'capture' else 'export.file', score, origin, refs)
+                add('capture.image' if op == 'capture' else 'export.file', origin, refs)
             if names.get(op):
-                # A broad reading objective must not tie with the specific next action.
-                add(names[op], score + (2 if names[op] in ('vlc.capture', 'gimp.export') else 0)
-                    - (5 if op == 'reading' and len(ops) > 1 else 0), origin, refs)
+                add(names[op], origin, refs)
             matched = False
             if op in REFERENCE_INTENTS:
                 for topic, entry in sorted(catalog.items()):
                     selected = [r for r in entry['recipes'] if r['intent'].casefold() == REFERENCE_INTENTS[op]]
                     if selected:
-                        catalog_card(topic, selected, score + 1, origin, refs)
+                        catalog_card(topic, selected, origin, refs)
                         matched = True
             if not names.get(op) and not matched:
                 gaps.append({'reason': 'no_enabled_recipe', 'missing': [op],
                              'evidence': [{'ref': n} for n in sorted({observation_ref, *refs})]})
 
-    fresh = [(seq, text, ds) for seq, text, ds in sorted(proposals, reverse=True)
-             if seq > boundary and 0 <= step - ds <= 2]
+    fresh = []
+    for seq, text, ds in sorted(proposals, reverse=True):
+        if seq <= boundary or not 0 <= step - ds <= 2:
+            reject('public_proposal', 'outside_task_boundary' if seq <= boundary else 'expired_public_intention', [seq])
+        else:
+            fresh.append((seq, text, ds))
     # Original goals freeze the capability universe; fresh public prose picks
-    # the immediate need. Do not let an older intention compete by score.
+    # the immediate need. Older intentions cannot compete with the newest one.
     if not fresh:
         initial = immediate_actions(task_semantics)
         # An unordered multi-stage task establishes capabilities, not which
-        # stage is visible. Do not break that ambiguity by card ID or score.
+        # stage is visible. Do not break that ambiguity by directory ordering.
         families = [set('copy cut paste move transfer rename folder_open file_find'.split()),
                     set('reading readability zoom_in zoom_out zoom_value maximize down up horizontal_scroll'.split()),
                     {'capture'}, {'export', 'save', 'save_as'}, {'image_edit', 'undo'},
@@ -376,38 +417,38 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
             gaps.append({'reason': 'current_phase_unspecified', 'missing': ['current_phase'],
                          'evidence': [{'ref': observation_ref}]})
         else:
-            choose(initial, 20, 'original_task', file_task=task_semantics['file_context'], text=instruction)
+            choose(initial, 'original_task', file_task=task_semantics['file_context'], text=instruction)
     current_semantics = analyze(fresh[0][1]) if fresh else task_semantics
     current_ops = immediate_actions(current_semantics)
     current_text = current_semantics['text'] or instruction
     reading_ops = {'reading', 'readability', 'zoom_in', 'zoom_out', 'zoom_value', 'maximize', 'down', 'up', 'horizontal_scroll'}
     readable_now = (readability and readability['state'] == 'readable' and 'zoom_value' not in task_ops
                     and not (current_ops - reading_ops))
-    for rank, (seq, text, decision_step) in enumerate(fresh):
+    for position, (seq, text, decision_step) in enumerate(fresh):
         if seq <= boundary or not 0 <= step - decision_step <= 2:
             continue
         parsed = analyze(text)
-        semantic_audit.append({'origin': 'public_proposal', 'ref': seq, **parsed})
-        if rank:
+        semantic_audit.append({'origin': proposal_origin, 'ref': seq, **parsed})
+        if position:
             reject('public_proposal', 'superseded_public_intention', [seq])
             continue
-        choose(immediate_actions(parsed), 60, 'public_proposal', [seq],
+        choose(immediate_actions(parsed), proposal_origin, [seq],
                file_task=parsed['file_context'], text=parsed['text'])
         if any(item['kind'] in ('non_clipboard_expression', 'unreadable') for item in parsed['states']):
             context['ops'] = {'readability'}
-            add('view.readability', 55 - rank, 'reported_clipping_unverified', [seq])
+            add('view.readability', 'reported_clipping_unverified', [seq])
             context['ops'] = immediate_actions(parsed)
-        if rank == 0:
+        if position == 0:
             lookup = re.findall(r'<key_lookup>([a-z0-9_.]+)</key_lookup>', text or '')
             if (len(lookup) == 1 and (text or '').count('<key_lookup') == 1
                     and (text or '').count('</key_lookup>') == 1):
                 name = lookup[0]
                 if name in library['guides']:
-                    add(name, 80, 'explicit_lookup', [seq])
+                    add(name, 'explicit_lookup', [seq], requested=True)
                 elif name.removeprefix('catalog.') in catalog:
                     topic = name.removeprefix('catalog.')
                     if topic in ('file_transfer', 'type.file_manager.file_transfer'):
-                        add('files.transfer', 80, 'explicit_lookup', [seq])
+                        add('files.transfer', 'explicit_lookup', [seq], requested=True)
                     else:
                         requested = {REFERENCE_INTENTS[op] for op in context['ops'] if op in REFERENCE_INTENTS}
                         recipes = catalog[topic]['recipes']
@@ -417,22 +458,22 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
                                 'missing': sorted(op for op in parsed['actions'] if op in REFERENCE_INTENTS),
                                 'evidence': [{'ref': seq}]})
                         else:
-                            catalog_card(topic, matching or recipes, 80, 'explicit_lookup', [seq])
+                            catalog_card(topic, matching or recipes, 'explicit_lookup', [seq], requested=True)
                 else:
                     gaps.append({'reason': 'lookup_not_enabled_or_unknown', 'missing': ['lookup_unavailable'], 'topic': name,
                                  'evidence': [{'ref': seq}]})
     # Existing image hashes can expose literal repetition without an OCR or
     # semantic app detector. Do not treat unchanged copy/cut images as failure.
     cycle = repeated_cycle(actions, observations)
-    if cycle and not pending_effect and not any(c['origin'] != 'original_task' for c in candidates.values()):
-        add('focus.verify', 90, 'literal_action_image_cycle', cycle['action_refs'])
-        candidates['focus.verify']['record']['cycle'] = cycle
+    # Literal repetition stays in the audit. It does not establish a keyboard
+    # need and must not manufacture a generic refocusing card. Source-bound
+    # execution conditions, where present, are delivered through Current.
     # A concrete pending action takes priority over a generic re-grounding
     # card. Its focus remains conditional and its exact provenance is audited.
     if pending_effect:
         name = 'view.zoom_confirm' if pending_effect['phase'] == 'confirm_once' else 'view.zoom_check'
         context.update(ops={'zoom_value'}, text=current_text, phase=pending_effect['phase'])
-        add(name, 95, 'executed_zoom_effect_unconfirmed', pending_effect['refs'])
+        add(name, 'executed_zoom_effect_unconfirmed', pending_effect['refs'])
     elif reading_goal:
         # A model's chosen percentage does not make it a user requirement.
         # Keep the proposal locally, but first inspect whether adjustment is
@@ -441,18 +482,18 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
             old = candidates.pop('view.zoom_value')
             refs = [e['ref'] for e in old['record']['evidence']]
             context.update(ops={'readability'}, phase=None)
-            add('view.readability', old['score'], 'readability_before_proposed_ratio', refs)
+            add('view.readability', 'readability_before_proposed_ratio', refs)
             excluded.append({'guide': 'view.zoom_value', 'reason': 'proposed_ratio_not_task_requirement'})
         if adjustment_chain:
             context.update(ops={'readability'}, phase=None)
-            add('view.readability', 94, 'reading_adjustment_effect_unconfirmed',
+            add('view.readability', 'reading_adjustment_effect_unconfirmed',
                 [e['ref'] for e in adjustment_chain['evidence']])
     # A source-bound readability report is conditional advice, not visual
     # certification. It can retire an arbitrary zoom target, never a task's
     # explicitly required precise ratio. Pending input stays in local audit.
     if readable_now:
         context.update(ops={'reading'}, phase=None)
-        add('document.read', 98, 'public_readability_report_unverified',
+        add('document.read', 'public_readability_report_unverified',
             [readability['ref'], readability['before']])
     if pending_effect:
         # Neither stale prose nor an explicit lookup may restart a completed
@@ -484,35 +525,45 @@ def route(*, instruction, enabled, rows, proposals, step, observation_ref, libra
                 excluded.append({'guide': key, 'reason': 'superseded_by_execution_phase'})
         # A destination-entry/dismissal proposal can be more immediate than
         # paste; keep paste as a candidate without pretending focus is ready.
-        score = 55 if state['phase'] == 'pending_paste' and any(
-            c['score'] >= 60 for c in candidates.values()) else 100
         context.update(ops={'paste'}, text=current_text, phase=state['phase'])
-        if add(name, score, 'executed_workflow', [state['ref']]):
+        if add(name, 'executed_workflow', [state['ref']]):
             candidates[name]['record']['workflow'] = {k: v for k, v in state.items() if k != 'started_step'}
-    # Phase rules are exclusions, not large scores that a lookup can beat.
+    # Phase compatibility is a named rule, never a numeric preference.
     phase_names = None
+    phase_kind = 'clipboard_' + state['phase'] if state else 'unconstrained'
     if readable_now:
         phase_names = {'document.read'}
+        phase_kind = 'readable_report'
     elif pending_effect:
         phase_names = {'view.zoom_confirm' if pending_effect['phase'] == 'confirm_once' else 'view.zoom_check'}
+        phase_kind = 'zoom_' + pending_effect['phase']
     elif adjustment_chain and reading_goal:
         phase_names = {'view.readability'}
+        phase_kind = 'view_adjustment_inspection'
     if phase_names:
         for key in list(candidates):
             if key not in phase_names:
                 del candidates[key]
                 reject(key, 'incompatible_with_current_phase')
-    if not candidates:
-        add('focus.verify', 0, 'no_matching_operation')
-    ranked = sorted(candidates.values(), key=lambda c: (-c['score'], c['record']['guide_id']))
+    phase = {'kind': phase_kind, 'allowed': sorted(phase_names) if phase_names is not None else None,
+             'readability_is': 'unverified_public_report', 'effect_status': 'unknown'}
+    ordered, uncovered, explanation = selection.select(list(candidates.values()), current_ops=current_ops,
+        phase=phase, gap=knowledge, frozen=frozen)
+    excluded.extend(uncovered)
+    if knowledge['provided'] and not ordered:
+        gaps.append({'reason': 'knowledge_gap_not_covered',
+            'missing': sorted(set(knowledge['requirements']) | set(knowledge['operations'])) or ['knowledge_gap'],
+            'evidence': [{'ref': n} for n in sorted({observation_ref, *(p[0] for p in fresh[:1])})]})
     sources = {}
-    for candidate in ranked:
+    for candidate in ordered:
         alias, source = model_card(candidate['record'])['source_ref'], candidate['record']['source']
         if alias in sources and sources[alias] != source:
             raise ValueError('Guidance short source identity collision')
         sources[alias] = source
-    return {'version': VERSION, 'groups': ranked, 'workflow': state, 'invalidations': invalidations,
-            'excluded': excluded, 'needed_groups': [ranked[0]['record']['guide_id']],
+    return {'version': VERSION, 'groups': ordered, 'workflow': state, 'invalidations': invalidations,
+            'excluded': excluded, 'needed_groups': [ordered[0]['record']['guide_id']] if ordered else [],
+            'selection_status': 'matched' if ordered else 'no_match',
+            'selection_explanation': explanation,
             'coverage_gaps': gaps, 'semantic_audit': semantic_audit, 'guide_sources': sources, 'literal_cycle': cycle,
             'need_basis': 'deterministic_router_estimate_not_ground_truth',
             'enabled_directories': sorted(set(enabled)), 'observation_ref': observation_ref,
@@ -533,6 +584,8 @@ def delivery_audit(selection, records, directory_visible, delivered=False):
     eligible = {c['record']['guide_id']: c['record'] for c in selection['groups']}
     invalid = sum(r['guide_id'] not in eligible or not equal(r, eligible[r['guide_id']]) for r in records) if delivered else 0
     return {'packet_delivered': delivered, 'directory_visible': delivered and directory_visible,
+            'selection_status': selection.get('selection_status', 'matched' if selection['groups'] else 'no_match'),
+            'matching_group_count': len(selection['groups']),
             'coverage_gap_count': len(selection.get('coverage_gaps', [])),
             'needed_recipe_count': len(needed_recipes), 'needed_recipes_delivered': len(needed_recipes & sent_recipes),
             'needed_group_count': len(needed), 'needed_groups_delivered': len(completed),

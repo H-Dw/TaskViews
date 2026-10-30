@@ -150,6 +150,12 @@ def generate_candidate(owner, transport, role, deadline, request, validator):
              'report_failures': [], 'feedback_version': REVIEW_FEEDBACK_VERSION}
     owner.mini_recovery_trace = trace
     ledger = owner.step_ledger
+    lookup = None
+    if getattr(owner, 'guidance_policy', None) is not None:
+        from .mini_keyboard_lookup import KeyboardLookup
+        lookup = KeyboardLookup(owner)
+        request = lookup.configure(request)
+        trace.update(knowledge_roundtrips=0, knowledge_requests=[], api_attempts=0)
     while True:
         request, lengths, admission = admit_request(request, lengths, contract=owner.contract,
             context=owner.cached_context, label=owner.context_label)
@@ -159,9 +165,19 @@ def generate_candidate(owner, transport, role, deadline, request, validator):
         payload.update(owner.generation_fields(ledger, role))
         observed = None
         try:
+            if lookup is not None:
+                trace['api_attempts'] += 1
             response = transport.create(deadline=deadline, step_ledger=ledger, budget_role=role,
                 generation_attempt=candidate, parent_request_id=parent, **payload)
             observed = response.model_dump()
+            consumed = lookup.consume(response, request) if lookup is not None else None
+            if consumed is not None:
+                request, evidence = consumed
+                trace['knowledge_roundtrips'] += 1
+                trace['knowledge_requests'].append(evidence)
+                parent = getattr(transport, 'last_request_id', None)
+                candidate += 1
+                continue  # A local query is not a GUI action or a rejected candidate.
             return response, validator(response)
         except ReviewError as exc:
             parent = getattr(transport, 'last_request_id', None)
@@ -169,7 +185,7 @@ def generate_candidate(owner, transport, role, deadline, request, validator):
             trace['report_failures'].append(exc.code)
             telemetry.emit('mini_report_rejected', request_id=parent, generation_attempt=candidate,
                            failure=exc.code, recovery='mini_report_feedback', action_executed=False)
-            exhausted = candidate > owner.contract.tool_repair_retries
+            exhausted = candidate - trace.get('knowledge_roundtrips', 0) > owner.contract.tool_repair_retries
             if exhausted or not ledger.regenerate(role, owner.budget.connect_s):
                 telemetry.emit('mini_report_recovery_exhausted', request_id=parent,
                     generation_attempt=candidate, failures=list(trace['report_failures']),
@@ -186,7 +202,7 @@ def generate_candidate(owner, transport, role, deadline, request, validator):
             trace['native_rejections'] += 1
             telemetry.emit('candidate_rejected', role=role, generation_attempt=candidate,
                 request_id=parent, error_code=exc.code, error=str(exc), action_executed=False)
-            if (not exc.retryable or candidate > owner.contract.tool_repair_retries
+            if (not exc.retryable or candidate - trace.get('knowledge_roundtrips', 0) > owner.contract.tool_repair_retries
                     or not ledger.regenerate(role, owner.budget.connect_s)):
                 exc.retryable = False
                 raise

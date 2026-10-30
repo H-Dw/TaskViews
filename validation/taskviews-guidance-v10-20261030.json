@@ -1,0 +1,147 @@
+{
+  "schema": "taskviews-offline-validation-v1",
+  "policy_version": "capability_guidance_v10",
+  "selection_version": "layered_guidance_selection_v1",
+  "passed": true,
+  "verified_at_utc": "2026-10-30T18:47:11.132325+08:00",
+  "base_commit": "6fcf92ce75a0fdda4adc24da3f9f36f0e0b85144",
+  "runtime_base_commit": "3800520",
+  "verification_kind": "Offline regression and same-input projection; not benchmark performance",
+  "regression": {
+    "tests": 668,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "checks": {
+    "ruff": 0,
+    "diff": 0,
+    "regression": 0,
+    "replay": 0,
+    "inventory": 0,
+    "frozen_sources": 0,
+    "comparison": 0,
+    "no_score_fields": 0
+  },
+  "source_sha256": {
+    "kobe_views/guidance_selection.py": "25f80e81eb27f9d41a3e3cb6e4e0fb93589fe9d3eeced72820e7117d0a8762ea",
+    "tests/test_guidance_selection_v10.py": "deba03437003411534e56b6c394a1df68886336fbd1dfd4c625007accd2ab2da",
+    "kobe_views/decision_flow.py": "d3e579b086ff56fcc949948f6ad9c425f1e91d412fa754dc198bb9648341b0f7",
+    "ui_kobe/osworld/mini_keyboard_lookup.py": "863c64e1576193f1e0a966252bc170c000ffcabe849c674bf69124daad4d2e9c",
+    "ui_kobe/osworld/mini_recovery.py": "3d9ec1f3ccf0f97e59f8377928b7e2ded2d3c06fe73107a359f543c999e127cd",
+    "ui_kobe/osworld/mini_taskviews_context.py": "39a5fdfefb59599a185ee43478119a9298fe95cec5387f684c8b0eaa68491e17",
+    "tests/test_decision_flow_v9.py": "35481056664b687b694c2a8c351e53e3fba8fc30e667cd7e669b50c4001e3b41",
+    "kobe_views/keyboard_guidance.py": "4b873cb21b746c0479ff45906f89dba7e60f1881baf2ca011c67792356a8cfd0",
+    "kobe_views/guidance_eligibility.py": "5212f9f8f44d39ad9d7a5ba13670b462e6ac022c8850056f90ce4e4f83c46dec",
+    "kobe_views/guidance_delivery.py": "b852f726fba9183701d2e8f61e8e3ee31c199fdb5a5510333e0b47141b5cf9cc",
+    "kobe_views/key_tools/guidance.json": "6147caa541832eba1991e927eca4a6ec836a1aa1ed2c4e45c4ffeba32d4ee21a",
+    "ui_kobe/osworld/mini_taskviews_native.py": "6c31b2b04a1d1b868c0cb61d37402f60722b2833045015a4b13d16ee4a02a0c8",
+    "scripts/audit_mini_guidance.py": "8a4028c3c46d667ce1f7e1f261ad8476b58c859d7bb624ded865d2db77de071c",
+    "scripts/audit_keyboard_contracts.py": "c269dc7ed1bf2eb7adc6be371ca2d300d4d869fecac02db101961ce14c4b4fbb",
+    "tests/test_keyboard_guidance.py": "89e0290c436b4132ce1f22d02e67c6176194d3f6361705282760a2b8da4a95ed",
+    "tests/test_guidance_eligibility_v7.py": "3742d7a795a5e1f5baea41b8e9f6bc55a631eb742a193a5b008d271398739b2f",
+    "tests/test_guidance_semantics_v2.py": "9f8d2227d00147325d2a897d3b4f27822325c738677d2dba3eac8f83f34d6dea",
+    "tests/test_guidance_minimal_v5.py": "cc7f9f2e39b593eb11e0dffc60f19fc3e790965d01a03105274114fd4505ad17",
+    "tests/test_optional_keyboard_v8.py": "39c48dc70b667bf775df4eb5e740399dabda3b7bff08aa4cf6b655a72bb49b82"
+  },
+  "inventory": {
+    "cards": 42,
+    "topics": 99,
+    "bindings": 253,
+    "reference_only_platform": 63,
+    "conditional_contract": 47,
+    "no_audited_operation_contract": 143
+  },
+  "selection_policy": {
+    "version": "layered_guidance_selection_v1",
+    "admission": "applicability_sources_lifetime_then_current_phase",
+    "layers": [
+      "phase",
+      "intent_match",
+      "software_object",
+      "knowledge_gap"
+    ],
+    "branches": {
+      "phase": [
+        "current_stage",
+        "current_prerequisite",
+        "post_action_check",
+        "pending_continuation",
+        "unconstrained"
+      ],
+      "intent_match": [
+        "requested_reference",
+        "complete_operation",
+        "partial_operation",
+        "execution_dependency",
+        "goal_support"
+      ],
+      "software_object": [
+        "explicit_application",
+        "matching_object_type",
+        "general_scope"
+      ],
+      "knowledge_gap": [
+        "fully_covered",
+        "alternative_covered",
+        "unspecified"
+      ]
+    },
+    "tie_break": "stable_content_id",
+    "numeric_priorities": false,
+    "gap_semantics": "public_requirements_no_new_capabilities_v1"
+  },
+  "offline_replay": {
+    "legacy": {
+      "frames": 80,
+      "packets": 80,
+      "cards": 47,
+      "no_match_frames": 33,
+      "navigation_recall_frames": 23,
+      "max_bytes": 2998
+    },
+    "flat": {
+      "frames": 80,
+      "packets": 80,
+      "cards": 47,
+      "no_match_frames": 33,
+      "navigation_recall_frames": 9,
+      "max_bytes": 2799
+    },
+    "linked": {
+      "frames": 80,
+      "packets": 80,
+      "cards": 47,
+      "no_match_frames": 33,
+      "navigation_recall_frames": 9,
+      "max_bytes": 2992
+    }
+  },
+  "same_input_comparison": {
+    "old_policy": "capability_guidance_v9",
+    "new_policy": "capability_guidance_v10",
+    "cases": 11,
+    "unchanged_without_new_gap": true,
+    "changed_gap_cases": 3,
+    "live_api_calls": 0,
+    "gui_dispatches": 0,
+    "benchmark_results": false
+  },
+  "frozen_sources_unchanged": {
+    "verified-mini-clipboard-flow-invoice-low40-20261027-v1/current": true,
+    "verified-mini-clipboard-flow-invoice-low40-20261027-v1/workflow": true,
+    "verified-mini-clipboard-flow-invoice-low40-20261027-v1/clipboard": true,
+    "verified-mini-v3-exact-invoice-low40-20261027-v1/current": true,
+    "verified-mini-v3-exact-invoice-low40-20261027-v1/v3exact": true
+  },
+  "live_api_calls": 0,
+  "gui_dispatches": 0,
+  "memory_max_bytes": 134217728,
+  "swap_max_bytes": 0,
+  "notes": [
+    "All listed source hashes matched the tested working tree before commit.",
+    "Raw local logs and experiment artifacts remain outside the repository.",
+    "Normal operations require no lookup; optional knowledge queries share the original actor budget.",
+    "No new online success-rate, token-efficiency or benchmark-score claim is made."
+  ]
+}
